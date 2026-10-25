@@ -18,6 +18,10 @@ const JOY_ON = 0.6, JOY_OFF = 0.35;   // 히스테리시스(떨림 방지)
 const JOY_REPEAT_DELAY = 350, JOY_REPEAT_INT = 80;   // 화면 버튼 홀드와 같은 값
 
 // kind — press: 누를 때 한 번 · hold: 누르는 동안 · repeat: 누른 뒤 연속
+// 트림(4방향 트림·햇)은 SIM 모드에서 딸깍 한 번에 1° 다 — 누르고 있어도 더
+// 옮기지 않는다(01-state.js startTrimHold). '누르는 동안' 으로 둔 것은 둘러보기
+// 버튼을 잡고 있을 때 햇이 시선이 되기 때문이다.
+const JOY_TRIM_CLICK = { click: true };
 const JOY_ACTIONS = [
   { id: 'sim',    grp: '운항',   label: 'FLY / PAUSE',   kind: 'press',
     run: () => toggleSim() },
@@ -34,13 +38,13 @@ const JOY_ACTIONS = [
     on: () => simLookHold(true), off: () => simLookHold(false) },
 
   { id: 'trimF',  grp: '트림',   label: '트림 ▲ (전/증속)', kind: 'hold',
-    on: () => startTrimHold('F'), off: () => stopTrimHold() },
+    on: () => startTrimHold('F', JOY_TRIM_CLICK), off: () => stopTrimHold() },
   { id: 'trimA',  grp: '트림',   label: '트림 ▼ (후/감속)', kind: 'hold',
-    on: () => startTrimHold('A'), off: () => stopTrimHold() },
+    on: () => startTrimHold('A', JOY_TRIM_CLICK), off: () => stopTrimHold() },
   { id: 'trimL',  grp: '트림',   label: '트림 ◀ (좌)',     kind: 'hold',
-    on: () => startTrimHold('L'), off: () => stopTrimHold() },
+    on: () => startTrimHold('L', JOY_TRIM_CLICK), off: () => stopTrimHold() },
   { id: 'trimR',  grp: '트림',   label: '트림 ▶ (우)',     kind: 'hold',
-    on: () => startTrimHold('R'), off: () => stopTrimHold() },
+    on: () => startTrimHold('R', JOY_TRIM_CLICK), off: () => stopTrimHold() },
   { id: 'pedL',   grp: '트림',   label: '페달 ◀ (좌)',     kind: 'repeat',
     run: () => applyDelta('yaw', -1) },
   { id: 'pedR',   grp: '트림',   label: '페달 ▶ (우)',     kind: 'repeat',
