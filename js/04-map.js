@@ -263,12 +263,21 @@ async function _satTile(z, x, y, signal) {
   return _canvasToBuffer(cv);
 }
 
-// ── 지형(DEM)의 바다를 수면(0m)으로 편다 ──
-// 지형 타일에는 바다 밑 수심이 들어 있는데 확대 단계마다 다르다 — 덜 자세한 단계는
-// 바다가 0m, 자세한 단계는 수심(서해 수십 m, 동해는 수 km)이다. 낮게 날수록 자세한
-// 타일이 깔리므로 그려진 바다가 0m 와 수심 사이를 오가며 뛰었다. 1인칭 카메라는 그
-// 높이를 따라 위아래로 튀어 화면이 점멸했고, 수면에 떠 있는 함정은 카메라 아래
-// 한참 밑이나 카메라 위로 가 버려 보이지 않았다. 바다 밑(음수)은 모두 0m 로 편다.
+// ── 바다는 무조건 평평하게 ──
+// 지형 타일의 바다에는 수심(음수)이 들어 있는데 확대 단계마다 다르고(덜 자세한 단계는
+// 0m, 자세한 단계는 서해 수십 m · 동해 수 km), 해안 가까이에는 수심과 육지 자료를 이어
+// 붙인 흔적으로 0~5m 의 잔물결 같은 값까지 섞여 있다. 그대로 그리면 낮게 날 때 바다가
+// 0m 와 수심 사이를 오가며 뛰어(1인칭 카메라가 그 높이를 따라 튀어 화면이 점멸하고,
+// 수면의 함정이 보이지 않았다) 바다가 울퉁불퉁하다.
+// 5m 아래는 모두 해수면(0m)으로 펴고, 5~15m 는 0~15m 로 부드럽게 이어 15m 위의 땅은
+// 그대로 둔다(턱이 지지 않게). 해안의 아주 낮은 땅(부두·모래사장)도 해수면이 된다.
+// 3D 지형(_demTile)과 SIM 의 땅(simTerrainFt)이 같은 규칙을 쓴다.
+const SEA_FLAT_M = 5, SEA_BLEND_M = 15;
+function seaFlatM(m) {
+  if (!(m > SEA_FLAT_M)) return 0;                 // 수심·잔물결(그리고 NaN)
+  if (m >= SEA_BLEND_M) return m;
+  return (m - SEA_FLAT_M) * SEA_BLEND_M / (SEA_BLEND_M - SEA_FLAT_M);
+}
 const DEM_URL = 'https://s3.amazonaws.com/elevation-tiles-prod/terrarium';
 async function _demTile(z, x, y, signal) {
   const r = await fetch(`${DEM_URL}/${z}/${x}/${y}.png`, { signal });
@@ -281,10 +290,14 @@ async function _demTile(z, x, y, signal) {
   const img = ctx.getImageData(0, 0, bmp.width, bmp.height), d = img.data;
   let sea = false;
   for (let i = 0; i < d.length; i += 4) {
-    // terrarium: 높이 = R×256 + G + B/256 − 32768 → R < 128 이면 0m 아래
-    if (d[i] < 128) { d[i] = 128; d[i + 1] = 0; d[i + 2] = 0; d[i + 3] = 255; sea = true; }
+    // terrarium: 높이 = R×256 + G + B/256 − 32768
+    const m = d[i] * 256 + d[i + 1] + d[i + 2] / 256 - 32768;
+    if (m >= SEA_BLEND_M) continue;
+    const v = seaFlatM(m) + 32768, vi = Math.floor(v);
+    d[i] = vi >> 8; d[i + 1] = vi & 255; d[i + 2] = Math.min(255, Math.round((v - vi) * 256)); d[i + 3] = 255;
+    sea = true;
   }
-  if (!sea) return blob.arrayBuffer();         // 바다가 없는 타일은 받은 그대로
+  if (!sea) return blob.arrayBuffer();         // 바다·낮은 땅이 없는 타일은 받은 그대로
   ctx.putImageData(img, 0, 0);
   return _canvasToBuffer(cv);
 }

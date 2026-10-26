@@ -214,12 +214,18 @@ export async function run(page, t) {
     const realElev = _tcElev;
     _tcElev = () => -50;                          // 수심 50m 바다
     const g = simTerrainFt();
+    _tcElev = () => 3;                            // 해안의 잔물결 같은 값
+    const ripple = simTerrainFt();
+    _tcElev = () => 100;                          // 땅
+    const land = simTerrainFt();
     _tcElev = realElev;
-    return { dist: distance(S.lat, S.lon, p[0], p[1]), brg: bearing(S.lat, S.lon, p[0], p[1]), g };
+    return { dist: distance(S.lat, S.lon, p[0], p[1]), brg: bearing(S.lat, S.lon, p[0], p[1]), g, ripple, land };
   });
   t.ok(Math.abs(sim.dist - 0.3) < 0.01 && Math.abs(sim.brg - 120) < 1,
     `SIM 에서는 기수 앞 0.3NM 에 놓는다 (${sim.dist.toFixed(2)}NM · ${sim.brg.toFixed(0)}°)`);
   t.eq(sim.g, 0, '바다 위에서는 해수면(0ft)이 바닥이다 — 수심만큼 내려가지 않는다');
+  t.ok(sim.ripple === 0 && Math.abs(sim.land - 100 / 0.3048) < 0.01,
+    `SIM 의 땅도 3D 와 같은 규칙이다 (잔물결 3m → ${sim.ripple}ft · 땅 100m → ${sim.land.toFixed(0)}ft)`);
 
   // ── 착함 — 함정 위에서는 갑판이 바닥이고, 앉으면 함정과 함께 간다 ──
   const land = await page.evaluate(async () => {
