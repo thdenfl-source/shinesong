@@ -10,10 +10,10 @@
 export const name = '3D 지도 카메라';
 import zlib from 'node:zlib';
 
-// 한 가지 색으로 칠한 4×4 PNG — 위성 타일 흉내
-function solidPng([r, g, b]) {
-  const w = 4, h = 4, raw = Buffer.alloc((w * 3 + 1) * h);
-  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) raw.set([r, g, b], y * (w * 3 + 1) + 1 + x * 3);
+// 작은 PNG — 위성·지형 타일 흉내. fn(x, y) → [r, g, b]
+export function pngOf(w, h, fn) {
+  const raw = Buffer.alloc((w * 3 + 1) * h);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) raw.set(fn(x, y), y * (w * 3 + 1) + 1 + x * 3);
   const chunk = (type, data) => {
     const len = Buffer.alloc(4); len.writeUInt32BE(data.length);
     const td = Buffer.concat([Buffer.from(type), data]);
@@ -25,6 +25,7 @@ function solidPng([r, g, b]) {
   return Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk('IHDR', ihdr),
                         chunk('IDAT', zlib.deflateSync(raw)), chunk('IEND', Buffer.alloc(0))]);
 }
+const solidPng = rgb => pngOf(4, 4, () => rgb);
 
 const T = 37.4602, G = 126.4407;
 
@@ -221,17 +222,20 @@ export async function run(page, t) {
   // ── 위성 사진의 빈 칸 메우기 ──
   // Esri 는 자세한 사진이 없는 곳(넓은 바다 등)의 높은 확대 단계에서 회색 '자료 없음'
   // 그림을 보낸다. 3D 는 그런 타일을 404 로 받아(blankTile=false) 위 단계 사진을 잘라
-  // 늘려 채운다. 여기서는 15 단계까지만 사진이 있는 바다를 흉내 낸다.
+  // 늘려 채운다. 여기서는 15 단계까지만 사진이 있는 바다를 흉내 낸다. 한 번 없다고
+  // 확인된 자리는 그 아래 단계를 다시 묻지 않는다.
   const COLORS = { 13: [10, 80, 30], 14: [20, 90, 40], 15: [30, 100, 160] };
   let seen = [];
   await page.route('**/server.arcgisonline.com/**', route => {
     const m = /\/tile\/(\d+)\/(\d+)\/(\d+)(\?.*)?$/.exec(route.request().url());
     const z = m ? +m[1] : -1;
     seen.push({ z, blank: !!(m && m[4] && m[4].includes('blankTile=false')) });
-    if (COLORS[z]) return route.fulfill({ status: 200, contentType: 'image/png', body: solidPng(COLORS[z]) });
+    // Esri 처럼 덜 자세한 단계는 다 있고(사진은 피라미드다) 16 단계부터 없다
+    if (z >= 0 && z <= 15) return route.fulfill({ status: 200, contentType: 'image/png', body: solidPng(COLORS[z] || [5, 5, 5]) });
     return route.fulfill({ status: 404, body: '' });
   });
   const sat = await page.evaluate(async () => {
+    _satMissing.clear(); _satBmp.clear();
     const px = async buf => {
       const bmp = await createImageBitmap(new Blob([buf]));
       const c = document.createElement('canvas'); c.width = bmp.width; c.height = bmp.height;
@@ -240,16 +244,25 @@ export async function run(page, t) {
     };
     const own = await px(await _satTile(14, 13950, 6327));       // 사진이 있는 단계
     const up3 = await px(await _satTile(18, 223200, 101232));    // 18 단계 → 15 단계에서 잘라 늘린다
-    return { own, up3, src: _ml3d.getStyle().sources.satellite.tiles[0] };
+    // 이웃한 19 단계 타일 — 18 단계가 없다는 것을 이미 알므로 그 자리는 묻지 않는다
+    const before = window._satAsked = 0;
+    const origFetch = window.fetch;
+    window.fetch = (u, o) => { if (String(u).includes('/tile/19/')) window._satAsked++; return origFetch(u, o); };
+    const up4 = await px(await _satTile(19, 446400, 202464));
+    window.fetch = origFetch;
+    return { own, up3, up4, asked19: window._satAsked, src: _ml3d.getStyle().sources.satellite.tiles[0] };
   });
   t.eq(sat.src, 'sat://{z}/{x}/{y}', '3D 위성 사진은 빈 칸을 메우는 길(sat://)로 받는다');
   t.ok(seen.length > 0 && seen.every(q => q.blank), '없는 타일은 회색 그림 대신 404 로 받는다(blankTile=false)');
   t.eq(sat.own.rgb.join(','), COLORS[14].join(','), '사진이 있는 단계는 그대로 쓴다');
   t.ok(sat.up3.w === 256 && sat.up3.rgb.every((v, i) => Math.abs(v - COLORS[15][i]) <= 2),
     `사진이 없는 18 단계는 15 단계 사진으로 메운다 (rgb ${sat.up3.rgb.join(',')})`);
+  t.ok(sat.asked19 === 0 && sat.up4.rgb.every((v, i) => Math.abs(v - COLORS[15][i]) <= 2),
+    `없다고 확인된 자리의 더 자세한 단계는 묻지 않고 바로 메운다 (19 단계 요청 ${sat.asked19}번)`);
   await page.unroute('**/server.arcgisonline.com/**');
   await page.route('**/server.arcgisonline.com/**', route => route.fulfill({ status: 404, body: '' }));
   const none = await page.evaluate(async () => {
+    _satMissing.clear(); _satBmp.clear();          // 앞 검사에서 알아 둔 것을 비운다
     const bmp = await createImageBitmap(new Blob([await _satTile(18, 223200, 101232)]));
     const c = document.createElement('canvas'); c.width = 256; c.height = 256;
     const ctx = c.getContext('2d'); ctx.drawImage(bmp, 0, 0);
@@ -257,4 +270,22 @@ export async function run(page, t) {
   });
   t.eq(none.join(','), '11,38,56', '어느 단계에도 사진이 없으면 바다 빛으로 채운다');
   await page.unroute('**/server.arcgisonline.com/**');
+
+  // ── 지형(DEM)의 바다는 0m 로 편다 ──
+  // 왼쪽 절반은 바다 밑 −20m, 오른쪽 절반은 땅 +100m 인 타일을 흉내 낸다.
+  const SEA20 = [127, 236, 0], LAND100 = [128, 100, 0];   // terrarium: R×256+G+B/256−32768
+  await page.route('**/elevation-tiles-prod/terrarium/**', route =>
+    route.fulfill({ status: 200, contentType: 'image/png', body: pngOf(256, 256, x => (x < 128 ? SEA20 : LAND100)) }));
+  const dem = await page.evaluate(async () => {
+    const buf = await _demTile(12, 3480, 1588);
+    const bmp = await createImageBitmap(new Blob([buf]), { premultiplyAlpha: 'none', colorSpaceConversion: 'none' });
+    const c = document.createElement('canvas'); c.width = bmp.width; c.height = bmp.height;
+    const ctx = c.getContext('2d'); ctx.drawImage(bmp, 0, 0);
+    const at = x => { const d = ctx.getImageData(x, 100, 1, 1).data; return d[0] * 256 + d[1] + d[2] / 256 - 32768; };
+    return { sea: at(30), land: at(200), src: _ml3d.getStyle().sources.terrain.tiles[0] };
+  });
+  await page.unroute('**/elevation-tiles-prod/terrarium/**');
+  t.eq(dem.src, 'dem://{z}/{x}/{y}', '3D 지형은 바다를 펴는 길(dem://)로 받는다');
+  t.eq(dem.sea, 0, '바다 밑(−20m)은 수면 0m 로 편다 — 확대 단계마다 수심이 달라 그려진 바다가 오르내리지 않게');
+  t.eq(dem.land, 100, '땅의 높이는 그대로다 (+100m)');
 }

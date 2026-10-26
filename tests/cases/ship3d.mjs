@@ -5,7 +5,16 @@
 // 설정창을 연다. 3D 가 제 창을 쓸 때는 SHIP 메뉴·설정창이 그 창 안에서 열린다.
 export const name = '3D 함정';
 
+import { pngOf } from './map3d.mjs';
+
 export async function run(page, t) {
+  // 지형 타일 흉내 — 덜 자세한 단계(≤12)는 바다가 0m, 자세한 단계(≥13)는 수심 −20m.
+  // 실제 지형 자료가 그렇다. 낮게 날면 자세한 타일이 깔린다.
+  const SEA0 = pngOf(256, 256, () => [128, 0, 0]), SEA20 = pngOf(256, 256, () => [127, 236, 0]);
+  await page.route('**/elevation-tiles-prod/terrarium/**', route => {
+    const m = /terrarium\/(\d+)\//.exec(route.request().url());
+    return route.fulfill({ status: 200, contentType: 'image/png', body: m && +m[1] >= 13 ? SEA20 : SEA0 });
+  });
   // 3D 를 겹쳐 켜고 함정 레이어가 얹힐 때까지 기다린다(지도 load 이벤트)
   const open = await page.evaluate(async () => {
     const wait = ms => new Promise(r => setTimeout(r, ms));
@@ -343,6 +352,37 @@ export async function run(page, t) {
     `뜬 직후에는 함정 속도로 날고 있다 (1초에 헬기 ${land.lift.heli.toFixed(1)}m · 함정 ${land.lift.ship.toFixed(1)}m)`);
   t.ok(land.touch.deck && Math.abs(land.touch.spd) < 1,
     `함정과 나란히 날다 닿으면 갑판 위에서는 서 있다 (갑판 기준 ${land.touch.spd.toFixed(1)}kt)`);
+
+  // ── 낮게 날아도 1인칭 화면이 뛰지 않는다 ──
+  // 확대 단계마다 수심이 다른 지형 타일이 섞여 깔리는 동안에도 그려진 바다는 0m 이고
+  // 카메라 높이가 그대로다(종전에는 0m 와 −30m 사이를 오가며 화면이 점멸했다).
+  const steady = await page.evaluate(async () => {
+    const wait = ms => new Promise(r => setTimeout(r, ms));
+    window._pad = { index: 0, id: 'T', mapping: '', buttons: [], axes: [0, 0, 0, 0] };
+    navigator.getGamepads = () => [window._pad];
+    joyStop(); joyOn = true; joyAxSaved = true; joyAxes = {}; joyPoll(1000);
+    if (!shipVisible) shipToggleOn();
+    shipLat = 37.0; shipLon = 126.0; shipHdg = 0; shipSpd = 0; updateShipMarker();
+    if (!simModeOn) toggleSimMode(true);
+    if (S.running) toggleSim();
+    S.lat = 37.0 - 300 / 111320; S.lon = 126.0; S.hdg = 0; S.alt = 20; S.spd = 0; S.vs = 0; S.pit = 0; S.bnk = 0;
+    const cam = [], terr = [];
+    for (let i = 0; i < 40; i++) {
+      _applyFollow(); await wait(100);
+      cam.push(_ml3d.transform.getCameraAltitude());
+      terr.push(_ml3d.queryTerrainElevation([S.lon, S.lat]));
+    }
+    const p = _ml3d.project([shipLon, shipLat]), H = _ml3d.getCanvas().clientHeight;
+    toggleSimMode(false);
+    return { camMin: Math.min(...cam), camMax: Math.max(...cam), terrMin: Math.min(...terr), terrMax: Math.max(...terr),
+             shipY: p.y, H };
+  });
+  t.ok(steady.terrMin === 0 && steady.terrMax === 0,
+    `그려진 바다는 늘 0m 다 (${steady.terrMin.toFixed(1)} … ${steady.terrMax.toFixed(1)}m)`);
+  t.ok(steady.camMax - steady.camMin < 0.5 && Math.abs(steady.camMin - 8) < 0.5,
+    `20ft 로 떠 있는 동안 카메라 높이가 뛰지 않는다 (${steady.camMin.toFixed(1)} … ${steady.camMax.toFixed(1)}m)`);
+  t.ok(steady.shipY > 0 && steady.shipY < steady.H,
+    `300m 앞 수면의 함정이 화면 안에 있다 (y ${steady.shipY.toFixed(0)} / ${steady.H})`);
 
   // ── 끄면 3D 에서도 사라진다 ──
   const off = await page.evaluate(async () => {

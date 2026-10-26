@@ -213,40 +213,94 @@ function toggle3dMap() {
 const SAT_URL = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile';
 const SAT_UP_LEVELS = 8;          // 이만큼 위 단계까지 찾아 올라간다
 const SAT_SEA = '#0b2638';        // 끝내 사진이 없을 때의 바다 빛
+// 사진이 없다고 확인된 타일 — 그 아래(더 자세한) 단계도 없으므로 다시 묻지 않는다.
+// 위 단계 사진은 자식 타일 여럿이 함께 쓰므로 잠깐 들고 있는다. 그래야 낮게 날 때
+// 발밑 타일이 빨리 채워진다(늦게 채워지면 빈 칸이 깜빡이는 것처럼 보인다).
+const _satMissing = new Set();
+const _satBmp = new Map();        // 'z/x/y' → Promise<ImageBitmap|null>
+function _satKnownMissing(z, x, y) {
+  for (let k = 0; k <= z; k++) if (_satMissing.has(`${z - k}/${x >> k}/${y >> k}`)) return true;
+  return false;
+}
 async function _satFetch(z, x, y, signal) {
+  if (_satKnownMissing(z, x, y)) return null;
   const r = await fetch(`${SAT_URL}/${z}/${y}/${x}?blankTile=false`, { signal });
-  return r.ok ? r.blob() : null;          // 404 = 그 단계에는 사진이 없다(네트워크 오류는 그대로 던진다)
+  if (r.status === 404) { _satMissing.add(`${z}/${x}/${y}`); return null; }   // 그 단계에는 사진이 없다
+  if (!r.ok) throw new Error('sat ' + r.status);                              // 그 밖의 오류는 그대로 던진다
+  return r.blob();
 }
-function _satCanvas() {
-  if (typeof OffscreenCanvas === 'function') return new OffscreenCanvas(256, 256);
-  const c = document.createElement('canvas'); c.width = 256; c.height = 256; return c;
+function _satAncestor(z, x, y) {
+  const key = `${z}/${x}/${y}`;
+  if (!_satBmp.has(key)) {
+    if (_satBmp.size > 96) _satBmp.delete(_satBmp.keys().next().value);
+    // 여러 타일이 함께 기다리므로 한 타일의 취소 신호에 묶지 않는다
+    _satBmp.set(key, _satFetch(z, x, y).then(b => (b ? createImageBitmap(b) : null))
+      .catch(e => { _satBmp.delete(key); throw e; }));
+  }
+  return _satBmp.get(key);
 }
-function _satToBuffer(cv) {
+function _mapCanvas(w, h) {
+  if (typeof OffscreenCanvas === 'function') return new OffscreenCanvas(w, h);
+  const c = document.createElement('canvas'); c.width = w; c.height = h; return c;
+}
+function _canvasToBuffer(cv) {
   if (cv.convertToBlob) return cv.convertToBlob({ type: 'image/png' }).then(b => b.arrayBuffer());
   return new Promise(res => cv.toBlob(b => res(b.arrayBuffer()), 'image/png'));
 }
 async function _satTile(z, x, y, signal) {
   const own = await _satFetch(z, x, y, signal);
   if (own) return own.arrayBuffer();
-  const cv = _satCanvas(), ctx = cv.getContext('2d');
+  const cv = _mapCanvas(256, 256), ctx = cv.getContext('2d');
   for (let k = 1; k <= SAT_UP_LEVELS && z - k >= 0; k++) {
-    const b = await _satFetch(z - k, x >> k, y >> k, signal);
-    if (!b) continue;
-    const bmp = await createImageBitmap(b);
+    const bmp = await _satAncestor(z - k, x >> k, y >> k);
+    if (!bmp) continue;
     const n = 1 << k, sz = bmp.width / n;
     ctx.imageSmoothingEnabled = true;
     ctx.drawImage(bmp, (x & (n - 1)) * sz, (y & (n - 1)) * sz, sz, sz, 0, 0, 256, 256);
-    return _satToBuffer(cv);
+    return _canvasToBuffer(cv);
   }
   ctx.fillStyle = SAT_SEA; ctx.fillRect(0, 0, 256, 256);
-  return _satToBuffer(cv);
+  return _canvasToBuffer(cv);
 }
+
+// ── 지형(DEM)의 바다를 수면(0m)으로 편다 ──
+// 지형 타일에는 바다 밑 수심이 들어 있는데 확대 단계마다 다르다 — 덜 자세한 단계는
+// 바다가 0m, 자세한 단계는 수심(서해 수십 m, 동해는 수 km)이다. 낮게 날수록 자세한
+// 타일이 깔리므로 그려진 바다가 0m 와 수심 사이를 오가며 뛰었다. 1인칭 카메라는 그
+// 높이를 따라 위아래로 튀어 화면이 점멸했고, 수면에 떠 있는 함정은 카메라 아래
+// 한참 밑이나 카메라 위로 가 버려 보이지 않았다. 바다 밑(음수)은 모두 0m 로 편다.
+const DEM_URL = 'https://s3.amazonaws.com/elevation-tiles-prod/terrarium';
+async function _demTile(z, x, y, signal) {
+  const r = await fetch(`${DEM_URL}/${z}/${x}/${y}.png`, { signal });
+  if (!r.ok) throw new Error('dem ' + r.status);
+  const blob = await r.blob();
+  // 색 보정·알파 곱셈이 끼면 높이 값(RGB)이 틀어진다 — 받은 값 그대로 읽는다
+  const bmp = await createImageBitmap(blob, { premultiplyAlpha: 'none', colorSpaceConversion: 'none' });
+  const cv = _mapCanvas(bmp.width, bmp.height), ctx = cv.getContext('2d', { willReadFrequently: true });
+  ctx.drawImage(bmp, 0, 0);
+  const img = ctx.getImageData(0, 0, bmp.width, bmp.height), d = img.data;
+  let sea = false;
+  for (let i = 0; i < d.length; i += 4) {
+    // terrarium: 높이 = R×256 + G + B/256 − 32768 → R < 128 이면 0m 아래
+    if (d[i] < 128) { d[i] = 128; d[i + 1] = 0; d[i + 2] = 0; d[i + 3] = 255; sea = true; }
+  }
+  if (!sea) return blob.arrayBuffer();         // 바다가 없는 타일은 받은 그대로
+  ctx.putImageData(img, 0, 0);
+  return _canvasToBuffer(cv);
+}
+
 try {
   if (typeof maplibregl !== 'undefined' && maplibregl.addProtocol) {
+    const zxy = (re, url) => { const m = re.exec(url); return m ? [+m[1], +m[2], +m[3]] : null; };
     maplibregl.addProtocol('sat', (params, abortController) => {
-      const m = /^sat:\/\/(\d+)\/(\d+)\/(\d+)/.exec(params.url);
-      if (!m) return Promise.reject(new Error('bad sat url ' + params.url));
-      return _satTile(+m[1], +m[2], +m[3], abortController && abortController.signal).then(data => ({ data }));
+      const t = zxy(/^sat:\/\/(\d+)\/(\d+)\/(\d+)/, params.url);
+      if (!t) return Promise.reject(new Error('bad sat url ' + params.url));
+      return _satTile(t[0], t[1], t[2], abortController && abortController.signal).then(data => ({ data }));
+    });
+    maplibregl.addProtocol('dem', (params, abortController) => {
+      const t = zxy(/^dem:\/\/(\d+)\/(\d+)\/(\d+)/, params.url);
+      if (!t) return Promise.reject(new Error('bad dem url ' + params.url));
+      return _demTile(t[0], t[1], t[2], abortController && abortController.signal).then(data => ({ data }));
     });
   }
 } catch (e) { _swallow(e); }
@@ -285,7 +339,7 @@ function _init3dMap() {
           terrain: {
             type: 'raster-dem',
             encoding: 'terrarium',
-            tiles: ['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'],
+            tiles: ['dem://{z}/{x}/{y}'],      // 바다 밑은 0m 로 편다(_demTile)
             minzoom: 0, maxzoom: 15,
             tileSize: 256,
             attribution: 'Terrain © Tilezen/AWS'
