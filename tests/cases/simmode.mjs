@@ -686,34 +686,52 @@ export async function run(page, t) {
   t.eq(gauge.val, true, `지금 토크 값이 숫자로 나온다 (${gauge.tq.toFixed(0)}%)`);
   t.eq(gauge.spdAbove, true, '속도계가 TQ 계기보다 위에 있다(속도계 아래가 TQ 다)');
 
-  // 한계를 넘으면 붉게 — 오버토크를 눈으로 알 수 있어야 한다
+  // 구간 색 — 0~100% 녹색 · 100~113% 노랑 · 113~125% 빨강(오버토크)
+  // 막대는 지금 값이 든 구간의 색으로 칠하고, 숫자는 녹색 구간이면 흰 글자·그 밖은 구간 색이다.
   const over = await page.evaluate(`(() => {
     (${SETUP.toString()})();
     const cv = document.getElementById('pfd');
     const grab = () => {
-      const seen = [];
-      const proto = CanvasRenderingContext2D.prototype, orig = proto.fillText;
+      const seen = [], rects = [];
+      const proto = CanvasRenderingContext2D.prototype, orig = proto.fillText, origR = proto.fillRect;
       proto.fillText = function (tx, px, py, ...a) {
         if (px < cv.width * 0.2) seen.push({ t: String(tx), col: this.fillStyle });
         return orig.call(this, tx, px, py, ...a);
       };
+      proto.fillRect = function (px, py, w, h) {
+        if (px < cv.width * 0.2) rects.push({ col: this.fillStyle, h });
+        return origR.call(this, px, py, w, h);
+      };
       drawPFD();
-      proto.fillText = orig;
+      proto.fillText = orig; proto.fillRect = origR;
       // 속도계 눈금에도 같은 숫자가 나온다 — 'TQ %' 머리글 뒤쪽만 본다
       const i = seen.findIndex(v => v.t === 'TQ %');
-      return i < 0 ? [] : seen.slice(i);
+      return { rows: i < 0 ? [] : seen.slice(i), rects };
     };
-    S.tq = 80;
-    const okCol = (grab().find(v => v.t === '80' && v.col !== '#6a7784') || {}).col;
-    S.tq = 110;
-    const rows = grab();
-    const hiCol = (rows.find(v => v.t === '110') || {}).col;
-    return { okCol, hiCol, warn: rows.some(v => v.t === 'OVER TQ'), over: tqOver() };
+    const at = v => {
+      S.tq = v;
+      const g = grab();
+      return { num: (g.rows.find(r => r.t === String(v) && r.col !== '#6a7784') || {}).col,
+               warn: g.rows.some(r => r.t === 'OVER TQ'), over: tqOver(), band: tqBand(v),
+               bars: g.rects.map(r => String(r.col).toLowerCase()) };
+    };
+    return { g: at(80), y: at(110), r: at(118), max: TQ_MAX, lim: [TQ_LIMIT, TQ_RED] };
   })()`);
-  t.eq(over.okCol, '#ffffff', `한계 안에서는 흰 숫자다 (${over.okCol})`);
-  t.eq(over.hiCol, '#ff5555', `100% 를 넘으면 붉어진다 (${over.hiCol})`);
-  t.eq(over.warn, true, 'OVER TQ 경고가 함께 뜬다');
-  t.eq(over.over, true, '상태로도 오버토크다');
+  t.eq(over.max, 125, '계기 눈금은 125% 까지다');
+  t.eq(JSON.stringify(over.lim), '[100,113]', '구간 경계는 100% · 113% 다');
+  t.ok(over.g.band === 'green' && over.g.bars.includes('#22dd55') && !over.g.bars.includes('#00e5ff'),
+    `0~100% 는 녹색 막대다 — 종전 청록색이 아니다 (80% → ${over.g.band})`);
+  t.eq(over.g.num, '#ffffff', `녹색 구간에서는 흰 숫자다 (${over.g.num})`);
+  t.ok(!over.g.warn && !over.g.over, '녹색 구간에서는 경고가 없다');
+  t.ok(over.y.band === 'yellow' && over.y.bars.includes('#ffcc00') && over.y.num === '#ffcc00',
+    `100~113% 는 노란 막대·노란 숫자다 (110% → ${over.y.num})`);
+  t.ok(!over.y.warn && !over.y.over, '노란 구간은 주의일 뿐 OVER TQ 는 아니다');
+  t.ok(over.r.band === 'red' && over.r.bars.includes('#ff4444') && over.r.num === '#ff5555',
+    `113~125% 는 빨간 막대·빨간 숫자다 (118% → ${over.r.num})`);
+  t.ok(over.r.warn && over.r.over, '빨간 구간에서는 OVER TQ 경고가 뜨고 상태로도 오버토크다');
+  t.ok(['rgba(0,200,80,0.16)', 'rgba(255,204,0,0.22)', 'rgba(255,60,60,0.25)']
+         .every(c => over.g.bars.includes(c.replace(/,/g, ', ')) || over.g.bars.includes(c)),
+    '바탕에 녹색·노랑·빨강 세 구간이 늘 칠해져 있다');
 
   // SIM 모드가 아니어도 계기는 지금 비행 상태에 맞는 값을 보여 준다
   const idle = await page.evaluate(`(() => {
@@ -1293,7 +1311,7 @@ export async function run(page, t) {
     _ax(3, 0); fly(4);                          // 가운데
     const mid = S.tq;
     _ax(3, 1); fly(4);                          // 맨 위
-    const up = { tq: S.tq, over: tqOver() };
+    const up = { tq: S.tq, over: tqOver(), band: tqBand() };
     return { down, mid, up, lbl: joyAxLabel('coll') };
   })()`);
   t.eq(trim.rolled.axis, 0, '레버식은 중립을 빼지 않는다 — 자리 그대로 읽는다');
@@ -1301,7 +1319,8 @@ export async function run(page, t) {
   t.ok(lever.down.vs < -500, `그러면 내려간다 (${lever.down.vs.toFixed(0)}fpm)`);
   t.ok(Math.abs(lever.mid - 55) < 8, `가운데면 호버 언저리다 (${lever.mid.toFixed(0)}%)`);
   t.ok(lever.up.tq > 100, `맨 위면 연속한계를 넘는다 (${lever.up.tq.toFixed(0)}%)`);
-  t.eq(lever.up.over, true, '오버토크로 뜬다');
+  t.ok(lever.up.band === 'yellow' && !lever.up.over,
+    `노란 구간(100~113%)에 든다 — 빨간 구간(오버토크)까지는 아니다 (${lever.up.band})`);
   t.ok(lever.lbl.includes('레버식'), `설정에도 그렇게 적힌다 (${lever.lbl})`);
 
   // 가운데로 돌아오는 축이면 종전대로 호버 토크 기준이다

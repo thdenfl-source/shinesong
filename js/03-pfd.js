@@ -392,12 +392,19 @@ function drawAI(x, y, w, h) {
 // 헬기에서 제일 많이 보는 계기다. 컬렉티브를 올린 만큼 토크가 오르고,
 // 지금 필요한 토크(호버 기준 + 뱅크 − 전진양력)보다 남으면 그만큼 올라간다.
 // 그래서 막대 위의 '필요 토크' 표식과 지금 값의 차이가 곧 상승·강하다.
+// 구간별 색 — 막대(fill)·막대 끝(edge)·숫자(text)·바탕(tint)
+const TQ_COLORS = {
+  green:  { fill: '#22dd55', edge: '#8af0a8', text: '#ffffff', tint: 'rgba(0,200,80,0.16)' },
+  yellow: { fill: '#ffcc00', edge: '#ffe36a', text: '#ffcc00', tint: 'rgba(255,204,0,0.22)' },
+  red:    { fill: '#ff4444', edge: '#ff8888', text: '#ff5555', tint: 'rgba(255,60,60,0.25)' },
+};
 function drawTqGauge(x, y, w, h) {
   ctx.save(); ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
   ctx.fillStyle = '#0d0d0d'; ctx.fillRect(x, y, w, h);
 
   let tq = 0, need = 60, over = false;
   try { tq = tqShown(); need = tqRequired(); over = tqOver(); } catch (e) { _swallow(e); }
+  const col = TQ_COLORS[tqBand(tq)];
 
   const HEAD = 16;                       // 머리글 'TQ %'
   const barX = x + Math.round(w * 0.22), barW = Math.round(w * 0.40);
@@ -410,10 +417,12 @@ function drawTqGauge(x, y, w, h) {
   ctx.fillText('TQ %', x + 3, y + 11);
 
   if (barH > 10) {
-    // 바탕 + 구간(연속한계 위는 붉게)
+    // 바탕 + 구간 — 0~100 녹색 · 100~113 노랑 · 113~125 빨강
     ctx.fillStyle = '#161a1e'; ctx.fillRect(barX, barY, barW, barH);
-    ctx.fillStyle = 'rgba(255,60,60,0.22)';
-    ctx.fillRect(barX, vToY(TQ_MAX), barW, vToY(TQ_LIMIT) - vToY(TQ_MAX));
+    [[0, TQ_LIMIT, 'green'], [TQ_LIMIT, TQ_RED, 'yellow'], [TQ_RED, TQ_MAX, 'red']].forEach(([lo, hi, k]) => {
+      ctx.fillStyle = TQ_COLORS[k].tint;
+      ctx.fillRect(barX, vToY(hi), barW, vToY(lo) - vToY(hi));
+    });
 
     // 눈금 — 0·20·…·120
     ctx.strokeStyle = '#3a4653'; ctx.lineWidth = 1;
@@ -425,11 +434,11 @@ function drawTqGauge(x, y, w, h) {
       ctx.fillText(String(v), barX - 4, ty + 2.5);
     }
 
-    // 지금 토크 — 아래에서 채운다
+    // 지금 토크 — 아래에서 채운다. 든 구간의 색으로 칠한다
     const topY = vToY(tq);
-    ctx.fillStyle = over ? '#ff5555' : '#00e5ff';
+    ctx.fillStyle = col.fill;
     ctx.fillRect(barX, topY, barW, barY + barH - topY);
-    ctx.strokeStyle = over ? '#ff8888' : '#8ae8ff'; ctx.lineWidth = 1;
+    ctx.strokeStyle = col.edge; ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(barX, topY + 0.5); ctx.lineTo(barX + barW, topY + 0.5); ctx.stroke();
 
     // 필요 토크 표식(여기에 맞추면 고도가 유지된다) — CDU PERF 의 호버 토크 기준
@@ -440,16 +449,18 @@ function drawTqGauge(x, y, w, h) {
     ctx.font = 'bold 7px Helvetica, Arial'; ctx.fillStyle = '#ffcc44';
     ctx.fillText('HOV', barX + barW + 6, ny + 2.5);
 
-    // 연속 사용 한계(100%) — 붉은 선
-    const ly = Math.round(vToY(TQ_LIMIT)) + 0.5;
-    ctx.strokeStyle = '#ff4444'; ctx.lineWidth = 1.5;
-    ctx.beginPath(); ctx.moveTo(barX - 2, ly); ctx.lineTo(barX + barW + 4, ly); ctx.stroke();
+    // 구간 경계 — 연속 사용 한계(100%) 노란 선 · 오버토크(113%) 붉은 선
+    [[TQ_LIMIT, '#ffcc00'], [TQ_RED, '#ff4444']].forEach(([v, c]) => {
+      const ly = Math.round(vToY(v)) + 0.5;
+      ctx.strokeStyle = c; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(barX - 2, ly); ctx.lineTo(barX + barW + 4, ly); ctx.stroke();
+    });
   }
 
-  // 숫자 — 막대 아래
+  // 숫자 — 막대 아래(녹색 구간은 흰 글자, 노랑·빨강 구간은 그 색)
   ctx.textAlign = 'center';
   ctx.font = 'bold 13px Helvetica, Arial';
-  ctx.fillStyle = over ? '#ff5555' : '#ffffff';
+  ctx.fillStyle = col.text;
   ctx.fillText(tq.toFixed(0), x + w / 2, y + h - 6);
   if (over) {
     ctx.font = 'bold 8px Helvetica, Arial';
