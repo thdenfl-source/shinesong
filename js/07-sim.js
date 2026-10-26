@@ -296,8 +296,9 @@ function simStep(ts){
       // smooth bank toward target — GSPD 중에는 ADI 자세 변화 없음(수평 유지)
       const bt = gspdOn ? 0 : bankTarget;
       const bankDiff=bt-S.bnk;
-      if (simModeOn) {
+      if (simModeOn && !simAfcsLat()) {
         // 조종간이 이미 자세를 정했다 — 여기서 다시 손대지 않는다
+        // (HDG·NAV 가 걸려 있으면 SIM 모드라도 아래 AFCS 선회가 뱅크를 잡는다)
         _rollRate = 0;
       } else if ((hdgSelOn || navApOn) && !gspdOn) {
         // AFCS 선회: 롤 각가속도 제한(사다리꼴 프로파일).
@@ -333,21 +334,27 @@ function simStep(ts){
             const f0 = gspdActFwd, l0 = gspdActLat;
             // Rate is scaled by current actual speed magnitude so that
             // the last few kt slew at ~1 kt/sec for a smooth arrival.
+            // 남은 차이보다 빨리는 가지 않는다(최소 1kt/s) — 4방향 트림을 누르고 있으면
+            // 기준속도가 1초마다 1kt 씩 옮겨 가는데, 빠른 속도에서 그 1kt 를 한순간에
+            // 따라가 버리면 1초마다 속도·지도·PFD 가 계단처럼 튄다. 이렇게 두면
+            // 1kt 를 1초에 걸쳐 따라가 끊김 없는 경사가 된다.
+            // (그래서 끝에 남는 몫도 정확히 닿는다 — 마지막에 덥석 채우지 않는다)
+            const gspdRate = (act, d) => Math.min(gspdSlewRate(act), Math.max(GSPD_RATE_SLOW, Math.abs(d)));
             if (fly && fly.lat) {
               gspdActLat = simGspdFly(gspdActLat, fly.lat, dt, -SIDE_MAX_KT, SIDE_MAX_KT);
             } else if (gspdRefLat !== null) {
               const dLat = gspdRefLat - gspdActLat;
-              const rLat = gspdSlewRate(gspdActLat);
+              const rLat = gspdRate(gspdActLat, dLat);
               gspdActLat += Math.sign(dLat) * Math.min(Math.abs(dLat), rLat * dt);
-              if (Math.abs(gspdRefLat - gspdActLat) < 0.05) gspdActLat = gspdRefLat;
+              if (Math.abs(gspdRefLat - gspdActLat) < 1e-3) gspdActLat = gspdRefLat;
             }
             if (fly && fly.fwd) {
               gspdActFwd = simGspdFly(gspdActFwd, fly.fwd, dt, SIM_SPD_BACK, SIM_SPD_MAX);
             } else if (gspdRefFwd !== null) {
               const dFwd = gspdRefFwd - gspdActFwd;
-              const rFwd = gspdSlewRate(gspdActFwd);
+              const rFwd = gspdRate(gspdActFwd, dFwd);
               gspdActFwd += Math.sign(dFwd) * Math.min(Math.abs(dFwd), rFwd * dt);
-              if (Math.abs(gspdRefFwd - gspdActFwd) < 0.05) gspdActFwd = gspdRefFwd;
+              if (Math.abs(gspdRefFwd - gspdActFwd) < 1e-3) gspdActFwd = gspdRefFwd;
             }
             if (fly) simGspdAfter(dt, f0, l0, fly);   // 자세·가감속(SIM 모드)
           }
@@ -406,7 +413,7 @@ function simStep(ts){
           const step = vs / 60 * dt;
           S.alt = Math.max(0, Math.min(45000, S.alt + step));
           S.vs = vs;
-        } else if (altHoldOn && !simModeOn) {
+        } else if (altHoldOn) {
           // ALT hold: converge S.alt → selAlt at the pilot-set selVS rate.
           // Sign of climb/descent is determined automatically from the
           // current altitude relative to the target.
@@ -418,7 +425,7 @@ function simStep(ts){
             S.alt = Math.max(0, Math.min(45000, S.alt + step));
             S.vs  = Math.sign(diff) * rate;
           }
-        } else if (crhtOn && !simModeOn) {
+        } else if (crhtOn) {
           // CRHT hold: always 500 fpm — rate is NOT user-configurable.
           const diff = selCrht - S.alt;
           if (Math.abs(diff) < 0.5) { S.alt = selCrht; S.vs = 0; }
@@ -429,13 +436,13 @@ function simStep(ts){
           }
         } else if (S.vs !== 0) {
           S.alt = Math.max(0, Math.min(45000, S.alt + S.vs / 60 * dt));
-          // SIM 모드에서는 지면이 바닥이다(해수면이 아니라)
-          if (simModeOn) {
-            try {
-              const g = simFloorFt();      // 발밑 바닥(지면·함정 갑판) — 지면은 '아는 때' 만
-              if (S.alt < g) { S.alt = g; S.vs = 0; }
-            } catch (e) { _swallow(e); }
-          }
+        }
+        // SIM 모드에서는 지면이 바닥이다(해수면이 아니라) — ALT·CRHT 가 몰 때도 같다
+        if (simModeOn) {
+          try {
+            const g = simFloorFt();      // 발밑 바닥(지면·함정 갑판) — 지면은 '아는 때' 만
+            if (S.alt < g) { S.alt = g; S.vs = 0; }
+          } catch (e) { _swallow(e); }
         }
 
         // Coordinated turn: bank angle drives heading change (g·tan(bank)/V).
@@ -714,6 +721,8 @@ function syncMap3dHost(toPanel) {
   if (!d3 || !w3 || !mw) return;
   if (toPanel) {
     if (d3.parentElement !== w3) w3.appendChild(d3);
+    const chin = document.getElementById('chin-row');    // CHIN 창은 3D 지도 바로 뒤에 붙어 다닌다
+    if (chin && chin.previousElementSibling !== d3) d3.after(chin);
     d3.classList.add('panel-3d', 'active');
     mw.classList.remove('map3d-on');          // 2D 는 제 창에서 그대로 보인다
     if (tilt) tilt.classList.add('active');
@@ -723,6 +732,8 @@ function syncMap3dHost(toPanel) {
     });
   } else {
     if (d3.parentElement !== mw) mw.insertBefore(d3, mw.firstElementChild.nextSibling);
+    const chin = document.getElementById('chin-row');
+    if (chin && chin.previousElementSibling !== d3) d3.after(chin);
     d3.classList.remove('panel-3d');
     // 3D 창 안에서 열었던 함정 메뉴·설정창은 2D 지도 창으로 돌려보낸다
     try { if (typeof shipUiHome === 'function') shipUiHome(false); } catch (e) { _swallow(e); }
@@ -791,6 +802,7 @@ function applyPanels() {
   });
   // 3D 지도를 어느 창이 쓰는지 — 지도 위에 겹칠지, 제 창을 통째로 쓸지
   syncMap3dHost(!!hostOf('m3d'));
+  try { syncChinView(); } catch (e) { _swallow(e); }   // CHIN 창도 3D 지도를 따라간다
 
   // PFD 호스트 패널은 FCP 조작부가 다 보이도록 넓게(2분할 55% / 3분할 1.4배)
   L.classList.toggle('pfd-host', leftSel === 'pfd');

@@ -214,12 +214,18 @@ export async function run(page, t) {
     const realElev = _tcElev;
     _tcElev = () => -50;                          // 수심 50m 바다
     const g = simTerrainFt();
+    _tcElev = () => 3;                            // 해안의 잔물결 같은 값
+    const ripple = simTerrainFt();
+    _tcElev = () => 100;                          // 땅
+    const land = simTerrainFt();
     _tcElev = realElev;
-    return { dist: distance(S.lat, S.lon, p[0], p[1]), brg: bearing(S.lat, S.lon, p[0], p[1]), g };
+    return { dist: distance(S.lat, S.lon, p[0], p[1]), brg: bearing(S.lat, S.lon, p[0], p[1]), g, ripple, land };
   });
   t.ok(Math.abs(sim.dist - 0.3) < 0.01 && Math.abs(sim.brg - 120) < 1,
     `SIM 에서는 기수 앞 0.3NM 에 놓는다 (${sim.dist.toFixed(2)}NM · ${sim.brg.toFixed(0)}°)`);
   t.eq(sim.g, 0, '바다 위에서는 해수면(0ft)이 바닥이다 — 수심만큼 내려가지 않는다');
+  t.ok(sim.ripple === 0 && Math.abs(sim.land - 100 / 0.3048) < 0.01,
+    `SIM 의 땅도 3D 와 같은 규칙이다 (잔물결 3m → ${sim.ripple}ft · 땅 100m → ${sim.land.toFixed(0)}ft)`);
 
   // ── 착함 — 함정 위에서는 갑판이 바닥이고, 앉으면 함정과 함께 간다 ──
   const land = await page.evaluate(async () => {
@@ -257,7 +263,7 @@ export async function run(page, t) {
     // 함미 갑판 위 100ft 에서 레버를 내려 내려앉는다
     if (!simModeOn) toggleSimMode(true);
     [S.lat, S.lon] = at(-35, 0); S.hdg = 0; S.alt = 100; S.spd = 0; S.vs = 0;
-    simAcc = 0; _simVs1 = 0; simLat = 0; S.pit = pitchFromSpd(0); simTrimHoldSpeed();
+    simAcc = 0; simVsAcc = 0; simLat = 0; S.pit = pitchFromSpd(0); simTrimHoldSpeed();
     fly(10);
     const landed = { alt: S.alt, vs: S.vs, deck: simOnDeck(), ...rel() };
     // 1인칭 시점 — 눈은 갑판 위 8m, 가까운 클립면이 몇 m 라 갑판·함교가 잘리지 않는다.
@@ -294,7 +300,7 @@ export async function run(page, t) {
     // 함정과 같은 속도로 날다 갑판에 닿으면 갑판 위에서는 거의 서 있다
     shipHdg = 0; shipSpd = 10; updateShipMarker();
     [S.lat, S.lon] = at(-35, 0); S.hdg = 0; S.spd = 10; simLat = 0;
-    S.alt = simFloorFt() + 0.3; S.vs = -200; _simVs1 = -200; simAcc = 0;
+    S.alt = simFloorFt() + 0.3; S.vs = -200; simVsAcc = 0; simAcc = 0;
     _pad.axes[3] = -1;
     S.running = true; S.lastT = ts; ts += 50; joyPoll(ts); simStep(ts); S.running = false;
     const touch = { deck: simOnDeck(), spd: S.spd };
@@ -302,7 +308,7 @@ export async function run(page, t) {
     shipHdg = 0; shipSpd = 0; updateShipMarker();
     _pad.axes[3] = (tqRequired() / 110) * 2 - 1;            // 레버는 높이 유지
     const push = (fwd, right, hdg, alt, sec) => {
-      [S.lat, S.lon] = at(fwd, right); S.hdg = hdg; S.alt = alt; S.vs = 0; _simVs1 = 0;
+      [S.lat, S.lon] = at(fwd, right); S.hdg = hdg; S.alt = alt; S.vs = 0; simVsAcc = 0;
       S.spd = 8; simLat = 0; simAcc = 0; S.pit = pitchFromSpd(8); simTrimHoldSpeed();
       S.running = true; S.lastT = ts;
       for (let i = 0; i < sec * 20; i++) { ts += 50; joyPoll(ts); simStep(ts); }
@@ -383,6 +389,76 @@ export async function run(page, t) {
     `20ft 로 떠 있는 동안 카메라 높이가 뛰지 않는다 (${steady.camMin.toFixed(1)} … ${steady.camMax.toFixed(1)}m)`);
   t.ok(steady.shipY > 0 && steady.shipY < steady.H,
     `300m 앞 수면의 함정이 화면 안에 있다 (y ${steady.shipY.toFixed(0)} / ${steady.H})`);
+
+  // ── CHIN BUBBLE — SIM 1인칭에서 3D 창을 위 2/3 · 아래 1/3(좌·우) 으로 나눈다 ──
+  // 아래의 두 창은 헬기 발밑의 둥근 창처럼 정면보다 더 아래를 본다. 같은 바탕(위성·
+  // 지형)과 함정을 그리고, 기체 자세를 따라 돈다. SIM 을 끄면 닫혀 정면이 다시 커진다.
+  const chin = await page.evaluate(async () => {
+    const wait = ms => new Promise(r => setTimeout(r, ms));
+    const box = id => { const r = document.getElementById(id).getBoundingClientRect();
+                        return { x: r.left, y: r.top, w: r.width, h: r.height }; };
+    if (!shipVisible) shipToggleOn();
+    shipLat = 37.0; shipLon = 126.0; shipHdg = 0; shipSpd = 0; updateShipMarker();
+    if (!simModeOn) toggleSimMode(true);
+    if (S.running) toggleSim();
+    S.lat = 37.0 - 60 / 111320; S.lon = 126.0; S.hdg = 0; S.alt = 150; S.spd = 0; S.vs = 0; S.pit = 0; S.bnk = 0;
+    _applyFollow();
+    let n = 0;
+    while ((_chinMaps.length < 2 || !_chinMaps.every(c => c.ship)) && n < 200) { await wait(50); n++; _applyFollow(); }
+    await wait(100); _applyFollow();
+    const out = { n: _chinMaps.length, ship: _chinMaps.map(c => !!c.map.getLayer('ship-3d')),
+                  main: box('map3d'), row: box('chin-row'), l: box('chin-l'), r: box('chin-r'),
+                  rowShown: getComputedStyle(document.getElementById('chin-row')).display,
+                  btn: getComputedStyle(document.getElementById('chin-btn')).display,
+                  mainPitch: _ml3d.getPitch(), mainH: _ml3d.transform.height,
+                  cam: _chinMaps.map(c => ({ side: c.side, pitch: c.map.getPitch(), bearing: c.map.getBearing() })) };
+    // 함정이 발밑 창에도 보인다(앞 60m 의 함정 — 갑판 높이)
+    out.shipIn = _chinMaps.map(c => {
+      const p = c.map.project([shipLon, 37.0 - 40 / 111320]), cv = c.map.getCanvas();
+      return p.x > 0 && p.x < cv.clientWidth && p.y > 0 && p.y < cv.clientHeight;
+    });
+    // 오른쪽으로 20° 기울이면 오른쪽 창은 더 아래를, 왼쪽 창은 덜 아래를 본다
+    S.bnk = 20; _applyFollow();
+    out.bank = _chinMaps.map(c => ({ side: c.side, pitch: c.map.getPitch() }));
+    S.bnk = 0; _applyFollow();
+    // CHIN 버튼으로 끄고 켠다
+    toggleChinView(); await wait(50);
+    out.off = { n: _chinMaps.length, main: box('map3d'), rowShown: getComputedStyle(document.getElementById('chin-row')).display };
+    toggleChinView(); await wait(50); _applyFollow();
+    out.on = _chinMaps.length;
+    // SIM 을 끄면 닫힌다
+    toggleSimMode(false); await wait(50);
+    out.exit = { n: _chinMaps.length, cls: document.getElementById('map3d').classList.contains('chin-on'),
+                 rowShown: getComputedStyle(document.getElementById('chin-row')).display,
+                 btn: getComputedStyle(document.getElementById('chin-btn')).display };
+    return out;
+  });
+  t.eq(chin.n, 2, 'SIM 1인칭에서 3D 창 아래에 CHIN 창 두 개가 열린다');
+  t.ok(chin.rowShown === 'flex' && chin.btn !== 'none', `CHIN 창과 CHIN 버튼이 보인다 (${chin.rowShown} · ${chin.btn})`);
+  const tot = chin.main.h + chin.row.h;
+  t.ok(Math.abs(chin.main.h / tot - 2 / 3) < 0.02 && Math.abs(chin.row.y - (chin.main.y + chin.main.h)) < 1.5,
+    `위 2/3 는 정면 시야, 아래 1/3 은 CHIN 창 (${chin.main.h.toFixed(0)} : ${chin.row.h.toFixed(0)}px)`);
+  t.ok(Math.abs(chin.mainH - chin.main.h) < 2, `정면 지도도 2/3 크기로 다시 잰다 (${chin.mainH}px)`);
+  t.ok(chin.l.x + chin.l.w <= chin.r.x + 1 && Math.abs(chin.l.w - chin.r.w) < 2 && Math.abs(chin.l.y - chin.r.y) < 1,
+    `좌·우로 나란히 반씩 (${chin.l.w.toFixed(0)} · ${chin.r.w.toFixed(0)}px)`);
+  const cl = chin.cam.find(c => c.side < 0), cr = chin.cam.find(c => c.side > 0);
+  const nA = d => ((d % 360) + 540) % 360 - 180;
+  t.ok(chin.mainPitch - cl.pitch > 40 && chin.mainPitch - cr.pitch > 40,
+    `정면보다 50° 아래를 본다 (정면 ${chin.mainPitch.toFixed(0)}° · CHIN ${cl.pitch.toFixed(0)}° / ${cr.pitch.toFixed(0)}°)`);
+  t.ok(nA(cl.bearing) < -5 && nA(cr.bearing) > 5,
+    `왼쪽 창은 왼쪽 앞, 오른쪽 창은 오른쪽 앞을 본다 (${nA(cl.bearing).toFixed(0)}° · ${nA(cr.bearing).toFixed(0)}°)`);
+  t.ok(chin.ship.every(Boolean) && chin.shipIn.some(Boolean),
+    `함정도 CHIN 창에 그린다 (레이어 ${chin.ship} · 화면 안 ${chin.shipIn})`);
+  const bl = chin.bank.find(c => c.side < 0), br = chin.bank.find(c => c.side > 0);
+  // (오른쪽 창은 이미 거의 아래를 보고 있어 조금만 더 내려가고, 왼쪽 창은 눈에 띄게 들린다)
+  t.ok(br.pitch < cr.pitch - 0.5 && bl.pitch > cl.pitch + 5,
+    `기체를 따라 돈다 — 오른쪽 뱅크면 오른쪽 창은 더 아래, 왼쪽 창은 덜 아래를 본다 ` +
+    `(오른쪽 ${cr.pitch.toFixed(0)}→${br.pitch.toFixed(0)}° · 왼쪽 ${cl.pitch.toFixed(0)}→${bl.pitch.toFixed(0)}°)`);
+  t.ok(chin.off.n === 0 && chin.off.rowShown === 'none' && chin.off.main.h > chin.main.h * 1.4,
+    `CHIN 버튼으로 끄면 정면 시야가 다시 창 가득 (${chin.off.main.h.toFixed(0)}px)`);
+  t.eq(chin.on, 2, '다시 누르면 CHIN 창이 열린다');
+  t.ok(chin.exit.n === 0 && !chin.exit.cls && chin.exit.rowShown === 'none' && chin.exit.btn === 'none',
+    'SIM 을 끄면 CHIN 창과 버튼이 사라진다');
 
   // ── 끄면 3D 에서도 사라진다 ──
   const off = await page.evaluate(async () => {

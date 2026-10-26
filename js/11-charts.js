@@ -2168,6 +2168,7 @@ appRegister({
   switchMode,
   tiltAdj,
   toggle3dMap,
+  toggleChinView,
   toggleAltHold,
   toggleAspcPanel,
   toggleAwyLayer,

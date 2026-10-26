@@ -32,7 +32,7 @@ const SETUP = () => {
   windSpd = 0; simSpeed = 1;
   if (!simModeOn) toggleSimMode();
   S.tq = 60; S.vs = 0; S.alt = 2000;   // 모드 진입이 손댄 값을 되돌린다
-  simAcc = 0; _simVs1 = 0;             // 가감속·유입류 지연도 비운다
+  simAcc = 0; simVsAcc = 0;             // 가감속·유입류 지연도 비운다
   simLookHold(false); simLookReset(); simTrimReset();
 };
 
@@ -198,8 +198,8 @@ export async function run(page, t) {
     const hold = (deg) => {
       // 그 자세가 되도록 조종간을 잡는다(앞으로 밀면 기수가 내려간다)
       _ax(1, stick(-deg / 60));
-      // 속도는 이제 천천히(≈3.5kt/s 한계) 붙는다 — 앞 자세에서 95kt 를 건너뛰려면
-      // 30초가 넘게 걸린다. 여기서는 '그 자세의 정상 속도' 를 보므로 15kt 떨어진
+      // 속도는 점점 붙는다(가감속 5~6kt/s 한계) — 앞 자세에서 95kt 를 건너뛰려면
+      // 20초 넘게 걸린다. 여기서는 '그 자세의 정상 속도' 를 보므로 15kt 떨어진
       // 자리에서 출발해 수렴하는지를 본다(점진성은 아래에서 따로 잰다).
       S.spd = Math.max(-40, Math.min(160, spdFromPitch(deg) + 15)); simAcc = 0;
       fly(25);
@@ -276,7 +276,7 @@ export async function run(page, t) {
     (${SETUP.toString()})();
     const fly = ${FLY};
     joyAxes = { pitch: { i: 1, inv: false }, coll: { i: 3, inv: false, abs: true } };
-    S.alt = 4000; _simGndFt = 0; S.bnk = 0; S.spd = 120; S.pit = 0; simAcc = 0; S.vs = 0; _simVs1 = 0;
+    S.alt = 4000; _simGndFt = 0; S.bnk = 0; S.spd = 120; S.pit = 0; simAcc = 0; S.vs = 0; simVsAcc = 0;
     simTrimReset();
     const lever = () => _ax(3, Math.max(-1, Math.min(1, tqRequired() / 110 * 2 - 1)));
     lever(); fly(10); lever(); fly(10);            // 수평 120kt 에 자리잡는다(레버는 고도 유지)
@@ -298,7 +298,7 @@ export async function run(page, t) {
     simTrimReset();
     // 땅 위에서 미끄러지다 서는 것은 고도가 되지 않는다
     joyAxes = { pitch: { i: 1, inv: false } };
-    S.alt = 0; _simGndFt = 0; S.spd = 30; S.vs = 0; _simVs1 = 0; simAcc = 0; S.tq = 0;
+    S.alt = 0; _simGndFt = 0; S.spd = 30; S.vs = 0; simVsAcc = 0; simAcc = 0; S.tq = 0;
     const gnd = run(3);
     return { lvl, flare, accel, gnd, eff: SIM_KE_EFF };
   })()`);
@@ -522,7 +522,7 @@ export async function run(page, t) {
     const run = (tq) => {
       _ax(3, Math.max(-1, Math.min(1, tq / 110 * 2 - 1)));
       // 토크도 그 값에서 시작한다(레버를 따라가는 지연은 아래 '점진적으로' 검사에서 본다)
-      S.spd = 120; simAcc = 0; S.vs = 0; _simVs1 = 0; S.alt = 3000; S.tq = tq; fly(10);
+      S.spd = 120; simAcc = 0; S.vs = 0; simVsAcc = 0; S.alt = 3000; S.tq = tq; fly(10);
       return S.vs;
     };
     const same = run(need);
@@ -544,7 +544,7 @@ export async function run(page, t) {
   t.ok(Math.abs(law.inv[0] - 500) < 15 && Math.abs(law.inv[1] + 500) < 15,
     `토크 → 상승률 되짚기도 맞는다 (${law.inv[0].toFixed(0)} · ${law.inv[1].toFixed(0)}fpm)`);
 
-  // ── 컬렉티브 감도 2배 · 강하는 4,000fpm 까지 ──
+  // ── 컬렉티브 감도(PERF 표 그대로) · 강하는 4,000fpm 까지 ──
   const coll2 = await page.evaluate(`(() => {
     (${SETUP.toString()})();
     const fly = ${FLY};
@@ -554,12 +554,12 @@ export async function run(page, t) {
     const lever = tq => _ax(3, Math.max(-1, Math.min(1, tq / 110 * 2 - 1)));
     lever(tqRequired()); fly(10);
     const pow = () => S.vs - simKeVs(false);
-    // 남는 토크 +5% — PERF 표 값의 2배로 오른다
-    S.spd = 70; simAcc = 0; S.vs = 0; _simVs1 = 0; S.alt = 5000;
+    // 남는 토크 +5% — PERF 표 값대로 오른다
+    S.spd = 70; simAcc = 0; S.vs = 0; simVsAcc = 0; S.alt = 5000;
     lever(tqRequired() + 5); fly(10);
     const up = { pow: pow(), want: SIM_COLL_GAIN * perfVsForTq(5) * simClimbEff() };
     // 기수를 숙이고 레버를 끝까지 내린다
-    simTrim.pitch = 10; S.spd = 120; simAcc = 0; S.vs = 0; _simVs1 = 0; S.alt = 8000;
+    simTrim.pitch = 10; S.spd = 120; simAcc = 0; S.vs = 0; simVsAcc = 0; S.alt = 8000;
     _ax(3, -1);
     let minPow = 0, minAll = 0;
     S.running = true; let ts = 1000; S.lastT = ts;
@@ -568,9 +568,9 @@ export async function run(page, t) {
     simTrimReset();
     return { up, minPow, minAll, gain: SIM_COLL_GAIN };
   })()`);
-  t.eq(coll2.gain, 2, '컬렉티브 감도는 2배다');
+  t.eq(coll2.gain, 1, '컬렉티브 감도는 PERF 표 그대로다(종전 2배의 반)');
   t.ok(Math.abs(coll2.up.pow - coll2.up.want) < coll2.up.want * 0.05,
-    `레버 +5% 면 PERF 표 상승률의 2배로 오른다 (${coll2.up.pow.toFixed(0)} · 기대 ${coll2.up.want.toFixed(0)}fpm)`);
+    `레버 +5% 면 PERF 표 상승률로 오른다 (${coll2.up.pow.toFixed(0)} · 기대 ${coll2.up.want.toFixed(0)}fpm)`);
   t.ok(coll2.minAll < -3900 && coll2.minAll >= -4000.01,
     `기수를 숙이고 레버를 끝까지 내리면 4,000fpm 까지 강하한다 (계기 ${coll2.minAll.toFixed(0)}fpm — 가속하며 붙는 몫까지 합쳐도 넘지 않는다)`);
 
@@ -1197,7 +1197,7 @@ export async function run(page, t) {
     const REST = 3.2857142857142856;
     let now = 5000; joyPoll(now);
     S.alt = 2000; _simGndFt = 0; S.spd = 0; S.bnk = 0; S.pit = pitchFromSpd(0);
-    simLat = 0; simAcc = 0; S.vs = 0; _simVs1 = 0;
+    simLat = 0; simAcc = 0; S.vs = 0; simVsAcc = 0;
     simTrimReset();
     if (gspdOn) toggleGspd();
     toggleGspd();                                  // 제자리에서 GSPD ENGAGE
@@ -1317,7 +1317,7 @@ export async function run(page, t) {
 
   // ── 속도·고도는 점진적으로 바뀐다 ──
   // 자세나 출력을 바꿔도 속도·상승률이 그 자리에서 튀지 않는다. 가감속이 먼저
-  // 천천히 붙고(S 자 모양), 그 한계(≈3.5kt/s)를 넘지 않으며, 넘쳐 지나치지 않는다.
+  // 점점 커지며 붙고(S 자 모양), 그 한계(가속 5kt/s)를 넘지 않으며, 넘쳐 지나치지 않는다.
   const grad = await page.evaluate(`(() => {
     (${SETUP.toString()})();
     const fly = ${FLY};
@@ -1326,7 +1326,7 @@ export async function run(page, t) {
     // ① 속도 — 수평(120kt)에서 기수를 10° 숙인다(목표 140kt)
     S.spd = 120; S.pit = 0; simAcc = 0;
     _ax(3, (tqRequired() / 110) * 2 - 1); fly(3);  // 레버를 고도 유지 언저리에 둔다
-    S.spd = 120; simAcc = 0; S.vs = 0; _simVs1 = 0;
+    S.spd = 120; simAcc = 0; S.vs = 0; simVsAcc = 0;
     simTrim.pitch = 10;                            // 트림으로 기수 10° 내림(조종간은 가운데)
     const spd = []; let maxAcc = 0, prev = S.spd;
     S.running = true; let ts = 1000; S.lastT = ts;
@@ -1349,37 +1349,203 @@ export async function run(page, t) {
     const lever = S.tq + 20;
     _ax(3, Math.min(1, (lever / 110) * 2 - 1));
     S.running = true; ts = 1000; S.lastT = ts;
-    const vs = [], tq = [], all = [];
+    const vs = [], tq = [], all = []; let peak = 0;
     for (let i = 1; i <= 10 * 20; i++) {
       ts += 50; joyPoll(ts); simStep(ts);
-      if (i === 6 || i === 20 || i === 60 || i === 200) {
+      if (i === 6 || i === 10 || i === 20 || i === 60 || i === 200) {
         vs.push(pow() - base); all.push(S.vs - baseAll); tq.push(S.tq);
       }
+      peak = Math.max(peak, pow() - base);
     }
     S.running = false;
     simTrimReset();
-    return { spd, maxAcc, vs, all, tq, lever };
+    return { spd, maxAcc, vs, all, tq, lever, peak };
   })()`);
   t.ok(grad.spd[0] - 120 < 0.8,
     `기수를 숙인 0.5초 뒤에는 거의 그대로다 (${grad.spd[0].toFixed(1)}kt — 종전에는 곧바로 빨라졌다)`);
   t.ok(grad.spd[1] - 120 < 6 && grad.spd[1] > grad.spd[0],
     `2초 뒤에도 조금씩 붙는다 (${grad.spd[1].toFixed(1)}kt)`);
-  t.ok(grad.maxAcc <= 3.6, `가감속은 3.5kt/s 를 넘지 않는다 (최대 ${grad.maxAcc.toFixed(2)}kt/s)`);
+  t.ok(grad.maxAcc <= 5.05, `가속은 5kt/s 를 넘지 않는다 (최대 ${grad.maxAcc.toFixed(2)}kt/s)`);
   t.ok(Math.abs(grad.spd[3] - 140) < 3 && grad.spd[3] <= 141,
     `25초면 그 자세의 속도(140kt)에 닿고 넘치지 않는다 (${grad.spd[3].toFixed(1)}kt)`);
-  const vsFinal = grad.vs[3];
+  // 상승률 — vs: 0.3 · 0.5 · 1 · 3 · 10초
+  const vsFinal = grad.vs[4];
   t.ok(vsFinal > 300, `레버를 올리면 결국 오른다 (${vsFinal.toFixed(0)}fpm)`);
-  t.ok(grad.vs[0] < vsFinal * 0.2,
+  t.ok(grad.vs[0] < vsFinal * 0.15,
     `0.3초 뒤 상승률은 아직 작다 (${grad.vs[0].toFixed(0)} / ${vsFinal.toFixed(0)}fpm)`);
-  t.ok(grad.vs[1] < vsFinal * 0.35,
-    `1초 뒤에도 아직 덜 붙었다 (${grad.vs[1].toFixed(0)} / ${vsFinal.toFixed(0)}fpm)`);
-  t.ok(grad.vs[2] > vsFinal * 0.6 && grad.vs[2] < vsFinal * 0.9,
-    `3초면 대부분 붙되 다 붙지는 않았다 (${grad.vs[2].toFixed(0)} / ${vsFinal.toFixed(0)}fpm)`);
-  t.ok(grad.all[2] > grad.vs[2] && grad.all[0] < vsFinal * 0.2,
+  t.ok(grad.vs[2] - grad.vs[1] > grad.vs[1],
+    `상승률은 점점 빨라지며 붙는다 — 0.5~1초에 붙는 몫이 처음 0.5초보다 크다 ` +
+    `(${grad.vs[1].toFixed(0)} → ${grad.vs[2].toFixed(0)}fpm)`);
+  t.ok(grad.vs[2] < vsFinal * 0.5,
+    `1초 뒤에도 아직 다 붙지 않았다 (${grad.vs[2].toFixed(0)} / ${vsFinal.toFixed(0)}fpm)`);
+  t.ok(grad.vs[3] > vsFinal * 0.85,
+    `3초면 거의 다 붙는다 (${grad.vs[3].toFixed(0)} / ${vsFinal.toFixed(0)}fpm)`);
+  t.ok(grad.peak < vsFinal * 1.12,
+    `크게 넘치지 않는다 — 오르며 속도가 줄어 목표가 조금 내려앉는 만큼뿐 ` +
+    `(최대 ${grad.peak.toFixed(0)} / ${vsFinal.toFixed(0)}fpm)`);
+  t.ok(grad.all[3] > grad.vs[3] && grad.all[0] < vsFinal * 0.2,
     `오르며 줄어든 속도가 고도로 조금 더해진다 — 그래도 처음에는 튀지 않는다 ` +
-    `(3초 ${grad.all[2].toFixed(0)} · 출력 몫 ${grad.vs[2].toFixed(0)}fpm · 0.3초 ${grad.all[0].toFixed(0)}fpm)`);
-  t.ok(grad.tq[0] < grad.lever - 3 && Math.abs(grad.tq[2] - grad.lever) < 1.5,
-    `토크도 레버를 천천히 따라간다 (0.3초 ${grad.tq[0].toFixed(0)}% → 3초 ${grad.tq[2].toFixed(0)}% · 레버 ${grad.lever.toFixed(0)}%)`);
+    `(3초 ${grad.all[3].toFixed(0)} · 출력 몫 ${grad.vs[3].toFixed(0)}fpm · 0.3초 ${grad.all[0].toFixed(0)}fpm)`);
+  t.ok(grad.tq[0] < grad.lever - 3 && Math.abs(grad.tq[3] - grad.lever) < 1.5,
+    `토크도 레버를 천천히 따라간다 (0.3초 ${grad.tq[0].toFixed(0)}% → 3초 ${grad.tq[3].toFixed(0)}% · 레버 ${grad.lever.toFixed(0)}%)`);
+
+  // ── 기수를 들며 레버를 내리면 — 고도는 크게 변하지 않고 속도가 점점 빠르게, 크게 준다 ──
+  // 감속이 정해진 빠르기로 커진다(최대 6kt/s). 레버를 내려 고도를 눌러도 속도를
+  // 돌려받지 않는다 — 줄어든 속도가 고도로 돌아와 고도를 실제로 잃지 않았으므로.
+  const flare = await page.evaluate(`(() => {
+    (${SETUP.toString()})();
+    joyAxes = { coll: { i: 3, inv: false, abs: true } };
+    const lever = tq => _ax(3, Math.max(-1, Math.min(1, tq / 110 * 2 - 1)));
+    const run = (dTq) => {
+      S.alt = 3000; _simGndFt = 0; S.bnk = 0; S.spd = 120; S.pit = 0;
+      S.tq = tqRequired(); simAcc = 0; S.vs = 0; simVsAcc = 0; simTrimReset();
+      simTrim.pitch = -6;                    // 기수 6° 들기(그 자세의 속도 60kt)
+      lever(tqRequired() + dTq);
+      const dec = [], spd = [], alt0 = S.alt; let altMax = 0, altMin = 0;
+      S.running = true; let ts = 1000; S.lastT = ts;
+      for (let i = 1; i <= 12 * 20; i++) {
+        ts += 50; joyPoll(ts); simStep(ts);
+        altMax = Math.max(altMax, S.alt - alt0); altMin = Math.min(altMin, S.alt - alt0);
+        if (i % 20 === 0) { dec.push(-simAcc); spd.push(S.spd); }
+      }
+      S.running = false;
+      return { dec, spd, altMax, altMin };
+    };
+    const down = run(-25), same = run(0);
+    simTrimReset();
+    return { down, same, decMax: SPD_DEC_MAX };
+  })()`);
+  const fd = flare.down;
+  t.ok(fd.dec[0] < fd.dec[1] && fd.dec[1] < fd.dec[2] && fd.dec[2] < fd.dec[3],
+    `감속이 점점 세진다 (1·2·3·4초 ${fd.dec.slice(0, 4).map(v => v.toFixed(1)).join(' · ')}kt/s)`);
+  t.ok(Math.max(...fd.dec) > flare.decMax - 0.5 && Math.max(...fd.dec) <= flare.decMax + 0.01,
+    `감속은 ${flare.decMax}kt/s 까지 세진다 (최대 ${Math.max(...fd.dec).toFixed(2)})`);
+  t.ok(fd.spd[7] < 88 && fd.spd[11] < 72,
+    `속도가 크게 준다 (120kt → 8초 ${fd.spd[7].toFixed(0)} · 12초 ${fd.spd[11].toFixed(0)}kt)`);
+  t.ok(fd.altMax < 200 && fd.altMin > -50,
+    `레버를 내렸으므로 고도는 크게 변하지 않는다 (+${fd.altMax.toFixed(0)} / ${fd.altMin.toFixed(0)}ft)`);
+  t.ok(flare.same.altMax > fd.altMax + 100,
+    `레버를 그대로 두면 줄어든 속도만큼 떠오른다 (+${flare.same.altMax.toFixed(0)}ft)`);
+  t.ok(Math.abs(fd.spd[11] - flare.same.spd[11]) < 4,
+    `레버를 내려도 속도가 덜 줄지 않는다 (${fd.spd[11].toFixed(1)} · 레버 그대로 ${flare.same.spd[11].toFixed(1)}kt)`);
+
+  // ── 기수를 숙이며 레버를 호버 이상으로 — 속도가 점점 빠르게 붙는다 ──
+  // 가속도 정해진 빠르기로 커지고, 속도가 붙을수록(전이양력) 더 세진다(최대 5kt/s).
+  const accel = await page.evaluate(`(() => {
+    (${SETUP.toString()})();
+    joyAxes = { coll: { i: 3, inv: false, abs: true } };
+    const lever = tq => _ax(3, Math.max(-1, Math.min(1, tq / 110 * 2 - 1)));
+    S.alt = 3000; _simGndFt = 0; S.bnk = 0; S.spd = 0; S.pit = pitchFromSpd(0);
+    S.tq = tqRequired(); simAcc = 0; S.vs = 0; simVsAcc = 0; simTrimReset();
+    simTrim.pitch = 5;                       // 기수 5° 숙이기
+    lever(hoverTqRef() + 10);                // 호버 토크보다 10% 더
+    const acc = {}, spd = {};
+    S.running = true; let ts = 1000; S.lastT = ts;
+    for (let i = 1; i <= 20 * 20; i++) {
+      ts += 50; joyPoll(ts); simStep(ts);
+      if (i % 20 === 0) { acc[i / 20] = simAcc; spd[i / 20] = S.spd; }
+    }
+    S.running = false; simTrimReset();
+    return { acc, spd };
+  })()`);
+  const ac = accel.acc;
+  t.ok(ac[1] < ac[3] && ac[3] < ac[6] && ac[6] < ac[10],
+    `가속이 점점 세진다 (1·3·6·10초 ${[1, 3, 6, 10].map(k => ac[k].toFixed(1)).join(' · ')}kt/s)`);
+  t.ok(accel.spd[10] > 30 && accel.spd[20] > 78,
+    `제자리에서 10초 ${accel.spd[10].toFixed(0)}kt · 20초 ${accel.spd[20].toFixed(0)}kt (종전 일정한 3.5kt/s 보다 빠르다)`);
+
+  // ── 상위모드가 잡은 축은 조종간을 무시한다 ──
+  // HDG SEL·NAV 는 좌우(뱅크)·페달을, ALT(선택 고도로 가는 것 포함)·CRHT 는 컬렉티브를 가져간다.
+  const upper = await page.evaluate(`(() => {
+    (${SETUP.toString()})();
+    const fly = ${FLY};
+    joyAxes = { roll: { i: 0, inv: false }, pitch: { i: 1, inv: false },
+                yaw: { i: 2, inv: false }, coll: { i: 3, inv: false, abs: true } };
+    const lever = tq => _ax(3, Math.max(-1, Math.min(1, tq / 110 * 2 - 1)));
+    const out = {};
+    S.alt = 3000; _simGndFt = 0; S.hdg = 90; S.bnk = 0; S.spd = 100; S.pit = pitchFromSpd(100);
+    simAcc = 0; S.vs = 0; simVsAcc = 0; simTrimHoldSpeed();
+    S.tq = tqRequired(); lever(S.tq); joyPoll(1000);
+    // HDG SEL 120° — 조종간을 왼쪽 끝까지 밀고 왼발 페달을 밟아도 오른쪽으로 돌아 선다
+    selHdg = 120; hdgSelOn = true; rollApOn = true;
+    _ax(0, -1); _ax(2, -1);
+    out.lat = simAfcsLat();
+    fly(1.5); out.bnk1 = S.bnk;
+    fly(25); out.hdg = S.hdg; out.bnk2 = S.bnk;
+    _ax(0, 0); _ax(2, 0);
+    // 좌우 트림을 누르면 HDG SEL 이 풀리고 그 자리 뱅크를 이어 잡는다
+    selHdg = 200; fly(4); const b0 = S.bnk;
+    startTrimHold('R'); stopTrimHold();
+    out.rel = { on: hdgSelOn || rollApOn, b0, lat: simAfcsLat() };
+    fly(1); out.rel.b1 = S.bnk;
+    // 풀린 뒤에는 조종간이 다시 뱅크를 잡는다
+    simTrimReset(); _ax(0, -0.5); fly(2); out.manual = S.bnk;
+    _ax(0, 0); fly(3);
+    // ALT — 선택 고도 3,300ft · 500fpm. 레버를 끝까지 내려도 오르고, 닿으면 선다
+    S.alt = 3000; S.vs = 0; simVsAcc = 0;   // 선회하며 가라앉은 만큼 되돌려 놓고 시작한다
+    selAlt = 3300; selVS = 500; altHoldOn = true; crhtOn = false;
+    _ax(3, -1);
+    const a0 = S.alt; fly(10); out.alt10 = S.alt - a0;
+    fly(40); out.alt50 = S.alt; out.tqAlt = S.tq; out.vert = simAfcsVert();
+    // AFCS 가 내는 만큼 — 고도를 지키는 토크(+ 속도를 되찾는 동안 운동에너지로 치르는 몫)
+    out.tqReq = tqRequired() + perfTqForVs(-simKeVs(false));
+    // ALT 를 풀면 레버가 다시 고도를 정한다(레버가 바닥이므로 내려간다)
+    toggleAltHold(); fly(4); out.offVs = S.vs; out.offAlt = S.alt;
+    // CRHT — 지금 고도를 지킨다. 레버를 끝까지 올려도
+    _ax(3, 1); toggleCrht(); const c0 = selCrht;
+    fly(12); out.crht = S.alt - c0; out.tqCrht = S.tq;
+    toggleCrht(); fly(3); out.crhtOffVs = S.vs;
+    _ax(3, 0); simTrimReset();
+    return out;
+  })()`);
+  t.ok(upper.lat, 'HDG SEL 을 걸면 좌우 축은 AFCS 몫이다');
+  t.ok(upper.bnk1 > 3, `조종간을 왼쪽 끝까지 밀어도 선택 헤딩 쪽(오른쪽)으로 기운다 (${upper.bnk1.toFixed(1)}°)`);
+  t.ok(Math.abs(normAS0(upper.hdg - 120)) < 1.5 && Math.abs(upper.bnk2) < 2,
+    `페달을 밟고 있어도 선택 헤딩 120° 에 선다 (${upper.hdg.toFixed(1)}° · 뱅크 ${upper.bnk2.toFixed(1)}°)`);
+  t.ok(!upper.rel.on && !upper.rel.lat, '좌우 트림을 누르면 HDG SEL 이 풀린다');
+  t.ok(upper.rel.b0 > 3 && Math.abs(upper.rel.b1 - (upper.rel.b0 + 1)) < 1.5,
+    `풀린 자리의 뱅크를 이어 잡는다 (${upper.rel.b0.toFixed(1)}° → ${upper.rel.b1.toFixed(1)}°)`);
+  t.ok(upper.manual < -15, `풀린 뒤에는 조종간이 다시 뱅크를 잡는다 (${upper.manual.toFixed(1)}°)`);
+  t.ok(upper.vert, 'ALT 를 걸면 컬렉티브 축은 AFCS 몫이다');
+  t.ok(Math.abs(upper.alt10 - 500 / 6) < 10,
+    `레버를 끝까지 내려도 선택 상승률로 오른다 (10초 +${upper.alt10.toFixed(0)}ft · 500fpm)`);
+  t.ok(Math.abs(upper.alt50 - 3300) < 1, `선택 고도에 닿으면 선다 (${upper.alt50.toFixed(0)}ft)`);
+  t.ok(Math.abs(upper.tqAlt - upper.tqReq) < 2 && upper.tqAlt > 40,
+    `토크는 레버(바닥 0%)가 아니라 고도를 지키는 만큼이다 (${upper.tqAlt.toFixed(0)}% · 필요 ${upper.tqReq.toFixed(0)}%)`);
+  t.ok(upper.offVs < -300 && upper.offAlt < 3300,
+    `ALT 를 풀면 레버가 다시 고도를 정한다 (바닥 레버 → ${upper.offVs.toFixed(0)}fpm)`);
+  t.ok(Math.abs(upper.crht) < 2 && upper.tqCrht < 100,
+    `CRHT 는 레버를 끝까지 올려도 고도를 지킨다 (${upper.crht.toFixed(1)}ft · 토크 ${upper.tqCrht.toFixed(0)}%)`);
+  t.ok(upper.crhtOffVs > 300, `CRHT 를 풀면 올려 둔 레버만큼 오른다 (${upper.crhtOffVs.toFixed(0)}fpm)`);
+
+  // ── GSPD 의 4방향 트림 — 기준속도가 1초마다 1kt 씩 옮겨 가도 계단 없이 따라간다 ──
+  // 빠른 속도에서 그 1kt 를 한순간에 따라가 버리면 1초마다 속도·자세·상승률(운동에너지
+  // 몫)이 튀어 PFD 와 3D 시점이 흔들렸다. 1kt 를 1초에 걸쳐 따라간다.
+  const gtrim = await page.evaluate(`(() => {
+    (${SETUP.toString()})();
+    S.alt = 3000; _simGndFt = 0; S.spd = 30; S.pit = pitchFromSpd(30); simAcc = 0; S.vs = 0; simVsAcc = 0;
+    if (!gspdOn) toggleGspd();
+    gspdRefFwd = 30; gspdActFwd = 30; gspdRefLat = 0; gspdActLat = 0;
+    S.running = true; let ts = 1000; S.lastT = ts;
+    for (let i = 0; i < 40; i++) { ts += 50; joyPoll(ts); simStep(ts); }   // 자리잡기
+    let maxStep = 0, maxDvs = 0, maxDpit = 0, pv = gspdActFwd, pvs = S.vs, pp = S.pit;
+    for (let i = 1; i <= 100; i++) {
+      if (i % 20 === 1) gspdTrimNudge('F');            // 누르고 있는 동안 1초마다 +1kt
+      ts += 50; joyPoll(ts); simStep(ts);
+      maxStep = Math.max(maxStep, Math.abs(gspdActFwd - pv)); pv = gspdActFwd;
+      maxDvs = Math.max(maxDvs, Math.abs(S.vs - pvs)); pvs = S.vs;
+      maxDpit = Math.max(maxDpit, Math.abs(S.pit - pp)); pp = S.pit;
+    }
+    S.running = false;
+    const out = { maxStep, maxDvs, maxDpit, fwd: gspdActFwd, ref: gspdRefFwd };
+    toggleGspd();
+    return out;
+  })()`);
+  t.ok(gtrim.maxStep <= 0.051,
+    `한 프레임(0.05초)에 ${gtrim.maxStep.toFixed(3)}kt 씩만 — 1kt 를 1초에 걸쳐 따라간다(종전 0.27kt)`);
+  t.ok(Math.abs(gtrim.fwd - 35) < 1.1, `5초에 5kt 를 끊김 없이 따라왔다 (${gtrim.fwd.toFixed(1)} · 기준 ${gtrim.ref}kt)`);
+  t.ok(gtrim.maxDvs < 150 && gtrim.maxDpit < 0.1,
+    `상승률·자세가 튀지 않는다 (프레임당 최대 ${gtrim.maxDvs.toFixed(0)}fpm · ${gtrim.maxDpit.toFixed(3)}°)`);
 
   // ── 시야 둘러보기 — B0 을 누르고 햇으로 눈을 돌린다 ──
   // 둘러보기 버튼을 누르고 있는 동안 햇은 트림이 아니라 시선이다. 놓으면 정면으로
@@ -1460,7 +1626,7 @@ export async function run(page, t) {
     joyAxes = {};
     _ax(0, 1); _ax(3, 1);
     S.spd = spdFromPitch(S.pit); simAcc = 0;      // 그 자세의 속도로 정속(속도가 변하면 고도도 변한다)
-    S.tq = tqRequired(); S.vs = 0; _simVs1 = 0;   // 레버가 없으면 고도를 지킬 토크가 걸린다
+    S.tq = tqRequired(); S.vs = 0; simVsAcc = 0;   // 레버가 없으면 고도를 지킬 토크가 걸린다
     const a0 = S.alt;
     fly(4);
     return { bnk: S.bnk, dAlt: S.alt - a0 };

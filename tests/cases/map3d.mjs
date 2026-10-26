@@ -271,21 +271,26 @@ export async function run(page, t) {
   t.eq(none.join(','), '11,38,56', '어느 단계에도 사진이 없으면 바다 빛으로 채운다');
   await page.unroute('**/server.arcgisonline.com/**');
 
-  // ── 지형(DEM)의 바다는 0m 로 편다 ──
-  // 왼쪽 절반은 바다 밑 −20m, 오른쪽 절반은 땅 +100m 인 타일을 흉내 낸다.
-  const SEA20 = [127, 236, 0], LAND100 = [128, 100, 0];   // terrarium: R×256+G+B/256−32768
+  // ── 바다는 무조건 평평하게 ──
+  // 네 칸: 바다 밑 −20m · 해안 잔물결 +3m · 낮은 땅 +10m · 땅 +100m (terrarium: R×256+G+B/256−32768)
+  const col = m => { const v = m + 32768; return [v >> 8, v & 255, 0]; };
+  const BANDS = [-20, 3, 10, 100];
   await page.route('**/elevation-tiles-prod/terrarium/**', route =>
-    route.fulfill({ status: 200, contentType: 'image/png', body: pngOf(256, 256, x => (x < 128 ? SEA20 : LAND100)) }));
+    route.fulfill({ status: 200, contentType: 'image/png', body: pngOf(256, 256, x => col(BANDS[x >> 6])) }));
   const dem = await page.evaluate(async () => {
     const buf = await _demTile(12, 3480, 1588);
     const bmp = await createImageBitmap(new Blob([buf]), { premultiplyAlpha: 'none', colorSpaceConversion: 'none' });
     const c = document.createElement('canvas'); c.width = bmp.width; c.height = bmp.height;
     const ctx = c.getContext('2d'); ctx.drawImage(bmp, 0, 0);
     const at = x => { const d = ctx.getImageData(x, 100, 1, 1).data; return d[0] * 256 + d[1] + d[2] / 256 - 32768; };
-    return { sea: at(30), land: at(200), src: _ml3d.getStyle().sources.terrain.tiles[0] };
+    return { sea: at(30), ripple: at(90), low: at(160), land: at(220), src: _ml3d.getStyle().sources.terrain.tiles[0],
+             fn: [seaFlatM(-3000), seaFlatM(4.9), seaFlatM(5), seaFlatM(10), seaFlatM(15), seaFlatM(800)] };
   });
   await page.unroute('**/elevation-tiles-prod/terrarium/**');
   t.eq(dem.src, 'dem://{z}/{x}/{y}', '3D 지형은 바다를 펴는 길(dem://)로 받는다');
   t.eq(dem.sea, 0, '바다 밑(−20m)은 수면 0m 로 편다 — 확대 단계마다 수심이 달라 그려진 바다가 오르내리지 않게');
-  t.eq(dem.land, 100, '땅의 높이는 그대로다 (+100m)');
+  t.eq(dem.ripple, 0, '해안의 잔물결 같은 값(+3m)도 0m — 바다는 무조건 평평하다');
+  t.eq(dem.low, 7.5, '5~15m 는 0~15m 로 부드럽게 잇는다(턱이 지지 않게) — +10m → 7.5m');
+  t.eq(dem.land, 100, '15m 위의 땅은 그대로다 (+100m)');
+  t.eq(dem.fn.join(','), '0,0,0,7.5,15,800', `바다 펴기 규칙 (−3000 · 4.9 · 5 · 10 · 15 · 800m → ${dem.fn.join(' · ')})`);
 }
