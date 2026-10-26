@@ -1228,6 +1228,22 @@ export async function run(page, t) {
   t.ok(Math.abs(gs.after.spd - gs.spd0) < 1.5,
     `조종간을 가운데 두면 그 속도로 계속 난다 (${gs.spd0.toFixed(1)} → ${gs.after.spd.toFixed(1)}kt · 트림 ${gs.off.trim.toFixed(1)}°)`);
 
+  // GSPD 를 풀고 타력으로 옆걸음 중일 때 SIM 에 들어와도 그 속도를 넘겨 받는다
+  const coast = await page.evaluate(`(() => {
+    (${SETUP.toString()})();
+    toggleSimMode(false);
+    S.spd = 0; if (!gspdOn) toggleGspd();
+    gspdActLat = 6; gspdActFwd = 3;
+    toggleGspd();                                  // 옆으로 가던 중에 풀면 타력 비행
+    const was = gspdCoasting;
+    toggleSimMode(true);
+    const r = { was, coast: gspdCoasting, lat: simLat, spd: S.spd };
+    toggleSimMode(false); simLat = 0;
+    return r;
+  })()`);
+  t.ok(coast.was && !coast.coast && coast.lat === 6 && coast.spd === 3,
+    `타력 비행 중에 SIM 에 들어와도 그 속도를 넘겨 받는다 (옆 ${coast.lat} · 앞 ${coast.spd}kt)`);
+
   // ── 스로틀처럼 세워 두는 레버(레버식) ──
   // 자리 자체가 출력이다. 맨 아래면 토크가 바닥, 맨 위면 110%.
   const lever = await page.evaluate(`(() => {
