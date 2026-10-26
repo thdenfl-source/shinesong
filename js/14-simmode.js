@@ -352,7 +352,8 @@ function simFly(dt) {
   // 만큼만 걸어 둔다(조이스틱 없이 켰다고 저절로 떠오르지 않게).
   const cfg = (typeof joyAxes === 'object' && joyAxes) ? joyAxes.coll : null;
   let tTgt;
-  // 레버가 없으면: 땅에서는 그대로 서 있고(출력 0), 공중에서는 고도를 지킨다
+  // 레버가 없으면: 땅에서는 그대로 서 있고(출력 0), 공중에서는 수평 비행에 드는
+  // 만큼 건다(속도를 바꾸면 그 운동에너지만큼은 오르내린다)
   if (!cfg) tTgt = onGnd ? 0 : tqRequired();
   else if (cfg.abs) {
     // 스로틀·컬렉티브처럼 '세워 두는' 레버는 자리 자체가 출력이다.

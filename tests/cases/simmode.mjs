@@ -518,9 +518,10 @@ export async function run(page, t) {
     _ax(3, 0); fly(20);
     S.alt = 3000;
     const need = tqRequired();
+    // 재는 동안 속도가 변하면 그 운동에너지도 오르내림이 된다 — 120kt 정속에서 잰다
     const run = (tq) => {
       _ax(3, Math.max(-1, Math.min(1, tq / 110 * 2 - 1)));
-      S.vs = 0; _simVs1 = 0; S.alt = 3000; fly(10);
+      S.spd = 120; simAcc = 0; S.vs = 0; _simVs1 = 0; S.alt = 3000; fly(10);
       return S.vs;
     };
     const same = run(need);
@@ -1206,18 +1207,23 @@ export async function run(page, t) {
     S.spd = 70; S.alt = 4000;
     _ax(3, (tqRequired() / 110) * 2 - 1); fly(12);
     _ax(3, (tqRequired() / 110) * 2 - 1); fly(8);
-    const base = S.vs;
+    // 출력(토크)이 만든 몫만 따로 본다 — 오르는 동안 속도가 줄며 돌려주는
+    // 운동에너지 몫은 유입류 지연과 상관없이 가감속과 함께 붙는다.
+    const pow = () => S.vs - simKeVs(false);
+    const base = pow(), baseAll = S.vs;
     const lever = S.tq + 20;
     _ax(3, Math.min(1, (lever / 110) * 2 - 1));
     S.running = true; ts = 1000; S.lastT = ts;
-    const vs = [], tq = [];
+    const vs = [], tq = [], all = [];
     for (let i = 1; i <= 10 * 20; i++) {
       ts += 50; joyPoll(ts); simStep(ts);
-      if (i === 6 || i === 20 || i === 60 || i === 200) { vs.push(S.vs - base); tq.push(S.tq); }
+      if (i === 6 || i === 20 || i === 60 || i === 200) {
+        vs.push(pow() - base); all.push(S.vs - baseAll); tq.push(S.tq);
+      }
     }
     S.running = false;
     simTrimReset();
-    return { spd, maxAcc, vs, tq, lever };
+    return { spd, maxAcc, vs, all, tq, lever };
   })()`);
   t.ok(grad.spd[0] - 120 < 0.8,
     `기수를 숙인 0.5초 뒤에는 거의 그대로다 (${grad.spd[0].toFixed(1)}kt — 종전에는 곧바로 빨라졌다)`);
@@ -1234,6 +1240,9 @@ export async function run(page, t) {
     `1초 뒤에도 아직 덜 붙었다 (${grad.vs[1].toFixed(0)} / ${vsFinal.toFixed(0)}fpm)`);
   t.ok(grad.vs[2] > vsFinal * 0.6 && grad.vs[2] < vsFinal * 0.9,
     `3초면 대부분 붙되 다 붙지는 않았다 (${grad.vs[2].toFixed(0)} / ${vsFinal.toFixed(0)}fpm)`);
+  t.ok(grad.all[2] > grad.vs[2] && grad.all[0] < vsFinal * 0.2,
+    `오르며 줄어든 속도가 고도로 조금 더해진다 — 그래도 처음에는 튀지 않는다 ` +
+    `(3초 ${grad.all[2].toFixed(0)} · 출력 몫 ${grad.vs[2].toFixed(0)}fpm · 0.3초 ${grad.all[0].toFixed(0)}fpm)`);
   t.ok(grad.tq[0] < grad.lever - 3 && Math.abs(grad.tq[2] - grad.lever) < 1.5,
     `토크도 레버를 천천히 따라간다 (0.3초 ${grad.tq[0].toFixed(0)}% → 3초 ${grad.tq[2].toFixed(0)}% · 레버 ${grad.lever.toFixed(0)}%)`);
 
@@ -1315,6 +1324,7 @@ export async function run(page, t) {
     const fly = ${FLY};
     joyAxes = {};
     _ax(0, 1); _ax(3, 1);
+    S.spd = spdFromPitch(S.pit); simAcc = 0;      // 그 자세의 속도로 정속(속도가 변하면 고도도 변한다)
     S.tq = tqRequired(); S.vs = 0; _simVs1 = 0;   // 레버가 없으면 고도를 지킬 토크가 걸린다
     const a0 = S.alt;
     fly(4);
