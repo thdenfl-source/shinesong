@@ -981,6 +981,60 @@ export async function run(page, t) {
   t.ok(trim.maxR === 30 && trim.maxP === -20,
     `한없이 쌓이지는 않는다 (뱅크 ±${trim.maxR}° · 피치 ${trim.maxP}°)`);
 
+  // ── 조이스틱 트림은 딸깍 한 번에 1° ──
+  // 4방향 트림(버튼)과 축 9 햇 모두, 누르고 있어도 1° 에서 멈춘다(반복 타이머를
+  // 걸지 않는다). 세 번 딸깍이면 3° 다.
+  const joyTrim = await page.evaluate(`(() => {
+    (${SETUP.toString()})();
+    _pad.buttons = Array.from({ length: 16 }, () => ({ pressed: false, value: 0 }));
+    _pad.axes = [0, 0, 0, 0, 0, 0, 0, 0, 0, 3.2857142857142856];
+    for (const k in _joyNeutral) delete _joyNeutral[k];
+    const savedBinds = Object.assign({}, joyBinds);
+    joyBinds = {};
+    // 한 동작에는 입력 하나뿐이다 — 버튼으로 먼저 재고, 햇으로 바꿔 다시 잰다
+    joySetBind('b12', 'trimF'); joySetBind('b13', 'trimA');
+    joySetBind('b14', 'trimL'); joySetBind('b15', 'trimR');
+    const REST = 3.2857142857142856;
+    let now = 2000;
+    joyPoll(now);
+    simTrimReset();
+    const btn = (i, on) => { _pad.buttons[i] = { pressed: on, value: on ? 1 : 0 }; joyPoll(now += 16); };
+    const hat = v => { _pad.axes[9] = v; joyPoll(now += 16); };
+    const holdPolls = n => { for (let i = 0; i < n; i++) joyPoll(now += 16); };
+    // 4방향 트림 ▶ 를 1초 넘게 누르고 있는다
+    btn(15, true); holdPolls(70);
+    const btnHeld = { roll: simTrim.roll, timer: trimHoldTimer, int: trimHoldInt };
+    btn(15, false);
+    btn(15, true); btn(15, false); btn(15, true); btn(15, false);   // 두 번 더 딸깍
+    const btnThree = simTrim.roll;
+    btn(12, true); btn(12, false);                                    // ▲ 한 번
+    const btnPitch = simTrim.pitch;
+    simTrimReset();
+    joySetBind('h9N', 'trimF'); joySetBind('h9S', 'trimA');
+    joySetBind('h9W', 'trimL'); joySetBind('h9E', 'trimR');
+    // 축 9 햇 ▼ 를 1초 넘게 누르고 있는다
+    hat(1/7); holdPolls(70);
+    const hatHeld = { pitch: simTrim.pitch, timer: trimHoldTimer, int: trimHoldInt };
+    hat(REST);
+    hat(1/7); hat(REST); hat(1/7); hat(REST);                         // 두 번 더 딸깍
+    const hatThree = simTrim.pitch;
+    hat(5/7); hat(REST);                                              // ◀ 한 번
+    const hatRoll = simTrim.roll;
+    simTrimReset();
+    joyBinds = savedBinds; joySave();
+    return { btnHeld, btnThree, btnPitch, hatHeld, hatThree, hatRoll };
+  })()`);
+  t.eq(joyTrim.btnHeld.roll, 1, `4방향 트림을 1초 넘게 누르고 있어도 1° 다 (${joyTrim.btnHeld.roll}°)`);
+  t.ok(joyTrim.btnHeld.timer === null && joyTrim.btnHeld.int === null,
+    '조이스틱 트림에는 반복 타이머가 걸리지 않는다');
+  t.eq(joyTrim.btnThree, 3, `4방향 트림 세 번 딸깍이면 3° 다 (${joyTrim.btnThree}°)`);
+  t.eq(joyTrim.btnPitch, 1, `4방향 트림 ▲ 도 한 번에 1° 다 (${joyTrim.btnPitch}°)`);
+  t.eq(joyTrim.hatHeld.pitch, -1, `축 9 햇 ▼ 를 누르고 있어도 1° 다 (${joyTrim.hatHeld.pitch}°)`);
+  t.ok(joyTrim.hatHeld.timer === null && joyTrim.hatHeld.int === null,
+    '햇에도 반복 타이머가 걸리지 않는다');
+  t.eq(joyTrim.hatThree, -3, `햇 세 번 딸깍이면 3° 다 (${joyTrim.hatThree}°)`);
+  t.eq(joyTrim.hatRoll, -1, `햇 ◀ 도 한 번에 1° 다 (${joyTrim.hatRoll}°)`);
+
   // ── 스로틀처럼 세워 두는 레버(레버식) ──
   // 자리 자체가 출력이다. 맨 아래면 토크가 바닥, 맨 위면 110%.
   const lever = await page.evaluate(`(() => {

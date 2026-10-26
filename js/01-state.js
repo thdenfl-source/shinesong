@@ -473,7 +473,10 @@ function gspdTrimNudge(dir) {
 let trimHoldTimer = null, trimHoldInt = null;
 let _trimNonGspdDir = null;
 let _trimGuard = null;
-function startTrimHold(dir) {
+// opt.click — 조이스틱(4방향 트림·햇)처럼 '딸깍' 으로 세는 입력이다.
+// SIM 모드에서는 한 번 누르면 1° 로 끝내고 누르고 있어도 이어 가지 않는다
+// (반복을 걸면 조금 길게 누른 딸깍 한 번이 2°·3° 로 넘어가 버린다).
+function startTrimHold(dir, opt) {
   stopTrimHold();                       // 중복 시작 방지(이전 홀드가 남아 있으면 정리)
   _trimGuard = setTimeout(stopTrimHold, 20000);   // 런어웨이 방지(최대 20초)
   // SIM 모드에서 '둘러보기' 버튼을 누르고 있으면 햇은 트림이 아니라 시선이다
@@ -485,6 +488,7 @@ function startTrimHold(dir) {
   // 1° 씩 옮겨 둔다(조종간을 가운데 두어도 그 자세로 날게 된다).
   if (simModeOn) {
     simTrimNudge(dir);
+    if (opt && opt.click) return;
     trimHoldTimer = setTimeout(() => {
       trimHoldInt = setInterval(() => simTrimNudge(dir), 100);
     }, 300);
