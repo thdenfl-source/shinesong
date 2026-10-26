@@ -521,7 +521,8 @@ export async function run(page, t) {
     // 재는 동안 속도가 변하면 그 운동에너지도 오르내림이 된다 — 120kt 정속에서 잰다
     const run = (tq) => {
       _ax(3, Math.max(-1, Math.min(1, tq / 110 * 2 - 1)));
-      S.spd = 120; simAcc = 0; S.vs = 0; _simVs1 = 0; S.alt = 3000; fly(10);
+      // 토크도 그 값에서 시작한다(레버를 따라가는 지연은 아래 '점진적으로' 검사에서 본다)
+      S.spd = 120; simAcc = 0; S.vs = 0; _simVs1 = 0; S.alt = 3000; S.tq = tq; fly(10);
       return S.vs;
     };
     const same = run(need);
@@ -570,8 +571,8 @@ export async function run(page, t) {
   t.eq(coll2.gain, 2, '컬렉티브 감도는 2배다');
   t.ok(Math.abs(coll2.up.pow - coll2.up.want) < coll2.up.want * 0.05,
     `레버 +5% 면 PERF 표 상승률의 2배로 오른다 (${coll2.up.pow.toFixed(0)} · 기대 ${coll2.up.want.toFixed(0)}fpm)`);
-  t.ok(coll2.minPow < -3900 && coll2.minPow >= -4000.01,
-    `기수를 숙이고 레버를 끝까지 내리면 4,000fpm 까지 강하한다 (출력 몫 ${coll2.minPow.toFixed(0)} · 계기 ${coll2.minAll.toFixed(0)}fpm)`);
+  t.ok(coll2.minAll < -3900 && coll2.minAll >= -4000.01,
+    `기수를 숙이고 레버를 끝까지 내리면 4,000fpm 까지 강하한다 (계기 ${coll2.minAll.toFixed(0)}fpm — 가속하며 붙는 몫까지 합쳐도 넘지 않는다)`);
 
   // ── Vy 에서 가장 잘 오른다 ──
   // 같은 토크라도 최대상승속도(Vy)에서 상승률이 가장 크고, 그보다 빠르거나

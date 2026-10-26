@@ -146,7 +146,7 @@ function simGspdAfter(dt, f0, l0, fly) {
   const spd = Math.hypot(gspdActFwd, gspdActLat);
   simAcc = (spd - Math.hypot(f0, l0)) / dt;
   S.spd = spd;                       // 07-sim.js 도 곧 같은 값을 넣는다
-  S.vs += simKeVs(_simOnGnd) - ke0;
+  S.vs = Math.max(-SIM_VS_DN_MAX, S.vs + simKeVs(_simOnGnd) - ke0);
   const tilt = a => Math.atan(a * 0.514444 / 9.80665) / D2R;   // kt/s → °
   const pTgt = Math.max(-SIM_PITCH_MAX, Math.min(SIM_PITCH_MAX, pitchFromSpd(gspdActFwd) - tilt(accF)));
   const bTgt = Math.max(-SIM_BANK_MAX, Math.min(SIM_BANK_MAX, tilt(accL)));
@@ -527,7 +527,8 @@ function simFly(dt) {
   _simVs1 += (vTgt - _simVs1) * Math.min(1, dt / VS_TAU1);
   // 출력 몫은 유입류를 거쳐 천천히, 운동에너지 몫은 가감속과 함께 바로 붙는다
   const vsP = vsPow + (_simVs1 - vsPow) * Math.min(1, dt / VS_TAU2);
-  S.vs = vsP + simKeVs(onGnd);
+  // 기수를 숙여 가속하며 레버를 내려도 강하는 4,000fpm 에서 멎는다(운동에너지 몫 포함)
+  S.vs = Math.max(-SIM_VS_DN_MAX, vsP + simKeVs(onGnd));
   // 땅 아래로는 내려가지 않는다 — 바닥은 해수면이 아니라 '발밑의 지면' 이다
   if (S.alt <= gnd + 0.5 && S.vs < 0) { S.vs = 0; S.alt = gnd; if (_simVs1 < 0) _simVs1 = 0; }
 
