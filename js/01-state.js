@@ -148,8 +148,10 @@ let simLat = 0;
 // 그래서 같은 레버 위치라도 뱅크를 주거나 속도가 바뀌면 오르내림이 달라진다.
 const TQ_HOVER   = 60;         // 무풍·수평·제자리에서 필요한 토크(%)
 const TQ_SPAN    = 45;         // 컬렉티브 끝까지 = ±45%
-const TQ_MAX     = 120;        // 계기 최대 눈금
-const TQ_LIMIT   = 100;        // 연속 사용 한계(넘으면 오버토크)
+const TQ_MAX     = 125;        // 계기 최대 눈금
+// 계기 구간 — 0~100% 녹색(연속 사용) · 100~113% 노랑(주의) · 113~125% 빨강(오버토크)
+const TQ_LIMIT   = 100;        // 연속 사용 한계 — 여기까지 녹색
+const TQ_RED     = 113;        // 이 위는 빨강 — 오버토크
 const TQ_RATE    = 60;         // 토크가 따라가는 속도(%/s)
 const TQ_PER_FPM = 55;         // 남는 토크 1% 당 상승률(fpm)
 const TQ_BANK    = 22;         // 뱅크로 더 드는 토크(1/cosφ−1 에 곱한다)
@@ -193,7 +195,9 @@ function tqShown() {
   try { if (typeof perfTqForVs === 'function') add = perfTqForVs(S.vs || 0); } catch (e) { _swallow(e); }
   return Math.max(0, Math.min(TQ_MAX, tqRequired() + add));
 }
-function tqOver() { return tqShown() > TQ_LIMIT; }
+function tqOver() { return tqShown() > TQ_RED; }
+// 지금 토크가 든 구간 — 'green' · 'yellow' · 'red'
+function tqBand(v = tqShown()) { return v > TQ_RED ? 'red' : v > TQ_LIMIT ? 'yellow' : 'green'; }
 
 function toggleGs() {
   if (gsArmed || gsOn) { gsArmed = false; gsOn = false; }
