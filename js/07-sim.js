@@ -427,7 +427,7 @@ function simStep(ts){
           // SIM 모드에서는 지면이 바닥이다(해수면이 아니라)
           if (simModeOn) {
             try {
-              const g = simGroundFt();     // 발밑 높이를 '아는 때' 만 바닥으로 삼는다
+              const g = simFloorFt();      // 발밑 바닥(지면·함정 갑판) — 지면은 '아는 때' 만
               if (S.alt < g) { S.alt = g; S.vs = 0; }
             } catch (e) { _swallow(e); }
           }
@@ -545,6 +545,11 @@ function simStep(ts){
     const sdt = (ts - S.lastT) / 1000 * simSpeed;   // 배가 항공기와 같은 시간을 흐르게
     if (sdt > 0 && sdt < 0.5 * simSpeed) {
       const [nLat, nLon] = destPoint(shipLat, shipLon, shipHdg, shipSpd * sdt / 3600);
+      // 갑판에 앉아 있는 헬기는 함정과 함께 간다(일시정지 중에도 — 함정은 계속 가므로)
+      if (typeof simOnDeck === 'function' && simOnDeck()) {
+        S.lat += nLat - shipLat; S.lon += nLon - shipLon;
+        if (!S.running) { try { updateAcOnMap(); } catch (e) { _swallow(e); } }
+      }
       shipLat = nLat; shipLon = nLon;
       if (!shipDragging) shipMarker.setLatLng([shipLat, shipLon]);
       try { updateShip3d(); } catch (e) { _swallow(e); }

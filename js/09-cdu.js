@@ -394,7 +394,11 @@ function shipKey(k) {
     const v = parseInt(shipInput, 10);
     if (!isNaN(v)) {
       if (shipInputMode === 'SPD')      shipSpd = Math.min(50, Math.max(0, v));
-      else if (shipInputMode === 'CRS') shipHdg = toTrue(v);   // 입력은 자북 → 내부는 진북
+      else if (shipInputMode === 'CRS') {
+        const was = shipHdg;
+        shipHdg = toTrue(v);                         // 입력은 자북 → 내부는 진북
+        _shipCarryTurn(normAS(shipHdg - was));
+      }
     }
     shipInput = '';
     updateShipDisplay();
@@ -476,6 +480,53 @@ function _ship3dQuad(out, p0, c, p1, n) {   // 2차 베지어(Q)를 점으로 �
     out.push([u * u * p0[0] + 2 * u * t * c[0] + t * t * p1[0], u * u * p0[1] + 2 * u * t * c[1] + t * t * p1[1]]);
   }
 }
+// ── 비행갑판 표시(함교 뒤 갑판) ──
+//   · 노란 정렬선 — 함교 뒷면 한가운데를 위에서 아래로, 이어서 갑판 중심선을 함미까지
+//   · 착함 원(흰색)과 그 안의 X
+//   · 어깨선(흰색) — 원 앞쪽에 원과 맞닿게 가로로. 헬기에 앉은 조종사의 어깨 자리다
+//   · 전방한계선(흰색) — 어깨선 2m 앞을 가로로
+// 모두 갑판에 칠한 것이라 갑판 위로 5cm 만 나온다(착함 바닥은 갑판 그대로).
+// 단위 m. 여기서만 [오른쪽 +, 앞 +] 로 그리고(반시계가 바깥 고리) 함정 좌표로 바꾼다.
+const SHIP3D_BRIDGE_AFT = -(26 - 20) * SHIP3D_LEN / 38;   // 함교 뒷면(가운데에서 15.8m 뒤)
+const SHIP3D_TD = { fwd: -31, r: 5, w: 0.6 };              // 착함 원 — 중심·바깥 반지름·선 굵기
+const SHIP3D_SHOULDER = SHIP3D_TD.fwd + SHIP3D_TD.r + 0.2;  // 어깨선(굵기 0.4m) 가운데
+const SHIP3D_FWD_LIMIT = SHIP3D_SHOULDER + 2;              // 전방한계선 — 어깨선 2m 앞
+const SHIP3D_DECK_MARKS = (() => {
+  const paint = SHIP3D_DECK + 0.05;
+  const YEL = '#ffd200', WHT = '#ffffff';
+  const rect = (x, f, hw, hl) =>
+    [[x - hw, f - hl], [x + hw, f - hl], [x + hw, f + hl], [x - hw, f + hl], [x - hw, f - hl]];
+  const bar = (x, f, deg, hl, hw) => {        // 기울어진 막대(X 의 한 획)
+    const a = deg * D2R, u = [Math.cos(a), Math.sin(a)], v = [-Math.sin(a), Math.cos(a)];
+    const p = (s, t) => [x + u[0] * s + v[0] * t, f + u[1] * s + v[1] * t];
+    return [p(-hl, -hw), p(hl, -hw), p(hl, hw), p(-hl, hw), p(-hl, -hw)];
+  };
+  const circle = (x, f, r, ccw) => {
+    const out = [];
+    for (let i = 0; i <= 48; i++) {
+      const a = (ccw ? i : -i) / 48 * 2 * Math.PI;
+      out.push([x + r * Math.cos(a), f + r * Math.sin(a)]);
+    }
+    return out;
+  };
+  const toShip = ring => ring && ring.map(([x, f]) => [x, -f]);
+  const td = SHIP3D_TD;
+  const stern = -(39 - 20) * SHIP3D_LEN / 38 + 1.3;          // 함미 끝 조금 안쪽
+  return [
+    // 노란 정렬선 — 갑판 중심선(함교 뒷면 → 함미), 함교 뒷면의 세로선(갑판 → 함교 꼭대기)
+    { ring: rect(0, (SHIP3D_BRIDGE_AFT + stern) / 2, 0.15, (SHIP3D_BRIDGE_AFT - stern) / 2),
+      h: paint, c: YEL, k: 'lineup' },
+    { ring: rect(0, SHIP3D_BRIDGE_AFT - 0.04, 0.3, 0.04), h: SHIP3D_DECK + 10, c: YEL, k: 'lineup-wall' },
+    // 착함 원과 X
+    { ring: circle(0, td.fwd, td.r, true), hole: circle(0, td.fwd, td.r - td.w, false),
+      h: paint, c: WHT, k: 'td' },
+    { ring: bar(0, td.fwd, 45, 2.5, 0.2),  h: paint, c: WHT, k: 'x' },
+    { ring: bar(0, td.fwd, -45, 2.5, 0.2), h: paint, c: WHT, k: 'x' },
+    // 어깨선 — 원 앞쪽에 맞닿게, 전방한계선 — 그 2m 앞
+    { ring: rect(0, SHIP3D_SHOULDER, td.r, 0.2), h: paint, c: WHT, k: 'shoulder' },
+    { ring: rect(0, SHIP3D_FWD_LIMIT, 11, 0.2),  h: paint, c: WHT, k: 'limit' },
+  ].map(p => ({ ...p, ring: toShip(p.ring), hole: toShip(p.hole), line: true }));
+})();
 const SHIP3D_PARTS = (() => {
   // 선체 — M12 1 Q20 7 21 17 L21 33 Q21 39 12 39 Q3 39 3 33 L3 17 Q4 7 12 1Z
   const hull = [[12, 1]];
@@ -498,19 +549,19 @@ const SHIP3D_PARTS = (() => {
   const bow = [];
   for (let i = 0; i <= 16; i++) { const a = i / 16 * 2 * Math.PI; bow.push([12 + 2.5 * Math.cos(a), 5 + 2.5 * Math.sin(a)]); }
   const parts = [
-    { ring: hull,   h: SHIP3D_DECK,      c: '#1a5fa8' },
-    { ring: bridge, h: SHIP3D_DECK + 10, c: '#2277bb' },
-    { ring: bow,    h: SHIP3D_DECK + 3,  c: '#7ab8f5' },
+    { ring: hull,   h: SHIP3D_DECK,      c: '#1a5fa8', k: 'hull' },
+    { ring: bridge, h: SHIP3D_DECK + 10, c: '#2277bb', k: 'bridge' },
+    { ring: bow,    h: SHIP3D_DECK + 3,  c: '#7ab8f5', k: 'bow' },
   ];
   // 중심선 — x=12, 점선(2 칸 긋고 3 칸 띄움), 굵기 0.5. 갑판 위로 살짝(5cm)만 나온다.
-  for (let y = 1; y < 39; y += 5) {
-    const y1 = Math.min(39, y + 2);
-    parts.push({ ring: [[11.75, y], [12.25, y], [12.25, y1], [11.75, y1], [11.75, y]],
-                 h: SHIP3D_DECK + 0.05, c: '#88ccff' });
+  // 함교 앞쪽만 둔다 — 함교 뒤 비행갑판에는 노란 정렬선이 있다.
+  for (let y = 1; y < 16; y += 5) {
+    parts.push({ ring: [[11.75, y], [12.25, y], [12.25, y + 2], [11.75, y + 2], [11.75, y]],
+                 h: SHIP3D_DECK + 0.05, c: '#88ccff', k: 'dash', line: true });
   }
   // 아이콘은 화면 좌표(아래가 +)라 돌림 방향이 지도와 반대다 — 바깥 고리를 반시계로 맞춘다
   parts.forEach(p => { p.ring = p.ring.map(_ship3dM).reverse(); });
-  return parts;
+  return parts.concat(SHIP3D_DECK_MARKS);
 })();
 // 함정 좌표(m) → 경위도. 함수(앞)가 침로를 향한다.
 function _ship3dLngLat([xr, ya]) {
@@ -523,10 +574,46 @@ function _ship3dGeo() {
   return {
     type: 'FeatureCollection',
     features: SHIP3D_PARTS.map(p => ({
-      type: 'Feature', properties: { h: p.h, c: p.c },
-      geometry: { type: 'Polygon', coordinates: [p.ring.map(_ship3dLngLat)] },
+      type: 'Feature', properties: { h: p.h, c: p.c, k: p.k },
+      geometry: { type: 'Polygon',
+                  coordinates: [p.ring.map(_ship3dLngLat)].concat(p.hole ? [p.hole.map(_ship3dLngLat)] : []) },
     })),
   };
+}
+// 그 자리 바로 아래에 있는 함정 부분의 윗면 높이(m, 수면 위) — 갑판 7m · 함수
+// 구조물 10m · 함교 17m. 함정 밖이면 null. 착함(14-simmode.js)이 이것을 바닥으로 쓴다.
+function shipDeckTopM(lat, lon) {
+  if (!shipVisible || shipLat === null) return null;
+  const n = (lat - shipLat) * 111320, e = (lon - shipLon) * 111320 * Math.cos(shipLat * D2R);
+  if (n * n + e * e > 60 * 60) return null;            // 함정(반 길이 50m)에서 멀다
+  const h = shipHdg * D2R;
+  const x = e * Math.cos(h) - n * Math.sin(h);           // 오른쪽 +
+  const y = -(n * Math.cos(h) + e * Math.sin(h));        // 함미 쪽 +
+  const inside = ring => {
+    let c = false;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const [xi, yi] = ring[i], [xj, yj] = ring[j];
+      if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) c = !c;
+    }
+    return c;
+  };
+  let top = null;
+  SHIP3D_PARTS.forEach(p => {
+    if (p.line || !inside(p.ring)) return;              // 중심선·비행갑판 표시는 갑판에 칠한 것이다
+    if (top === null || p.h > top) top = p.h;
+  });
+  return top;
+}
+// 함정이 침로를 바꾸면 갑판에 앉아 있는 헬기도 함정 중심을 축으로 같이 돈다
+function _shipCarryTurn(d) {
+  if (!d || typeof simOnDeck !== 'function' || !simOnDeck()) return;
+  const n = (S.lat - shipLat) * 111320, e = (S.lon - shipLon) * 111320 * Math.cos(shipLat * D2R);
+  const r = d * D2R;
+  const n2 = n * Math.cos(r) - e * Math.sin(r), e2 = n * Math.sin(r) + e * Math.cos(r);
+  S.lat = shipLat + n2 / 111320;
+  S.lon = shipLon + e2 / (111320 * Math.cos(shipLat * D2R));
+  S.hdg = normA(S.hdg + d);
+  try { updateAcOnMap(); } catch (e) { _swallow(e); }
 }
 let _ship3dReady = false;
 // 3D 지도가 다 뜨면(04-map.js 의 load) 함정·항적 레이어를 한 번 얹는다

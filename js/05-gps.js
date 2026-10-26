@@ -900,6 +900,20 @@ function _follow3d() {
 // 지평선 너머라 그릴 것이 없다) 기준을 낮춰 두어야 기수를 들었을 때 위를 볼
 // 여유가 생긴다. 78° 로 두면 기수 6° 에서 벌써 끝에 닿았다.
 const SIM_EYE_MIN_M = 8;      // 땅에 있어도 이 정도 눈높이는 둔다(m)
+// 눈높이의 바닥 — 지면, 함정 위에서는 갑판(지면 위 m). 갑판 끝을 넘는 순간 바닥이
+// 한 번에 7m 바뀌므로 시선이 덜컥 뛰지 않게 잠깐(0.4초)에 걸쳐 따라간다.
+let _simEyeFloor = null, _simEyeT = 0;
+function _simEyeFloorM(physM) {
+  let tgt = 0;
+  try { if (typeof simFloorFt === 'function') tgt = Math.max(0, simFloorFt() * 0.3048 - physM); }
+  catch (e) { _swallow(e); }
+  const now = performance.now();
+  const dt = _simEyeT ? Math.min(0.25, (now - _simEyeT) / 1000) : 0;
+  _simEyeT = now;
+  if (_simEyeFloor === null || !(dt > 0)) _simEyeFloor = (_simEyeFloor === null) ? tgt : _simEyeFloor;
+  else _simEyeFloor += (tgt - _simEyeFloor) * Math.min(1, dt / 0.4);
+  return _simEyeFloor;
+}
 
 // ── 1인칭 카메라(SIM 모드) ──
 //   · 자리   = 헬기 위경도
@@ -927,16 +941,45 @@ function _ml3dSimCamera() {
   // 바다는 해수면이 바닥이다 — 지형 자료에는 바다 밑 수심이 들어 있다(simTerrainFt 와 같다)
   if (physM === null) physM = Number.isFinite(rendM) ? Math.max(0, rendM / MAP3D_EXAG) : 0;
   const drawnM = Number.isFinite(rendM) ? rendM : physM * MAP3D_EXAG;
-  const aglM = Math.max(SIM_EYE_MIN_M, S.alt * 0.3048 - physM);
+  const aglM = Math.max(_simEyeFloorM(physM) + SIM_EYE_MIN_M, S.alt * 0.3048 - physM);
   const camAlt = drawnM + aglM;
   // 시선(둘러보기)을 기체 자세 위에 얹는다
   let look = { yaw: 0, pitch: 0 };
   try { if (typeof simLookStep === 'function') look = simLookStep(); } catch (e) { _swallow(e); }
   const r = _ml3dCamRot(S.hdg, S.pit, S.bnk, look.yaw, look.pitch);
   const pitch = Math.max(0, Math.min(180, 90 + r.pitch));
-  const o = _ml3d.calculateCameraOptionsFromCameraLngLatAltRotation(
-    [S.lon, S.lat], camAlt, r.yaw, pitch, r.roll);
+  // 화면 중심까지의 거리 — 낮게 날수록 가깝게(눈높이 × 20, 200m…10km)
+  const dist = Math.max(200, Math.min(10000, aglM * 20));
+  let o;
+  try { o = _ml3dCamOptions(S.lon, S.lat, camAlt, r.yaw, pitch, r.roll, dist); }
+  catch (e) {
+    _swallow(e);
+    o = _ml3d.calculateCameraOptionsFromCameraLngLatAltRotation([S.lon, S.lat], camAlt, r.yaw, pitch, r.roll);
+  }
   _ml3d.jumpTo(o);
+}
+// 카메라를 '이 자리 · 이 높이 · 이 방향' 에 놓는 지도 카메라 값.
+// maplibre 의 calculateCameraOptionsFromCameraLngLatAltRotation 과 같은 셈이다. 다만
+// 거의 수평으로 볼 때 그 함수는 화면 중심을 10km 밖에 두어(줌 ≈ 13) 가까운 클립면이
+// 130m 쯤 된다 — 그보다 가까운 것(내려앉은 함정의 갑판·함교, 발밑 지면)이 잘려
+// 보이지 않는다. 중심까지의 거리(dist, m)를 직접 정해 가까운 것도 그리게 한다.
+function _ml3dCamOptions(lon, lat, alt, bearing, pitch, roll, dist) {
+  const MC = maplibregl.MercatorCoordinate;
+  const cam = MC.fromLngLat([lon, lat], alt);
+  const pr = pitch * D2R, br = bearing * D2R;
+  const dx = Math.sin(pr) * Math.sin(br), dy = -Math.sin(pr) * Math.cos(br);
+  // 메르카토르 축척은 위도마다 달라 중심 자리에서 다시 재며 몇 번 맞춘다
+  let mpu = 1 / cam.meterInMercatorCoordinateUnits(), u = 0, c = cam;
+  for (let i = 0; i < 4; i++) {
+    u = dist / mpu;
+    c = new MC(cam.x + dx * u, cam.y + dy * u, 0);
+    mpu = 1 / c.meterInMercatorCoordinateUnits();
+  }
+  const tr = _ml3d.transform;
+  const fov = Number.isFinite(tr.fovInRadians) ? tr.fovInRadians : tr.fov * D2R;
+  const zoom = Math.log2(tr.height / 2 / Math.tan(fov / 2) / u / (tr.tileSize || 512));
+  const ll = c.toLngLat();
+  return { center: [ll.lng, ll.lat], elevation: alt - dist * Math.cos(pr), zoom, bearing, pitch, roll };
 }
 // 기체 자세(방위·피치·뱅크) 위에 고개 돌림(좌우·위아래)을 얹은 카메라 방향.
 // 그냥 더하면 안 된다 — 오른쪽 뱅크에서 오른쪽을 보면 시선은 땅 쪽으로 내려가야

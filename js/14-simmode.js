@@ -240,6 +240,36 @@ function simTerrainFt(lat, lon) {
 // (기수를 숙여도 가속되지 않는 증상). 모를 때는 해수면만 바닥으로 본다.
 function simGroundFt() { return _simGndFresh ? _simGndFt : 0; }
 
+// ── 함정 갑판 ──
+// 함정(09-cdu.js) 위에서는 그 자리 함정 부분의 윗면이 바닥이다 — 갑판 7m · 함수
+// 구조물 10m · 함교 17m. 함정은 수면(지면) 위에 서 있으므로 그 높이를 지면에 더한다.
+// 갑판에 앉아 있으면 함정과 함께 간다(07-sim.js 의 함정 이동 · 09-cdu.js 의 침로 변경).
+function simDeckFt() {
+  if (typeof shipDeckTopM !== 'function') return null;
+  const m = shipDeckTopM(S.lat, S.lon);
+  return (m == null) ? null : simGroundFt() + m / 0.3048;
+}
+// 내려앉을 수 있는 바닥(ft) — 지면, 함정 위에서는 갑판
+function simFloorFt() {
+  const d = simDeckFt(), g = simGroundFt();
+  return (d == null) ? g : Math.max(g, d);
+}
+let _simOnDeck = false;              // 함정 갑판에 앉아 있는가
+function simOnDeck() { return simModeOn && _simOnDeck && !!shipVisible; }
+// 갑판에 내려앉으면 속도를 '갑판에 대한 속도' 로, 뜨면 다시 '땅에 대한 속도' 로 바꾼다
+// (함정 속도만큼 빼고 더한다). 그래야 움직이는 함정에 내려앉고 떠도 튀지 않는다 —
+// 함정과 나란히 날다 내려앉으면 갑판 위에서는 거의 서 있고, 뜨면 함정 속도로 날고 있다.
+function simDeckHandoff(toDeck) {
+  if (typeof shipSpd !== 'number' || !shipSpd) return;
+  const k = toDeck ? -1 : 1, rel = (shipHdg - S.hdg) * D2R;
+  const f = k * shipSpd * Math.cos(rel), l = k * shipSpd * Math.sin(rel);
+  if (gspdOn) { gspdActFwd += f; gspdActLat += l; }
+  else {
+    S.spd = Math.max(SIM_SPD_BACK, Math.min(SIM_SPD_MAX, S.spd + f));
+    simLat += l;
+  }
+}
+
 function simStartGround() {
   S.vs = 0; S.spd = 0; simLat = 0; simAcc = 0; _simVs1 = 0;
   S.pit = 0; S.bnk = 0; bankTarget = 0;
@@ -271,6 +301,7 @@ function toggleSimMode(on, opt) {
     if (gspdCoasting) { S.spd = gspdActFwd; simLat = gspdActLat; gspdCoasting = false; }
     try { if (gsOn) toggleGs(); } catch (e) { _swallow(e); }
     hdgSelOn = false; rollApOn = false; altHoldOn = false; crhtOn = false;
+    _simOnDeck = false;
     try { updateHoverBtns(); } catch (e) { _swallow(e); }
     // 손을 떼면 그 자리에서 날던 대로 — 지금 자세를 그대로 이어받는다
     bankTarget = S.bnk;
@@ -355,9 +386,13 @@ function simFly(dt) {
 
   // 땅에 붙어 있는가 — 지면 위에서는 자세를 줘도 미끄러지지 않는다
   simTerrainFt();                       // 발밑 높이를 새로 읽어 둔다
-  const gnd = simGroundFt();
+  const deck = simDeckFt();             // 함정 위면 갑판(윗면) 높이
+  const gnd = (deck == null) ? simGroundFt() : Math.max(simGroundFt(), deck);
   const onGnd = S.alt <= gnd + 0.5;
   _simOnGnd = onGnd;
+  // 갑판에 내려앉거나 뜨는 순간 — 속도의 기준(함정 ↔ 땅)을 넘겨 준다
+  const onDeck = onGnd && deck != null && deck >= simGroundFt();
+  if (onDeck !== _simOnDeck) { simDeckHandoff(onDeck); _simOnDeck = onDeck; }
 
   // 상승률 가운데 감속이 돌려준 몫(운동에너지)은 빼고 본다 — 이미 속도로 치른
   // 것을 또 치르면 감속 → 상승 → 감속 이 되먹임으로 번진다.
