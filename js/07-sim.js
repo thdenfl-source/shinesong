@@ -122,6 +122,7 @@ document.addEventListener('keydown', e => {
   if (e.ctrlKey || e.metaKey || e.altKey) return;
   const t = e.target;
   if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+  if (typeof joyKeyOwned === 'function' && joyKeyOwned(e)) return;   // 조종 장치에 배정한 키
   const m = _keyMap[e.key];
   if (!m) return;
   e.preventDefault();
@@ -134,6 +135,7 @@ document.addEventListener('keydown', e => {
   if (e.ctrlKey || e.metaKey || e.altKey) return;
   const t = e.target;
   if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+  if (typeof joyKeyOwned === 'function' && joyKeyOwned(e)) return;   // 조종 장치에 배정한 키
   if (e.key === 'Enter') { e.preventDefault(); forceTrim(); return; }
   if (e.key === ' ' || e.code === 'Space') {
     e.preventDefault();                        // 페이지 스크롤 방지

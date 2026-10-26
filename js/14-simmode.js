@@ -54,6 +54,17 @@ let _simVs1 = 0;              // 상승률로 가기 전 단계(fpm)
 // 올라가는 동안에는 그만큼 속도를 내주고, 내려가는 동안에는 속도를 얻는다.
 // 그래서 기수를 숙인 채 컬렉티브를 내리면 고도가 빠지면서 속도가 붙는다.
 const SIM_CLIMB_KT  = 25;      // 1,000fpm 당 주고받는 속도(kt)
+// 거꾸로 속도를 줄이면(기수를 들어 감속) 줄어든 운동에너지가 고도로 돌아온다 —
+// 같은 컬렉티브로도 떠오른다(줌·플레어). 속도를 늘리면 그만큼 고도로 치른다.
+// ½v² 가 줄어든 만큼이 g·h 이므로 상승률 = −v·a/g. 주고받는 몫이 같아야
+// 감속·가속을 되풀이해도 고도가 저절로 쌓이지 않는다.
+const SIM_KE_EFF = 0.8;        // 운동에너지 중 고도로 옮겨 가는 몫(나머지는 항력으로 잃는다)
+const SIM_KE_FPM = 0.514444 * 0.514444 / 9.80665 * 196.8504;   // kt × kt/s → fpm (≈5.31)
+// 지금의 속도·가감속이 만드는 상승률(fpm). 땅 위에서는 미끄럼이 멈춰 세울 뿐이다.
+function simKeVs(onGnd) {
+  if (onGnd) return 0;
+  return -SIM_KE_EFF * SIM_KE_FPM * S.spd * simAcc;
+}
 
 // 토크(TQ) 상수와 tqRequired()·tqShown() 는 01-state.js 에 있다 —
 // PFD 가 이 파일보다 먼저 그려질 수 있어 TDZ 를 피한다.
@@ -63,8 +74,8 @@ const SIM_CLIMB_KT  = 25;      // 1,000fpm 당 주고받는 속도(kt)
 // ── 사이클릭 비퍼 트림(4방향 햇) ──
 // 실제 헬기의 사이클릭 햇은 '트림' 이다 — 조금씩 중립을 옮겨 두면 손을 놓아도
 // 그 자세로 난다. SIM 모드에서 좌우는 롤, 전후는 피치 트림으로 쓴다.
-// 한 번 누르면 1° — 뱅크도 피치도 같다. 조이스틱(4방향 트림·햇)은 딸깍 한 번에
-// 1° 로 끝나고, 화면 버튼·방향키는 누르고 있으면 0.1초마다 1° 씩 이어진다.
+// 한 번 누르면 1° — 뱅크도 피치도 같다. 0.5초 넘게 누르고 있으면 그때부터
+// 0.1초마다 1° 씩 이어 간다(조이스틱·화면 버튼·방향키 모두 같다).
 // 값은 '자세 각도(°)' 로 들고 있다가 조종간 몫으로 바꿔 더한다.
 const SIM_TRIM_STEP_DEG  = 1;      // 한 번에 옮기는 각도(°)
 const SIM_TRIM_MAX_ROLL  = 30;     // 트림만으로 갈 수 있는 뱅크(°)
@@ -306,7 +317,11 @@ function simFly(dt) {
   // 기수 4° 80kt, 7.5° 45kt (1° = 10kt). 그 속도로 천천히 수렴한다.
   // 기수를 더 들면 뒤로도 간다(16° ≈ −40kt).
   // 올라가는 중에는 그만큼 출력을 쓰므로 같은 자세에서도 느려진다.
-  let sTgt = spdFromPitch(S.pit) - (S.vs / 1000) * SIM_CLIMB_KT;
+  // 상승률 가운데 감속이 돌려준 몫(운동에너지)은 빼고 본다 — 이미 속도로 치른
+  // 것을 또 치르면 감속 → 상승 → 감속 이 되먹임으로 번진다.
+  const vsKe0 = simKeVs(onGnd);
+  const vsPow = S.vs - vsKe0;           // 출력(토크)이 만든 상승률
+  let sTgt = spdFromPitch(S.pit) - (vsPow / 1000) * SIM_CLIMB_KT;
   sTgt = Math.max(SIM_SPD_BACK, Math.min(SIM_SPD_MAX, sTgt));
   if (onGnd) {
     // 땅 위에서는 서 있는다 — 바퀴(스키드)가 잡으므로 금방 선다
@@ -337,7 +352,8 @@ function simFly(dt) {
   // 만큼만 걸어 둔다(조이스틱 없이 켰다고 저절로 떠오르지 않게).
   const cfg = (typeof joyAxes === 'object' && joyAxes) ? joyAxes.coll : null;
   let tTgt;
-  // 레버가 없으면: 땅에서는 그대로 서 있고(출력 0), 공중에서는 고도를 지킨다
+  // 레버가 없으면: 땅에서는 그대로 서 있고(출력 0), 공중에서는 수평 비행에 드는
+  // 만큼 건다(속도를 바꾸면 그 운동에너지만큼은 오르내린다)
   if (!cfg) tTgt = onGnd ? 0 : tqRequired();
   else if (cfg.abs) {
     // 스로틀·컬렉티브처럼 '세워 두는' 레버는 자리 자체가 출력이다.
@@ -367,7 +383,9 @@ function simFly(dt) {
   if (vRaw > 0) vRaw *= simClimbEff();
   const vTgt = Math.max(-2000, Math.min(2000, vRaw));
   _simVs1 += (vTgt - _simVs1) * Math.min(1, dt / VS_TAU1);
-  S.vs += (_simVs1 - S.vs) * Math.min(1, dt / VS_TAU2);
+  // 출력 몫은 유입류를 거쳐 천천히, 운동에너지 몫은 가감속과 함께 바로 붙는다
+  const vsP = vsPow + (_simVs1 - vsPow) * Math.min(1, dt / VS_TAU2);
+  S.vs = vsP + simKeVs(onGnd);
   // 땅 아래로는 내려가지 않는다 — 바닥은 해수면이 아니라 '발밑의 지면' 이다
   if (S.alt <= gnd + 0.5 && S.vs < 0) { S.vs = 0; S.alt = gnd; if (_simVs1 < 0) _simVs1 = 0; }
 
