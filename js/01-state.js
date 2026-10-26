@@ -387,7 +387,7 @@ function toggleGspd() {
     // snaps the controlled state to (0, S.spd); the GSPD slew loop then
     // decelerates from there to refs=(0,0).
     if (!gspdCoasting) {
-      gspdActLat = 0;
+      gspdActLat = simModeOn ? simLat : 0;   // SIM 모드는 옆걸음도 이어 받는다
       gspdActFwd = S.spd;
     }
     // References default to 0,0; the slew loop will decelerate.
@@ -402,7 +402,12 @@ function toggleGspd() {
     //   engagement, so the lateral/aft case decelerates gradually on
     //   re-engage exactly like the forward-only case (which survives a
     //   disengage via the base model).
-    if (Math.abs(gspdActLat) > 0.5 || gspdActFwd < 0) {
+    if (simModeOn) {
+      // SIM 모드는 옆·뒤로 가는 것도 그대로 몬다 — 타력 비행 없이 바로 넘겨 받고,
+      // 트림을 지금 속도에 맞춰 둬 조종간을 가운데 두면 그 속도로 계속 난다.
+      S.spd = gspdActFwd; simLat = gspdActLat; gspdCoasting = false;
+      try { simTrimHoldSpeed(); } catch (e) { _swallow(e); }
+    } else if (Math.abs(gspdActLat) > 0.5 || gspdActFwd < 0) {
       gspdCoasting = true;
     } else {
       S.spd = Math.max(0, gspdActFwd);
@@ -478,9 +483,9 @@ let _trimGuard = null;
 // 내보내는 경우 등). 그러면 1° 가 두 번 들어가 2° 가 되고, 뒤에 들어온 쪽이
 // 앞쪽의 반복 타이머를 끊어 누르고 있어도 이어지지 않았다.
 let _trimDir = null;
-// SIM 모드 자세 트림의 리듬 — 딸깍 한 번이 1°, 0.5초 넘게 누르고 있으면 그때부터
-// 0.1초마다 1° 씩 이어 간다. 홀드 문턱을 넉넉히 두어 조금 길게 누른 딸깍이
-// 2° 로 넘어가지 않게 한다.
+// SIM 모드 자세 트림의 리듬 — 딸깍 한 번이 한 칸(뱅크 1° · 피치 0.5°), 0.5초 넘게
+// 누르고 있으면 그때부터 0.1초마다 한 칸씩 이어 간다. 홀드 문턱을 넉넉히 두어
+// 조금 길게 누른 딸깍이 두 칸으로 넘어가지 않게 한다.
 const SIM_TRIM_HOLD_MS = 500;
 const SIM_TRIM_REP_MS  = 100;
 function startTrimHold(dir) {
@@ -493,9 +498,10 @@ function startTrimHold(dir) {
     simLookDir = dir;
     return;
   }
-  // SIM 모드에서는 사이클릭의 '비퍼 트림' 그대로다 — 좌우는 롤, 전후는 피치를
-  // 1° 씩 옮겨 둔다(조종간을 가운데 두어도 그 자세로 날게 된다).
-  if (simModeOn) {
+  // SIM 모드에서는 사이클릭의 '비퍼 트림' 그대로다 — 좌우는 롤 1°, 전후는 피치
+  // 0.5° 씩 옮겨 둔다(조종간을 가운데 두어도 그 자세로 날게 된다).
+  // GSPD 가 걸려 있으면 SIM 모드라도 아래의 GSPD 기준속도 트림으로 간다.
+  if (simModeOn && !gspdOn) {
     simTrimNudge(dir);
     trimHoldTimer = setTimeout(() => {
       trimHoldInt = setInterval(() => simTrimNudge(dir), SIM_TRIM_REP_MS);

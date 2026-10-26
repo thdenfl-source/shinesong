@@ -61,9 +61,9 @@ const SIM_CLIMB_KT  = 25;      // 1,000fpm 당 주고받는 속도(kt)
 const SIM_KE_EFF = 0.8;        // 운동에너지 중 고도로 옮겨 가는 몫(나머지는 항력으로 잃는다)
 const SIM_KE_FPM = 0.514444 * 0.514444 / 9.80665 * 196.8504;   // kt × kt/s → fpm (≈5.31)
 // 지금의 속도·가감속이 만드는 상승률(fpm). 땅 위에서는 미끄럼이 멈춰 세울 뿐이다.
-function simKeVs(onGnd) {
+function simKeVs(onGnd, spd = S.spd, acc = simAcc) {
   if (onGnd) return 0;
-  return -SIM_KE_EFF * SIM_KE_FPM * S.spd * simAcc;
+  return -SIM_KE_EFF * SIM_KE_FPM * spd * acc;
 }
 
 // 토크(TQ) 상수와 tqRequired()·tqShown() 는 01-state.js 에 있다 —
@@ -74,23 +74,79 @@ function simKeVs(onGnd) {
 // ── 사이클릭 비퍼 트림(4방향 햇) ──
 // 실제 헬기의 사이클릭 햇은 '트림' 이다 — 조금씩 중립을 옮겨 두면 손을 놓아도
 // 그 자세로 난다. SIM 모드에서 좌우는 롤, 전후는 피치 트림으로 쓴다.
-// 한 번 누르면 1° — 뱅크도 피치도 같다. 0.5초 넘게 누르고 있으면 그때부터
-// 0.1초마다 1° 씩 이어 간다(조이스틱·화면 버튼·방향키 모두 같다).
+// 한 번 누르면 뱅크 1° · 피치 0.5°(피치는 1° 가 속도 10kt 라 더 잘게 둔다).
+// 0.5초 넘게 누르고 있으면 그때부터 0.1초마다 한 칸씩 이어 간다(조이스틱·
+// 화면 버튼·방향키 모두 같다). GSPD 가 걸려 있으면 트림은 GSPD 기준속도를
+// 옮긴다(01-state.js startTrimHold).
 // 값은 '자세 각도(°)' 로 들고 있다가 조종간 몫으로 바꿔 더한다.
-const SIM_TRIM_STEP_DEG  = 1;      // 한 번에 옮기는 각도(°)
+const SIM_TRIM_STEP_ROLL  = 1;     // 한 번에 옮기는 뱅크(°)
+const SIM_TRIM_STEP_PITCH = 0.5;   // 한 번에 옮기는 기수 자세(°)
 const SIM_TRIM_MAX_ROLL  = 30;     // 트림만으로 갈 수 있는 뱅크(°)
 const SIM_TRIM_MAX_PITCH = 20;     // 트림만으로 갈 수 있는 기수 자세(°)
 let simTrim = { roll: 0, pitch: 0 };   // roll: 오른쪽 + · pitch: 기수 내림 +
 function simTrimNudge(dir) {
-  const k = SIM_TRIM_STEP_DEG;
-  if (dir === 'R') simTrim.roll += k;
-  else if (dir === 'L') simTrim.roll -= k;
-  else if (dir === 'F') simTrim.pitch += k;      // 앞으로 = 기수 내림
-  else if (dir === 'A') simTrim.pitch -= k;
+  if (dir === 'R') simTrim.roll += SIM_TRIM_STEP_ROLL;
+  else if (dir === 'L') simTrim.roll -= SIM_TRIM_STEP_ROLL;
+  else if (dir === 'F') simTrim.pitch += SIM_TRIM_STEP_PITCH;      // 앞으로 = 기수 내림
+  else if (dir === 'A') simTrim.pitch -= SIM_TRIM_STEP_PITCH;
   simTrim.roll = Math.max(-SIM_TRIM_MAX_ROLL, Math.min(SIM_TRIM_MAX_ROLL, simTrim.roll));
   simTrim.pitch = Math.max(-SIM_TRIM_MAX_PITCH, Math.min(SIM_TRIM_MAX_PITCH, simTrim.pitch));
 }
 function simTrimReset() { simTrim = { roll: 0, pitch: 0 }; }
+// 지금 속도를 지키는 트림으로 맞춘다 — GSPD 를 풀었을 때 자세가 튀지 않게
+// (조종간을 가운데 두면 그 속도로 계속 난다).
+function simTrimHoldSpeed() {
+  const p = -pitchFromSpd(S.spd);
+  simTrim = { roll: 0, pitch: Math.max(-SIM_TRIM_MAX_PITCH, Math.min(SIM_TRIM_MAX_PITCH, p)) };
+}
+
+// ── GSPD 중의 조종간(fly-through) ──
+// GSPD 가 걸려 있으면 자세와 속도는 GSPD 가 맡는다. 조종간을 중립(데드존) 밖으로
+// 밀고 있는 축만 조종사가 몬다 — 미는 쪽으로 지상속도가 붙고, 놓으면 GSPD 가
+// 기준속도로 되돌린다. 새 속도를 지키려면 FORCE TRIM 을 누른다(그 순간의
+// 지상속도가 새 기준이 된다 — forceTrim). 4방향 트림은 기준속도를 옮긴다.
+const GSPD_FLY_ACC = SPD_ACC_MAX;   // 조종간을 끝까지 밀었을 때의 가감속(kt/s)
+let _simOnGnd = false;              // 마지막 적분 구간에 땅에 붙어 있었는가
+// 조종간 몫 — { lat: 좌우, fwd: 전후 } (-1…1, 중립이면 0). GSPD 가 아니면 null.
+function simGspdStick() {
+  if (!simModeOn || !gspdOn) return null;
+  if (_simOnGnd) return { lat: 0, fwd: 0 };   // 땅 위에서는 미끄러지지 않는다
+  const a = simModeAxes();
+  return { lat: a.roll, fwd: a.pitch };
+}
+// 한 축을 조종간 몫만큼 가감속한다(SIM 모드가 낼 수 있는 속도 안에서)
+function simGspdFly(v, k, dt, lo, hi) {
+  return Math.max(lo, Math.min(hi, v + k * GSPD_FLY_ACC * dt));
+}
+// GSPD 가 지상속도를 옮긴 뒤에 부른다(07-sim.js). 자세는 그 속도를 지키는
+// 자세(SIM 자세-속도 식)에 가감속에 드는 기울기(atan a/g)를 얹은 것이다 —
+// 앞으로 붙으면 기수가 숙고, 옆으로 붙으면 그쪽으로 기운다. 가감속은
+// 운동에너지 ↔ 고도 교환(simKeVs)에도 그대로 쓰인다.
+function simGspdAfter(dt, f0, l0) {
+  if (!simModeOn || !(dt > 0)) return;
+  if (_simOnGnd) {
+    // 땅 위에서는 스키드가 잡는다 — 금방 선다
+    const k = Math.max(0, 1 - 1.2 * dt);
+    gspdActFwd *= k; gspdActLat *= k;
+  }
+  const accF = (gspdActFwd - f0) / dt, accL = (gspdActLat - l0) / dt;
+  // 속도가 바뀐 만큼 운동에너지 몫의 상승률도 바로 고친다. simFly 는 이 구간의
+  // 속도가 바뀌기 전에 상승률을 써 두었으므로, 여기서 맞추지 않으면 다음 구간에
+  // 그 차이가 출력 몫으로 섞여 1~2초 뒤 사라져 버린다.
+  const ke0 = simKeVs(_simOnGnd);
+  const spd = Math.hypot(gspdActFwd, gspdActLat);
+  simAcc = (spd - Math.hypot(f0, l0)) / dt;
+  S.spd = spd;                       // 07-sim.js 도 곧 같은 값을 넣는다
+  S.vs += simKeVs(_simOnGnd) - ke0;
+  const tilt = a => Math.atan(a * 0.514444 / 9.80665) / D2R;   // kt/s → °
+  const pTgt = Math.max(-SIM_PITCH_MAX, Math.min(SIM_PITCH_MAX, pitchFromSpd(gspdActFwd) - tilt(accF)));
+  const bTgt = Math.max(-SIM_BANK_MAX, Math.min(SIM_BANK_MAX, tilt(accL)));
+  const dP = pTgt - S.pit, dB = bTgt - S.bnk;
+  S.pit += Math.sign(dP) * Math.min(Math.abs(dP), SIM_PITCH_RATE * dt);
+  S.bnk += Math.sign(dB) * Math.min(Math.abs(dB), SIM_ROLL_RATE * dt);
+  bankTarget = S.bnk;
+  simLat = gspdActLat;               // 풀었을 때 옆걸음을 그대로 이어 받는다
+}
 
 // ── 시야 둘러보기(눈 돌리기) ──
 // 정해 둔 버튼(기본 B0)을 누르고 있는 동안에는 4방향 햇이 트림 대신 '시선' 이
@@ -206,6 +262,9 @@ function toggleSimMode(on, opt) {
     // 손으로 모는 동안에는 AFCS 를 놓는다 — 같은 축을 둘이 몰면 싸운다
     try { if (navApOn) toggleNavAp(); } catch (e) { _swallow(e); }
     try { if (gspdOn) toggleGspd(); } catch (e) { _swallow(e); }
+    // GSPD 를 풀고 타력으로 옆·뒤로 가던 중이면 그 속도를 SIM 조종으로 넘겨 받는다
+    // (타력 비행과 SIM 조종이 같은 속도를 함께 쓰지 않게)
+    if (gspdCoasting) { S.spd = gspdActFwd; simLat = gspdActLat; gspdCoasting = false; }
     try { if (gsOn) toggleGs(); } catch (e) { _swallow(e); }
     hdgSelOn = false; rollApOn = false; altHoldOn = false; crhtOn = false;
     try { updateHoverBtns(); } catch (e) { _swallow(e); }
@@ -290,55 +349,62 @@ function simFly(dt) {
   if (!simModeOn || !(dt > 0)) return;
   const a = simModeAxes();
 
-  // 조종간 값에 트림을 더한다 — 가운데 두어도 트림 자세를 지킨다
-  const cl = v => Math.max(-1, Math.min(1, v));
-  const roll = cl(a.roll + simTrim.roll / SIM_BANK_MAX);
-  const pitch = cl(a.pitch + simTrim.pitch / SIM_PITCH_MAX);
-
-  // ── 사이클릭 좌우 → 뱅크 ──
-  const bTgt = roll * SIM_BANK_MAX;
-  const dB = bTgt - S.bnk;
-  S.bnk += Math.sign(dB) * Math.min(Math.abs(dB), SIM_ROLL_RATE * dt);
-  bankTarget = S.bnk;             // 모드를 빠져나가도 자세가 튀지 않게
-
-  // ── 사이클릭 전후 → 피치 ──
-  // 조종간을 밀면(+) 기수가 내려간다. S.pit 은 기수 올림이 +.
-  const pTgt = -pitch * SIM_PITCH_MAX;
-  const dP = pTgt - S.pit;
-  S.pit += Math.sign(dP) * Math.min(Math.abs(dP), SIM_PITCH_RATE * dt);
-
   // 땅에 붙어 있는가 — 지면 위에서는 자세를 줘도 미끄러지지 않는다
   simTerrainFt();                       // 발밑 높이를 새로 읽어 둔다
   const gnd = simGroundFt();
   const onGnd = S.alt <= gnd + 0.5;
+  _simOnGnd = onGnd;
 
-  // ── 피치 → 속도 ──
-  // 고도를 지키며 나는 헬기는 '자세 하나가 곧 속도' 다 — 수평 120kt,
-  // 기수 4° 80kt, 7.5° 45kt (1° = 10kt). 그 속도로 천천히 수렴한다.
-  // 기수를 더 들면 뒤로도 간다(16° ≈ −40kt).
-  // 올라가는 중에는 그만큼 출력을 쓰므로 같은 자세에서도 느려진다.
   // 상승률 가운데 감속이 돌려준 몫(운동에너지)은 빼고 본다 — 이미 속도로 치른
   // 것을 또 치르면 감속 → 상승 → 감속 이 되먹임으로 번진다.
   const vsKe0 = simKeVs(onGnd);
   const vsPow = S.vs - vsKe0;           // 출력(토크)이 만든 상승률
-  let sTgt = spdFromPitch(S.pit) - (vsPow / 1000) * SIM_CLIMB_KT;
-  sTgt = Math.max(SIM_SPD_BACK, Math.min(SIM_SPD_MAX, sTgt));
-  if (onGnd) {
-    // 땅 위에서는 서 있는다 — 바퀴(스키드)가 잡으므로 금방 선다
-    simAcc = Math.max(-15, Math.min(15, -S.spd * 1.2));
-  } else {
-    // 가고 싶은 가감속 → 실제 가감속은 그쪽으로 천천히 붙는다
-    const aDes = Math.max(-SPD_ACC_MAX, Math.min(SPD_ACC_MAX, (sTgt - S.spd) / SPD_TAU));
-    simAcc += (aDes - simAcc) * Math.min(1, dt / SPD_JERK_TAU);
-  }
-  S.spd = Math.max(SIM_SPD_BACK, Math.min(SIM_SPD_MAX, S.spd + simAcc * dt));
 
-  // ── 저속에서는 뱅크가 옆걸음이 된다 ──
-  // 제자리에서 오른쪽으로 기울이면 기수는 그대로 둔 채 오른쪽으로 간다.
-  // 속도가 붙으면 그 몫이 선회로 넘어간다(선회 자체는 07-sim.js 가 한다).
-  const side = (1 - simTurnFrac()) * Math.sin(S.bnk * D2R) / Math.sin(SIM_BANK_MAX * D2R);
-  const latTgt = onGnd ? 0 : Math.max(-SIDE_MAX_KT, Math.min(SIDE_MAX_KT, side * SIDE_MAX_KT));
-  simLat += (latTgt - simLat) * Math.min(1, (onGnd ? 1.2 : SIDE_K) * dt);
+  // GSPD 가 걸려 있으면 자세·속도는 GSPD 가 맡는다 — 조종간 좌우·전후는
+  // 07-sim.js 의 GSPD 수렴에서 fly-through 로 쓰인다(simGspdStick).
+  // 페달·컬렉티브는 그대로 조종사 몫이다.
+  if (!gspdOn) {
+    // 조종간 값에 트림을 더한다 — 가운데 두어도 트림 자세를 지킨다
+    const cl = v => Math.max(-1, Math.min(1, v));
+    const roll = cl(a.roll + simTrim.roll / SIM_BANK_MAX);
+    const pitch = cl(a.pitch + simTrim.pitch / SIM_PITCH_MAX);
+
+    // ── 사이클릭 좌우 → 뱅크 ──
+    const bTgt = roll * SIM_BANK_MAX;
+    const dB = bTgt - S.bnk;
+    S.bnk += Math.sign(dB) * Math.min(Math.abs(dB), SIM_ROLL_RATE * dt);
+    bankTarget = S.bnk;             // 모드를 빠져나가도 자세가 튀지 않게
+
+    // ── 사이클릭 전후 → 피치 ──
+    // 조종간을 밀면(+) 기수가 내려간다. S.pit 은 기수 올림이 +.
+    const pTgt = -pitch * SIM_PITCH_MAX;
+    const dP = pTgt - S.pit;
+    S.pit += Math.sign(dP) * Math.min(Math.abs(dP), SIM_PITCH_RATE * dt);
+
+    // ── 피치 → 속도 ──
+    // 고도를 지키며 나는 헬기는 '자세 하나가 곧 속도' 다 — 수평 120kt,
+    // 기수 4° 80kt, 7.5° 45kt (1° = 10kt). 그 속도로 천천히 수렴한다.
+    // 기수를 더 들면 뒤로도 간다(16° ≈ −40kt).
+    // 올라가는 중에는 그만큼 출력을 쓰므로 같은 자세에서도 느려진다.
+    let sTgt = spdFromPitch(S.pit) - (vsPow / 1000) * SIM_CLIMB_KT;
+    sTgt = Math.max(SIM_SPD_BACK, Math.min(SIM_SPD_MAX, sTgt));
+    if (onGnd) {
+      // 땅 위에서는 서 있는다 — 바퀴(스키드)가 잡으므로 금방 선다
+      simAcc = Math.max(-15, Math.min(15, -S.spd * 1.2));
+    } else {
+      // 가고 싶은 가감속 → 실제 가감속은 그쪽으로 천천히 붙는다
+      const aDes = Math.max(-SPD_ACC_MAX, Math.min(SPD_ACC_MAX, (sTgt - S.spd) / SPD_TAU));
+      simAcc += (aDes - simAcc) * Math.min(1, dt / SPD_JERK_TAU);
+    }
+    S.spd = Math.max(SIM_SPD_BACK, Math.min(SIM_SPD_MAX, S.spd + simAcc * dt));
+
+    // ── 저속에서는 뱅크가 옆걸음이 된다 ──
+    // 제자리에서 오른쪽으로 기울이면 기수는 그대로 둔 채 오른쪽으로 간다.
+    // 속도가 붙으면 그 몫이 선회로 넘어간다(선회 자체는 07-sim.js 가 한다).
+    const side = (1 - simTurnFrac()) * Math.sin(S.bnk * D2R) / Math.sin(SIM_BANK_MAX * D2R);
+    const latTgt = onGnd ? 0 : Math.max(-SIDE_MAX_KT, Math.min(SIDE_MAX_KT, side * SIDE_MAX_KT));
+    simLat += (latTgt - simLat) * Math.min(1, (onGnd ? 1.2 : SIDE_K) * dt);
+  }
 
   // ── 페달 → 기수 ──
   if (a.yaw) {
