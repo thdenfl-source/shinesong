@@ -782,7 +782,10 @@ function _update3dTrail() {
     geometry: { type: 'LineString', coordinates: S.trail.map(t => [t[1], t[0]]) }
   });
 }
-function updateShipTrail(){ shipTrailLine.setLatLngs(shipTrail.map(t=>[t[0],t[1]])); }
+function updateShipTrail(){
+  shipTrailLine.setLatLngs(shipTrail.map(t=>[t[0],t[1]]));
+  if (typeof updateShip3dTrail === 'function') updateShip3dTrail();   // 3D 지도의 함정 항적(09-cdu.js)
+}
 // ── 1인칭 Follow Mode ────────────────────────────────────────────────────
 // When active: 2D map centres on aircraft every frame;
 //              3D map additionally tracks heading and scales zoom with altitude.
@@ -921,7 +924,8 @@ function _ml3dSimCamera() {
   let physM = null;
   try { if (typeof _simGndFresh !== 'undefined' && _simGndFresh) physM = simGroundFt() * 0.3048; }
   catch (e) { physM = null; }
-  if (physM === null) physM = Number.isFinite(rendM) ? rendM / MAP3D_EXAG : 0;
+  // 바다는 해수면이 바닥이다 — 지형 자료에는 바다 밑 수심이 들어 있다(simTerrainFt 와 같다)
+  if (physM === null) physM = Number.isFinite(rendM) ? Math.max(0, rendM / MAP3D_EXAG) : 0;
   const drawnM = Number.isFinite(rendM) ? rendM : physM * MAP3D_EXAG;
   const aglM = Math.max(SIM_EYE_MIN_M, S.alt * 0.3048 - physM);
   const camAlt = drawnM + aglM;

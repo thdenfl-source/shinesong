@@ -226,6 +226,10 @@ function simTerrainFt(lat, lon) {
   let m = null;
   try { m = _tcElev(la, lo); } catch (e) { _swallow(e); }
   if (m == null) { _simGndFresh = false; return _simGndFt; }   // 아직 모르면 마지막 값
+  // 바다는 해수면이 바닥이다. 지형 자료에는 바다 밑 수심(음수)이 들어 있어, 그대로
+  // 쓰면 바다 위에서 해수면 아래로 내려가고 3D 시점도 바다 밑바닥에 맞춰진다
+  // (그러면 수면에 떠 있는 함정이 발아래 한참 아래에 보인다).
+  m = Math.max(0, m);
   _simGndFt = m / 0.3048;
   _simGndAt = [la, lo];
   _simGndFresh = true;

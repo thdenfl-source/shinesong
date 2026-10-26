@@ -998,6 +998,12 @@ body.solo-mode .solo-panel-visible {
 }
 #map-wrap.tcut-off #ship-menu { bottom: 40px; }
 #ship-menu.open { display: flex; }
+/* 3D 창의 SHIP — 3D 가 제 창을 쓸 때만 보인다(2D 위에 겹쳐 쓸 때는 지도 아래 막대의 SHIP 을 쓴다).
+   메뉴·설정창은 이 창으로 옮겨 와 열린다(shipUiHome). */
+#ship3d-btn { display: none; position: absolute; top: 8px; left: 8px; z-index: 900; padding: 5px 10px; }
+#map3d.panel-3d #ship3d-btn { display: block; }
+#map3d #ship-menu { top: 40px; bottom: auto; left: 8px; }
+#map3d #ship-panel { top: 8px; right: 8px; bottom: auto; }
 #ship-menu button {
   background: rgba(20,20,20,0.9); border: 1px solid #444; border-radius: 4px;
   color: #cfe; font-size: 11px; font-weight: bold; padding: 7px 12px;
@@ -2369,6 +2375,8 @@ body.night-mode::after {
     <div id="map-wrap" class="page-content tcut-off">
       <div id="map"></div>
       <div id="map3d">
+        <!-- 3D 가 제 창(탭의 '3D')을 쓸 때의 SHIP — 메뉴·설정창을 이 창 안에서 연다 -->
+        <button class="sim-btn" id="ship3d-btn" data-act="toggleShip3d">⛵ SHIP</button>
         <div id="tilt-ctrl">
           <button data-act="tiltAdj" data-arg='[-5]' title="Tilt up">▲</button>
           <button data-act="tiltAdj" data-arg='[5]'  title="Tilt down">▼</button>

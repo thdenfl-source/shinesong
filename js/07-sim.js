@@ -547,6 +547,7 @@ function simStep(ts){
       const [nLat, nLon] = destPoint(shipLat, shipLon, shipHdg, shipSpd * sdt / 3600);
       shipLat = nLat; shipLon = nLon;
       if (!shipDragging) shipMarker.setLatLng([shipLat, shipLon]);
+      try { updateShip3d(); } catch (e) { _swallow(e); }
       const slast = shipTrail[shipTrail.length - 1];
       if (!slast || distance(slast[0], slast[1], shipLat, shipLon) > 0.01) {
         shipTrail.push([shipLat, shipLon]);
@@ -713,6 +714,8 @@ function syncMap3dHost(toPanel) {
   } else {
     if (d3.parentElement !== mw) mw.insertBefore(d3, mw.firstElementChild.nextSibling);
     d3.classList.remove('panel-3d');
+    // 3D 창 안에서 열었던 함정 메뉴·설정창은 2D 지도 창으로 돌려보낸다
+    try { if (typeof shipUiHome === 'function') shipUiHome(false); } catch (e) { _swallow(e); }
     // 제 창에서 빠져나오면 겹치기 모드의 상태(3D 버튼)를 그대로 따른다
     d3.classList.toggle('active', _view3dOn);
     mw.classList.toggle('map3d-on', _view3dOn);

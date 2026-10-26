@@ -276,6 +276,7 @@ function shipIcon() {
 
 // 하단 SHIP 버튼: INHIBIT처럼 선택 메뉴(배 표시 / 설정창) 열기·닫기
 function toggleShip(force) {
+  if (force !== false) shipUiHome(false);    // 지도 아래 막대의 SHIP — 2D 지도 창에서 연다
   const m = document.getElementById('ship-menu');
   if (force === false) m.classList.remove('open');
   else m.classList.toggle('open');
@@ -290,13 +291,28 @@ function shipToggleOn() {
     shipTrail = []; updateShipTrail();
     document.getElementById('ship-panel').style.display = 'none';   // 배 끄면 설정창도 닫음
   } else {
-    const c = leafMap.getCenter();
-    shipLat = c.lat; shipLon = c.lng;
+    [shipLat, shipLon] = _shipSpawn();
     shipTrail = []; updateShipTrail();
     shipVisible = true;
     createShipMarker();
   }
   renderShipOnOff();
+  updateShip3d();
+}
+
+// 새 함정을 놓을 자리 — 지금 보고 있는 지도의 가운데(3D 창에서 켰거나 2D 지도가
+// 화면에 없으면 3D 의 가운데). SIM 1인칭에서는 화면 가운데가 지평선 너머이거나
+// 헬기 바로 아래라, 기수 앞 0.3NM 에 놓는다.
+function _shipSpawn() {
+  try {
+    if (typeof simModeOn !== 'undefined' && simModeOn) return destPoint(S.lat, S.lon, S.hdg, 0.3);
+    const mw = document.getElementById('map-wrap');
+    const map2d = !!mw && !mw.classList.contains('page-hidden') && !_view3dOn;
+    const on3d = _ml3d && _ml3dReady && _map3dShown() && (_shipUiIn3d() || !map2d);
+    if (on3d) { const c = _ml3d.getCenter(); return [c.lat, c.lng]; }
+  } catch (e) { _swallow(e); }
+  const c = leafMap.getCenter();
+  return [c.lat, c.lng];
 }
 
 // 메뉴: 설정창 ON/OFF (배가 있어야 열림)
@@ -318,25 +334,28 @@ function renderShipOnOff() {
   if (sShow) { sShow.classList.toggle('on', shipVisible); sShow.querySelector('span').textContent = shipVisible ? 'ON' : 'OFF'; }
   const sPanel = document.getElementById('ship-menu-panel');
   if (sPanel) { sPanel.classList.toggle('on', panelOpen); sPanel.querySelector('span').textContent = panelOpen ? 'ON' : 'OFF'; }
-  const mb = document.getElementById('map-ship-btn');
-  if (mb) mb.classList.toggle('ship-active', shipVisible);
+  ['map-ship-btn', 'ship3d-btn'].forEach(id => {
+    const b = document.getElementById(id);
+    if (b) b.classList.toggle('ship-active', shipVisible);
+  });
 }
 
 function createShipMarker() {
   shipMarker = L.marker([shipLat, shipLon], { icon: shipIcon(), draggable: true, zIndexOffset: 500 }).addTo(leafMap);
-  shipMarker.on('drag', e => { shipLat = e.latlng.lat; shipLon = e.latlng.lng; shipDragging = true; });
+  shipMarker.on('drag', e => { shipLat = e.latlng.lat; shipLon = e.latlng.lng; shipDragging = true; updateShip3d(); });
   shipMarker.on('dragend', () => { shipDragging = false; shipTrail = []; updateShipTrail(); });
   // 배를 두 번 터치(더블탭/더블클릭)하면 속도·방향 설정 창 다시 열기
   let _shipLastTap = 0;
   shipMarker.on('click', e => {
     const t = Date.now();
-    if (t - _shipLastTap < 450) { try { L.DomEvent.stop(e); } catch(_) { _swallow(_); } openShipPanel(); _shipLastTap = 0; }
+    if (t - _shipLastTap < 450) { try { L.DomEvent.stop(e); } catch(_) { _swallow(_); } shipUiHome(false); openShipPanel(); _shipLastTap = 0; }
     else { _shipLastTap = t; }
   });
-  shipMarker.on('dblclick', e => { try { L.DomEvent.stop(e); } catch(_) { _swallow(_); } openShipPanel(); });
+  shipMarker.on('dblclick', e => { try { L.DomEvent.stop(e); } catch(_) { _swallow(_); } shipUiHome(false); openShipPanel(); });
 }
 
 function updateShipMarker() {
+  updateShip3d();
   if (!shipMarker || shipDragging) return;
   shipMarker.setLatLng([shipLat, shipLon]);
   shipMarker.setIcon(shipIcon());
@@ -436,10 +455,175 @@ makePanelDraggable('ship-panel', 'ship-panel-header');
     const cy = t.clientY - rect.top;
     const mp = leafMap.latLngToContainerPoint(shipMarker.getLatLng());
     if ((cx - mp.x) * (cx - mp.x) + (cy - mp.y) * (cy - mp.y) < 900) {
-      openShipPanel(); // tapped within 30px of marker center
+      shipUiHome(false); openShipPanel(); // tapped within 30px of marker center
     }
   }, {passive: true, capture: true});
 })();
+
+// ── 3D 지도의 함정 ──
+// 지도의 함정 모양(shipIcon 의 SVG)을 실제 크기 — 길이 100m · 폭 25m — 로 키워
+// 3D 지도에 세운다. 선체·함교·함수 구조물은 높이만 달리해 세우고(fill-extrusion),
+// 갑판 위에는 아이콘처럼 점선 중심선을 둔다. 위치·침로·속도는 2D 와 같은 값
+// (shipLat · shipLon · shipHdg · shipSpd)을 쓰므로 어느 쪽에서 바꿔도 함께 움직인다.
+// 3D 에서도 끌어 옮기고, 두 번 누르면 설정창이 열린다(2D 와 같다).
+const SHIP3D_LEN = 100, SHIP3D_BEAM = 25;   // m
+const SHIP3D_DECK = 7;                      // 갑판 높이(수면 위 m)
+// 아이콘 좌표(24×40, 가운데 12·20) → 함정 좌표(m) [오른쪽 +, 함미 쪽 +]
+const _ship3dM = ([x, y]) => [(x - 12) * SHIP3D_BEAM / 18, (y - 20) * SHIP3D_LEN / 38];
+function _ship3dQuad(out, p0, c, p1, n) {   // 2차 베지어(Q)를 점으로 펼친다
+  for (let i = 1; i <= n; i++) {
+    const t = i / n, u = 1 - t;
+    out.push([u * u * p0[0] + 2 * u * t * c[0] + t * t * p1[0], u * u * p0[1] + 2 * u * t * c[1] + t * t * p1[1]]);
+  }
+}
+const SHIP3D_PARTS = (() => {
+  // 선체 — M12 1 Q20 7 21 17 L21 33 Q21 39 12 39 Q3 39 3 33 L3 17 Q4 7 12 1Z
+  const hull = [[12, 1]];
+  _ship3dQuad(hull, [12, 1], [20, 7], [21, 17], 10);
+  hull.push([21, 33]);
+  _ship3dQuad(hull, [21, 33], [21, 39], [12, 39], 6);
+  _ship3dQuad(hull, [12, 39], [3, 39], [3, 33], 6);
+  hull.push([3, 17]);
+  _ship3dQuad(hull, [3, 17], [4, 7], [12, 1], 10);
+  // 함교 — rect x8 y16 w8 h10 rx2 (모서리를 둥글게)
+  const bridge = [];
+  [[10, 18, 180], [14, 18, 270], [14, 24, 0], [10, 24, 90]].forEach(([cx, cy, a0]) => {
+    for (let i = 0; i <= 4; i++) {
+      const a = (a0 + i * 22.5) * D2R;
+      bridge.push([cx + 2 * Math.cos(a), cy + 2 * Math.sin(a)]);
+    }
+  });
+  bridge.push(bridge[0]);
+  // 함수 구조물 — circle cx12 cy5 r2.5
+  const bow = [];
+  for (let i = 0; i <= 16; i++) { const a = i / 16 * 2 * Math.PI; bow.push([12 + 2.5 * Math.cos(a), 5 + 2.5 * Math.sin(a)]); }
+  const parts = [
+    { ring: hull,   h: SHIP3D_DECK,      c: '#1a5fa8' },
+    { ring: bridge, h: SHIP3D_DECK + 10, c: '#2277bb' },
+    { ring: bow,    h: SHIP3D_DECK + 3,  c: '#7ab8f5' },
+  ];
+  // 중심선 — x=12, 점선(2 칸 긋고 3 칸 띄움), 굵기 0.5. 갑판 위로 살짝(5cm)만 나온다.
+  for (let y = 1; y < 39; y += 5) {
+    const y1 = Math.min(39, y + 2);
+    parts.push({ ring: [[11.75, y], [12.25, y], [12.25, y1], [11.75, y1], [11.75, y]],
+                 h: SHIP3D_DECK + 0.05, c: '#88ccff' });
+  }
+  // 아이콘은 화면 좌표(아래가 +)라 돌림 방향이 지도와 반대다 — 바깥 고리를 반시계로 맞춘다
+  parts.forEach(p => { p.ring = p.ring.map(_ship3dM).reverse(); });
+  return parts;
+})();
+// 함정 좌표(m) → 경위도. 함수(앞)가 침로를 향한다.
+function _ship3dLngLat([xr, ya]) {
+  const h = shipHdg * D2R, sh = Math.sin(h), ch = Math.cos(h);
+  const east = -ya * sh + xr * ch, north = -ya * ch - xr * sh;
+  return [shipLon + east / (111320 * Math.cos(shipLat * D2R)), shipLat + north / 111320];
+}
+function _ship3dGeo() {
+  if (!shipVisible || shipLat === null) return { type: 'FeatureCollection', features: [] };
+  return {
+    type: 'FeatureCollection',
+    features: SHIP3D_PARTS.map(p => ({
+      type: 'Feature', properties: { h: p.h, c: p.c },
+      geometry: { type: 'Polygon', coordinates: [p.ring.map(_ship3dLngLat)] },
+    })),
+  };
+}
+let _ship3dReady = false;
+// 3D 지도가 다 뜨면(04-map.js 의 load) 함정·항적 레이어를 한 번 얹는다
+function _ship3dEnsure() {
+  if (!_ml3d || _ship3dReady) return;
+  _ml3d.addSource('ship-trail-3d', { type: 'geojson',
+    data: { type: 'Feature', geometry: { type: 'LineString', coordinates: [] } } });
+  _ml3d.addLayer({ id: 'ship-trail-3d', type: 'line', source: 'ship-trail-3d',
+    layout: { 'line-cap': 'round', 'line-join': 'round' },
+    paint: { 'line-color': '#ff3333', 'line-width': 2, 'line-opacity': 0.75 } });
+  _ml3d.addSource('ship-3d', { type: 'geojson', data: _ship3dGeo() });
+  _ml3d.addLayer({ id: 'ship-3d', type: 'fill-extrusion', source: 'ship-3d',
+    paint: { 'fill-extrusion-color': ['get', 'c'], 'fill-extrusion-height': ['get', 'h'],
+             'fill-extrusion-base': 0, 'fill-extrusion-opacity': 1 } });
+  _ship3dReady = true;
+  _ship3dBindEvents();
+  updateShip3d();
+  updateShip3dTrail();
+}
+function updateShip3d() {
+  if (!_ml3d || !_ship3dReady) return;
+  const src = _ml3d.getSource('ship-3d');
+  if (src) src.setData(_ship3dGeo());
+}
+function updateShip3dTrail() {
+  if (!_ml3d || !_ship3dReady) return;
+  const src = _ml3d.getSource('ship-trail-3d');
+  if (src) src.setData({ type: 'Feature', geometry: { type: 'LineString',
+    coordinates: (shipVisible ? shipTrail : []).map(t => [t[1], t[0]]) } });
+}
+// 3D 에서 함정을 누르고 끌면 옮기고, 두 번 누르면 설정창을 연다(2D 마커와 같다)
+function _ship3dBindEvents() {
+  let lastTap = 0, grab = null;
+  const open = e => {
+    try { e.preventDefault(); } catch (_) { _swallow(_); }
+    shipUiHome(typeof map3dPanelOn === 'function' && map3dPanelOn());
+    openShipPanel();
+  };
+  _ml3d.on('dblclick', 'ship-3d', open);
+  _ml3d.on('click', 'ship-3d', e => {
+    const t = Date.now();
+    if (t - lastTap < 450) { open(e); lastTap = 0; } else lastTap = t;
+  });
+  // 끄는 동안은 창 전체에서 듣는다 — 커서가 설정창 같은 다른 창 위로 지나가도
+  // 놓치지 않게(지도 이벤트로만 들으면 그 순간부터 끌기가 멈춘다)
+  const move = ev => {
+    const pt = ev.touches ? ev.touches[0] : ev;
+    if (!grab || !pt) return;
+    const r = _ml3d.getCanvas().getBoundingClientRect();
+    const ll = _ml3d.unproject([pt.clientX - r.left, pt.clientY - r.top]);
+    if (!ll) return;
+    shipLat = ll.lat + grab.dLat; shipLon = ll.lng + grab.dLon;
+    shipDragging = true; grab.moved = true;
+    updateShip3d();
+    try { if (shipMarker) shipMarker.setLatLng([shipLat, shipLon]); } catch (_) { _swallow(_); }
+  };
+  const end = () => {
+    window.removeEventListener('mousemove', move); window.removeEventListener('touchmove', move);
+    ['mouseup', 'touchend', 'touchcancel'].forEach(k => window.removeEventListener(k, end));
+    if (grab && grab.moved) { shipTrail = []; updateShipTrail(); }
+    grab = null; shipDragging = false;
+  };
+  const start = e => {
+    if (e.points && e.points.length !== 1) return;   // 두 손가락은 지도 확대·회전
+    try { e.preventDefault(); } catch (_) { _swallow(_); }   // 지도가 따라 밀리지 않게
+    grab = { dLat: shipLat - e.lngLat.lat, dLon: shipLon - e.lngLat.lng, moved: false };
+    window.addEventListener('mousemove', move);
+    window.addEventListener('touchmove', move, { passive: true });
+    ['mouseup', 'touchend', 'touchcancel'].forEach(k => window.addEventListener(k, end));
+  };
+  _ml3d.on('mousedown', 'ship-3d', start);
+  _ml3d.on('touchstart', 'ship-3d', start);
+  _ml3d.on('mouseenter', 'ship-3d', () => { _ml3d.getCanvas().style.cursor = 'pointer'; });
+  _ml3d.on('mouseleave', 'ship-3d', () => { _ml3d.getCanvas().style.cursor = ''; });
+}
+
+// 함정 메뉴·설정창은 하나뿐이다. 3D 가 제 창(탭의 '3D')을 쓰고 있으면 그 창
+// 안으로 옮겨 연다 — 2D 지도 창은 그때 화면에 없을 수도 있다.
+function shipUiHome(to3d) {
+  const host = document.getElementById(to3d ? 'map3d' : 'map-wrap');
+  if (!host) return;
+  ['ship-menu', 'ship-panel'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el && el.parentElement !== host) host.appendChild(el);
+  });
+}
+function _shipUiIn3d() {
+  const m = document.getElementById('ship-menu');
+  return !!(m && m.parentElement && m.parentElement.id === 'map3d');
+}
+// 3D 창의 SHIP 버튼 — 메뉴를 3D 창 안에서 연다
+function toggleShip3d() {
+  shipUiHome(true);
+  const m = document.getElementById('ship-menu');
+  m.classList.toggle('open');
+  renderShipOnOff();
+}
 
 // ── METAR / TAF Weather Panel ────────────────────────────────────────────
 function openWxPanel() {
