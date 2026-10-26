@@ -430,8 +430,9 @@ function toggleAltHold() {
   altHoldOn = !altHoldOn;
   if (altHoldOn) {
     crhtOn = false;  // mutually exclusive
-  } else {
+  } else if (!simModeOn) {
     S.vs = 0;  // prevent unintended climb/descent after disengagement
+    // (SIM 모드에서는 그 상승률에서 컬렉티브가 이어 받는다 — 계기가 튀지 않게)
   }
   updateHoverBtns();
 }
@@ -444,7 +445,7 @@ function toggleCrht() {
     // CRHT +/- buttons; convergence runs at the fixed 500 fpm rate.
     selCrht   = Math.round(S.alt);
     altHoldOn = false;
-  } else {
+  } else if (!simModeOn) {
     S.vs = 0;  // prevent unintended climb/descent after disengagement
   }
   updateHoverBtns();
@@ -507,6 +508,13 @@ function startTrimHold(dir) {
   // 0.5° 씩 옮겨 둔다(조종간을 가운데 두어도 그 자세로 날게 된다).
   // GSPD 가 걸려 있으면 SIM 모드라도 아래의 GSPD 기준속도 트림으로 간다.
   if (simModeOn && !gspdOn) {
+    // HDG·NAV 가 뱅크를 잡고 있으면: HDG SEL 은 좌우 트림으로 풀고 손으로 넘겨 받는다
+    // (평소의 '수동 뱅크 → HDG SEL 해제' 와 같다 — 지금 뱅크를 이어 잡는다).
+    // NAV 는 버튼으로만 푼다 — 그동안 좌우 트림은 쌓아 두지 않는다.
+    if ((dir === 'L' || dir === 'R') && simAfcsLat()) {
+      if (navApOn) return;
+      simAfcsLatRelease();
+    }
     simTrimNudge(dir);
     trimHoldTimer = setTimeout(() => {
       trimHoldInt = setInterval(() => simTrimNudge(dir), SIM_TRIM_REP_MS);

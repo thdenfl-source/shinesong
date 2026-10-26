@@ -883,6 +883,7 @@ function _follow3d() {
     //  정말로 하늘을 보고, 기울이면 지평선이 그대로 기운다. 화면을 돌리거나
     //  밀어 흉내 내던 종전 방식은 더 쓰지 않는다.)
     if (simModeOn) {
+      try { syncChinView(); } catch (e) { _swallow(e); }   // 아래 1/3 CHIN 창(04-map.js)
       _ml3dSimCamera();
       _apply3dRoll();
       return;
@@ -957,13 +958,38 @@ function _ml3dSimCamera() {
     o = _ml3d.calculateCameraOptionsFromCameraLngLatAltRotation([S.lon, S.lat], camAlt, r.yaw, pitch, r.roll);
   }
   _ml3d.jumpTo(o);
+  _simEye = { lon: S.lon, lat: S.lat, alt: camAlt, agl: aglM };
+  _ml3dChinCamera();
+}
+// ── CHIN 창의 카메라(SIM 1인칭) ──
+// 눈 자리는 정면 시야와 같다(_ml3dSimCamera 가 잰 자리). 기체 바닥에 난 창이므로
+// 기체 자세를 따라 돌고(고개 돌리기는 따르지 않는다), 좌우로 벌려 앞아래를 본다.
+// 정면 시야(±18°)와 계기판에 가린 틈을 건너 그 아래를 보여 준다.
+const CHIN_YAW   = 15;    // 좌우로 벌린 각(°)
+const CHIN_PITCH = -50;   // 기체 기준으로 내려다보는 각(°)
+let _simEye = null;       // 마지막으로 놓은 눈 자리 { lon, lat, alt(m, 그려진 높이), agl(m) }
+function _ml3dChinCamera() {
+  if (typeof _chinMaps === 'undefined' || !_chinMaps.length || !_simEye) return;
+  const eye = _simEye;
+  _chinMaps.forEach(c => {
+    const m = c.map;
+    if (!m || !m.transform || !(m.transform.height > 0)) return;
+    const r = _ml3dCamRot(S.hdg, S.pit, S.bnk, c.side * CHIN_YAW, CHIN_PITCH);
+    const pitch = Math.max(0, Math.min(180, 90 + r.pitch));
+    // 화면 중심은 내려다보는 땅 — 지평선 아래로 보는 각이 얕으면 멀리(최대 10km)
+    const down = Math.max(5, -r.pitch);
+    const dist = Math.max(30, Math.min(10000, eye.agl / Math.sin(down * D2R)));
+    try { m.jumpTo(_ml3dCamOptions(eye.lon, eye.lat, eye.alt, r.yaw, pitch, r.roll, dist, m)); }
+    catch (e) { _swallow(e); }
+  });
 }
 // 카메라를 '이 자리 · 이 높이 · 이 방향' 에 놓는 지도 카메라 값.
 // maplibre 의 calculateCameraOptionsFromCameraLngLatAltRotation 과 같은 셈이다. 다만
 // 거의 수평으로 볼 때 그 함수는 화면 중심을 10km 밖에 두어(줌 ≈ 13) 가까운 클립면이
 // 130m 쯤 된다 — 그보다 가까운 것(내려앉은 함정의 갑판·함교, 발밑 지면)이 잘려
 // 보이지 않는다. 중심까지의 거리(dist, m)를 직접 정해 가까운 것도 그리게 한다.
-function _ml3dCamOptions(lon, lat, alt, bearing, pitch, roll, dist) {
+// map 을 주면 그 지도(CHIN 창)의 화면 크기로 줌을 셈한다.
+function _ml3dCamOptions(lon, lat, alt, bearing, pitch, roll, dist, map) {
   const MC = maplibregl.MercatorCoordinate;
   const cam = MC.fromLngLat([lon, lat], alt);
   const pr = pitch * D2R, br = bearing * D2R;
@@ -975,7 +1001,7 @@ function _ml3dCamOptions(lon, lat, alt, bearing, pitch, roll, dist) {
     c = new MC(cam.x + dx * u, cam.y + dy * u, 0);
     mpu = 1 / c.meterInMercatorCoordinateUnits();
   }
-  const tr = _ml3d.transform;
+  const tr = (map || _ml3d).transform;
   const fov = Number.isFinite(tr.fovInRadians) ? tr.fovInRadians : tr.fov * D2R;
   const zoom = Math.log2(tr.height / 2 / Math.tan(fov / 2) / u / (tr.tileSize || 512));
   const ll = c.toLngLat();

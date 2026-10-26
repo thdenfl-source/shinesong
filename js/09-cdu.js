@@ -619,33 +619,47 @@ function _shipCarryTurn(d) {
   try { updateAcOnMap(); } catch (e) { _swallow(e); }
 }
 let _ship3dReady = false;
+// 함정·항적 레이어를 한 지도에 얹는다 — 3D 본 화면과 CHIN 창(04-map.js)이 같이 쓴다
+function _ship3dAddTo(map) {
+  map.addSource('ship-trail-3d', { type: 'geojson', data: _ship3dTrailGeo() });
+  map.addLayer({ id: 'ship-trail-3d', type: 'line', source: 'ship-trail-3d',
+    layout: { 'line-cap': 'round', 'line-join': 'round' },
+    paint: { 'line-color': '#ff3333', 'line-width': 2, 'line-opacity': 0.75 } });
+  map.addSource('ship-3d', { type: 'geojson', data: _ship3dGeo() });
+  map.addLayer({ id: 'ship-3d', type: 'fill-extrusion', source: 'ship-3d',
+    paint: { 'fill-extrusion-color': ['get', 'c'], 'fill-extrusion-height': ['get', 'h'],
+             'fill-extrusion-base': 0, 'fill-extrusion-opacity': 1 } });
+}
 // 3D 지도가 다 뜨면(04-map.js 의 load) 함정·항적 레이어를 한 번 얹는다
 function _ship3dEnsure() {
   if (!_ml3d || _ship3dReady) return;
-  _ml3d.addSource('ship-trail-3d', { type: 'geojson',
-    data: { type: 'Feature', geometry: { type: 'LineString', coordinates: [] } } });
-  _ml3d.addLayer({ id: 'ship-trail-3d', type: 'line', source: 'ship-trail-3d',
-    layout: { 'line-cap': 'round', 'line-join': 'round' },
-    paint: { 'line-color': '#ff3333', 'line-width': 2, 'line-opacity': 0.75 } });
-  _ml3d.addSource('ship-3d', { type: 'geojson', data: _ship3dGeo() });
-  _ml3d.addLayer({ id: 'ship-3d', type: 'fill-extrusion', source: 'ship-3d',
-    paint: { 'fill-extrusion-color': ['get', 'c'], 'fill-extrusion-height': ['get', 'h'],
-             'fill-extrusion-base': 0, 'fill-extrusion-opacity': 1 } });
+  _ship3dAddTo(_ml3d);
   _ship3dReady = true;
   _ship3dBindEvents();
   updateShip3d();
   updateShip3dTrail();
 }
+// 함정 레이어가 얹힌 지도들 — 3D 본 화면 + 열려 있는 CHIN 창
+function _ship3dMaps() {
+  const a = (_ml3d && _ship3dReady) ? [_ml3d] : [];
+  if (typeof _chinMaps !== 'undefined') _chinMaps.forEach(c => { if (c.ship) a.push(c.map); });
+  return a;
+}
+function _ship3dTrailGeo() {
+  return { type: 'Feature', geometry: { type: 'LineString',
+    coordinates: (shipVisible ? shipTrail : []).map(t => [t[1], t[0]]) } };
+}
 function updateShip3d() {
-  if (!_ml3d || !_ship3dReady) return;
-  const src = _ml3d.getSource('ship-3d');
-  if (src) src.setData(_ship3dGeo());
+  const maps = _ship3dMaps();
+  if (!maps.length) return;
+  const geo = _ship3dGeo();
+  maps.forEach(m => { const src = m.getSource('ship-3d'); if (src) src.setData(geo); });
 }
 function updateShip3dTrail() {
-  if (!_ml3d || !_ship3dReady) return;
-  const src = _ml3d.getSource('ship-trail-3d');
-  if (src) src.setData({ type: 'Feature', geometry: { type: 'LineString',
-    coordinates: (shipVisible ? shipTrail : []).map(t => [t[1], t[0]]) } });
+  const maps = _ship3dMaps();
+  if (!maps.length) return;
+  const geo = _ship3dTrailGeo();
+  maps.forEach(m => { const src = m.getSource('ship-trail-3d'); if (src) src.setData(geo); });
 }
 // 3D 에서 함정을 누르고 끌면 옮기고, 두 번 누르면 설정창을 연다(2D 마커와 같다)
 function _ship3dBindEvents() {

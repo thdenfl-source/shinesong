@@ -195,6 +195,7 @@ function toggle3dMap() {
     div3d.classList.remove('active');
     wrap.classList.remove('map3d-on');
     if (tiltCtrl) tiltCtrl.classList.remove('active');
+    try { syncChinView(); } catch (e) { _swallow(e); }   // 3D 를 닫으면 CHIN 창도 닫는다
     // Returning to 2D — Leaflet needs to recompute its size; apply follow immediately
     setTimeout(() => {
       try { leafMap.invalidateSize(); } catch (e) { _swallow(e); }
@@ -305,6 +306,42 @@ try {
   }
 } catch (e) { _swallow(e); }
 
+// 3D 지도의 하늘·안개 — 본 화면과 CHIN 창이 같이 쓴다
+const MAP3D_SKY = {
+  'sky-color': '#1a2a4a',
+  'sky-horizon-blend': 0.5,
+  'horizon-color': '#6699bb',
+  'horizon-fog-blend': 0.3,
+  'fog-color': '#aabbcc',
+  'fog-ground-blend': 0.9
+};
+// 3D 지도의 바탕(위성 사진 + 지형) — 본 화면과 CHIN 창이 같이 쓴다
+function _map3dStyle() {
+  return {
+    version: 8,
+    sources: {
+      satellite: {
+        type: 'raster',
+        tiles: ['sat://{z}/{x}/{y}'],      // 빈 칸은 위 단계 사진으로 메운다(_satTile)
+        tileSize: 256,
+        maxzoom: 19,
+        attribution: 'Tiles © Esri'
+      },
+      terrain: {
+        type: 'raster-dem',
+        encoding: 'terrarium',
+        tiles: ['dem://{z}/{x}/{y}'],      // 바다 밑은 0m 로 편다(_demTile)
+        minzoom: 0, maxzoom: 15,
+        tileSize: 256,
+        attribution: 'Terrain © Tilezen/AWS'
+      }
+    },
+    layers: [
+      { id: 'satellite', type: 'raster', source: 'satellite' }
+    ]
+  };
+}
+
 function _init3dMap() {
   if (_ml3d) {
     // Already initialised — just jump to current aircraft position
@@ -314,41 +351,10 @@ function _init3dMap() {
     return;
   }
 
-  const SKY = {
-    'sky-color': '#1a2a4a',
-    'sky-horizon-blend': 0.5,
-    'horizon-color': '#6699bb',
-    'horizon-fog-blend': 0.3,
-    'fog-color': '#aabbcc',
-    'fog-ground-blend': 0.9
-  };
-
   try {
     _ml3d = new maplibregl.Map({
       container: 'map3d',
-      style: {
-        version: 8,
-        sources: {
-          satellite: {
-            type: 'raster',
-            tiles: ['sat://{z}/{x}/{y}'],      // 빈 칸은 위 단계 사진으로 메운다(_satTile)
-            tileSize: 256,
-            maxzoom: 19,
-            attribution: 'Tiles © Esri'
-          },
-          terrain: {
-            type: 'raster-dem',
-            encoding: 'terrarium',
-            tiles: ['dem://{z}/{x}/{y}'],      // 바다 밑은 0m 로 편다(_demTile)
-            minzoom: 0, maxzoom: 15,
-            tileSize: 256,
-            attribution: 'Terrain © Tilezen/AWS'
-          }
-        },
-        layers: [
-          { id: 'satellite', type: 'raster', source: 'satellite' }
-        ]
-      },
+      style: _map3dStyle(),
       center: [S.lon, S.lat],
       zoom: 11,
       pitch: 55,
@@ -374,7 +380,7 @@ function _init3dMap() {
     // Terrain is best-effort — a DEM failure must not blank the satellite view
     try { _ml3d.setTerrain({ source: 'terrain', exaggeration: MAP3D_EXAG }); }
     catch (e) { console.warn('[3D] terrain unavailable:', e); }
-    try { _ml3d.setSky(SKY); } catch (e) { /* sky optional */ }
+    try { _ml3d.setSky(MAP3D_SKY); } catch (e) { /* sky optional */ }
 
     // Aircraft marker. Maplibre controls the OUTER element's transform for
     // positioning, so heading rotation is applied to an INNER wrapper instead.
@@ -430,6 +436,78 @@ function _init3dMap() {
   const _sc3dEl = _sc3d.onAdd(_ml3d);
   _sc3dEl.style.cssText += ';position:absolute;left:10px;bottom:62px;z-index:850;margin:0;';
   _ml3d.getContainer().appendChild(_sc3dEl);
+}
+
+// ── CHIN BUBBLE(SIM 1인칭) ──
+// 헬기 조종석 발밑의 둥근 창처럼, 3D 창을 위 2/3(정면 시야)와 아래 1/3(좌·우
+// CHIN 창)으로 나눈다. CHIN 창은 같은 바탕(위성·지형·함정)을 그리는 작은 3D 지도
+// 두 장이다 — 카메라는 같은 눈 자리에서 기체를 따라 앞아래를 본다(05-gps.js 의
+// _ml3dChinCamera). SIM 1인칭에서만 쓰고, 나오면 지도를 지워 그래픽 자원을 돌려준다.
+let chinViewOn = true;            // CHIN 창을 쓸 것인가(CHIN 버튼으로 끄고 켠다)
+let _chinMaps = [];               // [{ map, side: -1 왼쪽 · +1 오른쪽, ship: 함정 레이어를 얹었나 }]
+function _chinWanted() {
+  return chinViewOn && (typeof simModeOn !== 'undefined') && simModeOn && !!_ml3d && _map3dShown();
+}
+// 지금 상태에 맞춰 CHIN 창을 열고 닫는다 — SIM 진입·해제, 3D 창 옮기기, 버튼에서 부른다
+// (1인칭 카메라가 매 프레임 부르지만 바뀐 것이 없으면 아무것도 하지 않는다)
+function syncChinView() {
+  const d3 = document.getElementById('map3d');
+  const row = document.getElementById('chin-row');
+  if (!d3 || !row) return;
+  const sim = (typeof simModeOn !== 'undefined') && simModeOn;
+  const btn = document.getElementById('chin-btn');
+  if (btn) {
+    if (btn.classList.contains('show') !== sim) btn.classList.toggle('show', sim);
+    if (btn.classList.contains('on') !== chinViewOn) btn.classList.toggle('on', chinViewOn);
+  }
+  // 3D 지도 바로 뒤에 붙어 다닌다(2D 위에 겹쳐 쓰든, 제 창으로 옮겨 가든)
+  if (row.previousElementSibling !== d3) d3.after(row);
+  const want = _chinWanted();
+  if (d3.classList.contains('chin-on') !== want) {
+    d3.classList.toggle('chin-on', want);
+    // 정면 시야가 2/3 로 줄거나 다시 커진다 — 지도 엔진에 크기를 다시 재게 한다
+    try { _ml3d.resize(); } catch (e) { _swallow(e); }
+  }
+  if (want && !_chinMaps.length) _chinCreate();
+  else if (!want && _chinMaps.length) _chinDestroy();
+}
+function _chinCreate() {
+  if (typeof maplibregl === 'undefined') return;
+  [['chin-l', -1], ['chin-r', 1]].forEach(([id, side]) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    let map;
+    try {
+      map = new maplibregl.Map({
+        container: el, style: _map3dStyle(),
+        center: [S.lon, S.lat], zoom: 14, pitch: 45, bearing: S.hdg, maxPitch: 180,
+        interactive: false, attributionControl: false,
+        // 작은 창이다 — 고해상도 화면에서도 1.5배까지만 그려 그래픽 부담을 줄인다
+        pixelRatio: Math.min(1.5, window.devicePixelRatio || 1)
+      });
+    } catch (e) { console.warn('[3D] chin view failed:', e); return; }
+    const c = { map, side, ship: false };
+    map.on('error', (e) => console.warn('[3D] chin error:', e && e.error ? e.error.message : e));
+    map.on('load', () => {
+      try { map.setTerrain({ source: 'terrain', exaggeration: MAP3D_EXAG }); } catch (e) { _swallow(e); }
+      try { map.setSky(MAP3D_SKY); } catch (e) { _swallow(e); }
+      // 함정도 같이 보인다(발밑 창으로 갑판을 보며 내려앉는다)
+      try { if (typeof _ship3dAddTo === 'function') { _ship3dAddTo(map); c.ship = true; } } catch (e) { _swallow(e); }
+    });
+    // 카메라가 눈 자리에 있어야 하므로 화면 중심을 지면에 묶지 않는다
+    try { if (map.setCenterClampedToGround) map.setCenterClampedToGround(false); } catch (e) { _swallow(e); }
+    _chinMaps.push(c);
+  });
+  try { if (typeof _ml3dChinCamera === 'function') _ml3dChinCamera(); } catch (e) { _swallow(e); }
+}
+function _chinDestroy() {
+  _chinMaps.forEach(c => { try { c.map.remove(); } catch (e) { _swallow(e); } });
+  _chinMaps = [];
+}
+function toggleChinView() {
+  chinViewOn = !chinViewOn;
+  syncChinView();
+  requestAnimationFrame(() => { try { if (_ml3d) _applyFollow(); } catch (e) { _swallow(e); } });
 }
 
 // 3D(maplibre)용 이중 축척 — 2D L.Control.DualScale과 동일한 마크업/CSS·계산방식

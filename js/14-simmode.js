@@ -12,8 +12,9 @@
 //   · 사이클릭 전후 → 피치, 피치가 가감속을 만든다(기수를 내리면 빨라진다)
 //   · 페달         → 기수만 돌린다(저속에서 쓰는 요 조작)
 //   · 컬렉티브     → 토크(TQ %). 남는 토크가 상승률이 된다
-// SIM 모드에서는 AFCS(NAV·HDG·ALT·CRHT·GSPD)를 잡아 두지 않는다 — 두 곳에서
-// 같은 축을 몰면 서로 싸운다.
+// SIM 모드로 들어갈 때 AFCS(NAV·HDG·ALT·CRHT·GSPD)는 놓는다. 들어온 뒤 조종사가
+// 상위모드를 걸면 그 축은 AFCS 가 몰고 조종간의 그 축 값은 무시한다 — 두 곳에서
+// 같은 축을 몰면 서로 싸운다(HDG·NAV → 좌우·페달, ALT·CRHT → 컬렉티브).
 // ─────────────────────────────────────────────────────────────
 
 const SIM_BANK_MAX  = 45;      // 사이클릭 최대 뱅크(°)
@@ -29,9 +30,27 @@ const SIM_YAW_RATE  = 25;      // 페달 최대 요율(°/s)
 const SIDE_FADE_KT = 45;      // 이 속도부터는 옆으로 가지 않고 선회만 한다
 const SIDE_MAX_KT  = 35;      // 최대 뱅크에서의 옆방향 속도(kt)
 const SIDE_K       = 0.5;     // 옆방향 속도가 따라가는 빠르기(1/s)
+// ── 상위모드가 잡은 축 ──
+// SIM 모드에서도 상위모드를 걸면 그 축은 AFCS 가 몬다. 조종간의 그 축 값은 무시한다.
+//   좌우(뱅크)·페달: HDG SEL · NAV (GSPD 가 걸려 있으면 GSPD 가 우선이다)
+//   컬렉티브(고도): ALT(선택 고도로 가는 것 포함) · CRHT
+function simAfcsLat() {
+  return simModeOn && !gspdOn && !gspdCoasting && (navApOn || (hdgSelOn && rollApOn));
+}
+function simAfcsVert() { return simModeOn && (altHoldOn || crhtOn); }
+// HDG SEL 을 손으로 넘겨 받는다(좌우 트림을 누를 때) — 지금 뱅크를 트림으로 잡아
+// 두어 놓는 순간 자세가 튀지 않게 한다(조종간이 가운데가 아니면 그 몫은 뺀다).
+function simAfcsLatRelease() {
+  hdgSelOn = false; rollApOn = false;
+  const r = simModeAxes().roll * SIM_BANK_MAX;
+  simTrim.roll = Math.max(-SIM_TRIM_MAX_ROLL, Math.min(SIM_TRIM_MAX_ROLL, Math.round(S.bnk - r)));
+  bankTarget = S.bnk;
+}
+
 // 지금 속도에서 뱅크가 '선회' 로 쓰이는 몫(0=전부 옆미끄럼, 1=전부 선회)
+// HDG·NAV 가 뱅크를 잡고 있으면 평소처럼 선회만 한다(옆으로 미끄러지면 기수를 못 돌린다).
 function simTurnFrac() {
-  if (!simModeOn) return 1;
+  if (!simModeOn || simAfcsLat()) return 1;
   return Math.max(0, Math.min(1, Math.abs(S.spd) / SIDE_FADE_KT));
 }
 const SIM_SPD_MAX   = 160;     // 최대 대기속도(kt)
@@ -39,22 +58,46 @@ const SIM_SPD_BACK  = -40;     // 후방 비행 한계(kt) — 헬기는 뒤로�
 // ── 공력적 지연 ──
 // 자세나 출력을 바꿔도 속도·고도는 곧바로 따라오지 않는다. 로터 원판이 기울어
 // 힘이 생기고, 그 힘이 기체 무게를 밀어 움직이기까지 시간이 걸린다.
-//   속도: 가감속(simAcc)이 먼저 천천히 붙고, 그 가감속으로 속도가 바뀐다.
-//         가감속의 한계는 약 3.5kt/s(≈0.18g). 감쇠를 임계로 맞춰 넘치지 않는다.
-//   고도: 토크 → 유입류 → 상승률로 두 번 걸러 천천히 붙는다.
-const SPD_TAU      = 5.0;     // 속도가 자세에 맞는 값으로 다가가는 시정수(s)
-const SPD_ACC_MAX  = 3.5;     // 낼 수 있는 최대 가감속(kt/s)
-const SPD_JERK_TAU = 1.2;     // 가감속이 붙는 데 걸리는 시간(s) — 로터 기울기·기체 관성
-const VS_TAU1      = 0.5;     // 토크가 바뀐 뒤 유입류가 바뀌는 시간(s)
-const VS_TAU2      = 1.5;     // 그 힘이 상승률로 옮겨 가는 시간(s)
+//   속도: 가감속(simAcc)이 정해진 빠르기(SPD_JERK)로 점점 커진다 — 기수를 숙이거나
+//         들면 처음엔 느리게, 갈수록 빠르게 속도가 바뀐다. 목표 속도가 가까워지면
+//         같은 식으로 풀어 넘치지 않는다. 감속(최대 6kt/s)이 가속보다 세고,
+//         가속은 속도가 붙을수록(전이양력으로 출력이 남을수록) 세진다.
+//   고도: 상승률도 같은 식이다 — 레버를 움직이면 오르내림이 점점 빨라지며 붙는다.
+const SPD_JERK     = 1.5;     // 가감속이 커지는 빠르기(kt/s²)
+const SPD_ACC_UP0  = 3.0;     // 제자리 언저리에서 낼 수 있는 가속(kt/s)
+const SPD_ACC_UP   = 5.0;     // 전이양력을 다 받은 뒤의 최대 가속(kt/s)
+const SPD_ETL_KT   = 40;      // 가속이 다 세지는 속도(kt)
+const SPD_DEC_MAX  = 6.0;     // 최대 감속(kt/s) — 원판을 젖히면 항력까지 같이 받는다
+const VS_JERK      = 500;     // 상승률의 변화가 커지는 빠르기(fpm/s²)
+const VS_ACC_MAX   = 1000;    // 상승률이 바뀌는 최대 빠르기(fpm/s)
 const TQ_TAU       = 0.5;     // 토크가 레버를 따라가는 시간(s) — 엔진·로터 관성
 // 컬렉티브 감도 — 남는 토크가 만드는 상승·강하율을 PERF 표의 이 배로 쓴다.
-// (레버를 조금만 움직여도 고도·속도가 눈에 띄게 바뀌게 — 종전의 2배)
-const SIM_COLL_GAIN = 2;
+// (한때 2배로 두었다가 너무 민감해 PERF 표 그대로로 돌렸다)
+const SIM_COLL_GAIN = 1;
 // 상승·강하율의 한계(fpm). 기수를 숙인 채 레버를 끝까지 내리면 4,000fpm 까지 떨어진다.
 const SIM_VS_UP_MAX = 2000, SIM_VS_DN_MAX = 4000;
+// 남은 차이(d)를 향해 '바뀌는 빠르기(acc)' 를 한 구간 옮긴다. acc 는 jerk 의 빠르기로
+// 커진다(그래서 점점 빨라진다). 목표가 가까워지면 그 빠르기의 반으로 풀 수 있는 만큼
+// (√(j·|d|))으로 줄여 넘치지 않고, 아주 가까우면 곧게(d 에 비례해) 붙어 떨지 않는다.
+// 푸는 쪽(줄이거나 반대로 돌리는 쪽)은 세 배 빠르다 — 가속하다 조종간을 당기면 가속이
+// 금방 풀리고 감속이 다시 점점 커진다(원판은 조종간을 곧바로 따른다).
+const JERK_RELEASE = 3;
+function simJerkStep(d, acc, dt, aMax, jerk, d0) {
+  const j = jerk / 2, ad = Math.abs(d);
+  const brake = ad < d0 ? ad * Math.sqrt(2 * j / d0) : Math.sqrt(2 * j * ad);
+  const want = Math.sign(d) * Math.min(aMax, brake);
+  const rel = want * acc < 0 || Math.abs(want) < Math.abs(acc);
+  const r = (rel ? jerk * JERK_RELEASE : jerk) * dt;
+  return acc + Math.max(-r, Math.min(r, want - acc));
+}
+// 지금 속도에서 낼 수 있는 가감속(kt/s) — 줄이는 쪽(감속)인가, 늘리는 쪽(가속)인가
+function simAccLimit(ds) {
+  const v = S.spd;
+  if (v && Math.sign(ds) !== Math.sign(v)) return SPD_DEC_MAX;
+  return SPD_ACC_UP0 + (SPD_ACC_UP - SPD_ACC_UP0) * Math.min(1, Math.abs(v) / SPD_ETL_KT);
+}
 let simAcc = 0;               // 지금의 가감속(kt/s)
-let _simVs1 = 0;              // 상승률로 가기 전 단계(fpm)
+let simVsAcc = 0;             // 지금 상승률이 바뀌는 빠르기(fpm/s)
 // ── 위치에너지 ↔ 운동에너지 ──
 // 올라가는 동안에는 그만큼 속도를 내주고, 내려가는 동안에는 속도를 얻는다.
 // 그래서 기수를 숙인 채 컬렉티브를 내리면 고도가 빠지면서 속도가 붙는다.
@@ -110,7 +153,7 @@ function simTrimHoldSpeed() {
 // 밀고 있는 축만 조종사가 몬다 — 미는 쪽으로 지상속도가 붙고, 놓으면 GSPD 가
 // 기준속도로 되돌린다. 새 속도를 지키려면 FORCE TRIM 을 누른다(그 순간의
 // 지상속도가 새 기준이 된다 — forceTrim). 4방향 트림은 기준속도를 옮긴다.
-const GSPD_FLY_ACC = SPD_ACC_MAX;   // 조종간을 끝까지 밀었을 때의 가감속(kt/s)
+const GSPD_FLY_ACC = 3.5;           // 조종간을 끝까지 밀었을 때의 가감속(kt/s)
 let _simOnGnd = false;              // 마지막 적분 구간에 땅에 붙어 있었는가
 // 조종간 몫 — { lat: 좌우, fwd: 전후 } (-1…1, 중립이면 0). GSPD 가 아니면 null.
 function simGspdStick() {
@@ -307,7 +350,7 @@ function simDeckHandoff(toDeck) {
 }
 
 function simStartGround() {
-  S.vs = 0; S.spd = 0; simLat = 0; simAcc = 0; _simVs1 = 0;
+  S.vs = 0; S.spd = 0; simLat = 0; simAcc = 0; simVsAcc = 0;
   S.pit = 0; S.bnk = 0; bankTarget = 0;
   S.tq = 0;                      // 레버를 내려 둔 상태에서 올리며 뜬다
   S.alt = simTerrainFt();        // 지면 높이 = AGL 0
@@ -329,7 +372,8 @@ function simStartGround() {
 function toggleSimMode(on, opt) {
   simModeOn = (on === undefined) ? !simModeOn : !!on;
   if (simModeOn) {
-    // 손으로 모는 동안에는 AFCS 를 놓는다 — 같은 축을 둘이 몰면 싸운다
+    // 들어올 때는 AFCS 를 놓는다 — 상위모드는 들어온 뒤 조종사가 다시 건다
+    // (걸면 그 축은 AFCS 가 몰고 조종간 값은 무시한다 — simAfcsLat·simAfcsVert)
     try { if (navApOn) toggleNavAp(); } catch (e) { _swallow(e); }
     try { if (gspdOn) toggleGspd(); } catch (e) { _swallow(e); }
     // GSPD 를 풀고 타력으로 옆·뒤로 가던 중이면 그 속도를 SIM 조종으로 넘겨 받는다
@@ -342,7 +386,7 @@ function toggleSimMode(on, opt) {
     // 손을 떼면 그 자리에서 날던 대로 — 지금 자세를 그대로 이어받는다
     bankTarget = S.bnk;
     simTrimReset();
-    simAcc = 0; _simVs1 = S.vs || 0;      // 지금 날던 대로 이어 간다
+    simAcc = 0; simVsAcc = 0;            // 지금 날던 대로 이어 간다
     simLookReset();
     // 지금 날고 있는 상태를 유지할 만큼의 토크로 레버를 맞춰 둔다(진입 충격 방지)
     let add = (S.vs || 0) / TQ_PER_FPM;
@@ -355,7 +399,7 @@ function toggleSimMode(on, opt) {
   } else {
     simExitView();
     // 손을 뗀 자리에서 수평으로 돌려 놓는다(기울어진 채 남지 않게)
-    bankTarget = 0; S.vs = 0; simLat = 0; simAcc = 0; _simVs1 = 0;
+    bankTarget = 0; S.vs = 0; simLat = 0; simAcc = 0; simVsAcc = 0;
     simLookReset();
     selHdg = ((Math.round(S.hdg) + 359) % 360) + 1;
   }
@@ -384,10 +428,12 @@ function simEnterView() {
   if (v.side) { try { selectPanel(v.side, 'm3d', true); } catch (e) { _swallow(e); } }
   // 조종석 시야이므로 항공기를 따라가야 한다
   try { if (!followMode) toggleFollow(); } catch (e) { _swallow(e); }
+  try { syncChinView(); } catch (e) { _swallow(e); }   // 아래 1/3 CHIN 창
 }
 function simExitView() {
   const v = _simView; _simView = null;
   try { _apply3dRoll(); } catch (e) { _swallow(e); }
+  try { syncChinView(); } catch (e) { _swallow(e); }       // CHIN 창을 닫고 정면 시야를 다시 키운다
   try { _ml3dSimCameraOff(); } catch (e) { _swallow(e); }   // 1인칭 카메라(롤·90° 너머)를 되돌린다
   try { _update3dMarker(); } catch (e) { _swallow(e); }     // 제 마커를 다시 보인다
   if (!v) return;
@@ -445,10 +491,13 @@ function simFly(dt) {
     const pitch = cl(a.pitch + simTrim.pitch / SIM_PITCH_MAX);
 
     // ── 사이클릭 좌우 → 뱅크 ──
-    const bTgt = roll * SIM_BANK_MAX;
-    const dB = bTgt - S.bnk;
-    S.bnk += Math.sign(dB) * Math.min(Math.abs(dB), SIM_ROLL_RATE * dt);
-    bankTarget = S.bnk;             // 모드를 빠져나가도 자세가 튀지 않게
+    // HDG·NAV 가 걸려 있으면 뱅크는 AFCS 가 잡는다(07-sim.js) — 조종간 좌우는 무시한다.
+    if (!simAfcsLat()) {
+      const bTgt = roll * SIM_BANK_MAX;
+      const dB = bTgt - S.bnk;
+      S.bnk += Math.sign(dB) * Math.min(Math.abs(dB), SIM_ROLL_RATE * dt);
+      bankTarget = S.bnk;           // 모드를 빠져나가도 자세가 튀지 않게
+    }
 
     // ── 사이클릭 전후 → 피치 ──
     // 조종간을 밀면(+) 기수가 내려간다. S.pit 은 기수 올림이 +.
@@ -461,15 +510,19 @@ function simFly(dt) {
     // 기수 4° 80kt, 7.5° 45kt (1° = 10kt). 그 속도로 천천히 수렴한다.
     // 기수를 더 들면 뒤로도 간다(16° ≈ −40kt).
     // 올라가는 중에는 그만큼 출력을 쓰므로 같은 자세에서도 느려진다.
-    let sTgt = spdFromPitch(S.pit) - (vsPow / 1000) * SIM_CLIMB_KT;
+    // 내려가며 얻는 속도는 '실제로 잃는 고도' 만큼만이다 — 기수를 들어 감속하며
+    // 레버를 내리면 줄어든 속도가 고도로 돌아와 고도가 그대로이므로, 레버를 내린
+    // 몫으로 속도를 돌려받지 않는다(그래서 고도를 지키며 속도가 크게 준다).
+    const vsTrade = vsPow > 0 ? vsPow : Math.min(0, Math.max(vsPow, S.vs));
+    let sTgt = spdFromPitch(S.pit) - (vsTrade / 1000) * SIM_CLIMB_KT;
     sTgt = Math.max(SIM_SPD_BACK, Math.min(SIM_SPD_MAX, sTgt));
     if (onGnd) {
       // 땅 위에서는 서 있는다 — 바퀴(스키드)가 잡으므로 금방 선다
       simAcc = Math.max(-15, Math.min(15, -S.spd * 1.2));
     } else {
-      // 가고 싶은 가감속 → 실제 가감속은 그쪽으로 천천히 붙는다
-      const aDes = Math.max(-SPD_ACC_MAX, Math.min(SPD_ACC_MAX, (sTgt - S.spd) / SPD_TAU));
-      simAcc += (aDes - simAcc) * Math.min(1, dt / SPD_JERK_TAU);
+      // 가감속은 점점 커진다 — 기수를 들면 감속이, 숙이면 가속이 갈수록 세진다
+      const ds = sTgt - S.spd;
+      simAcc = simJerkStep(ds, simAcc, dt, simAccLimit(ds), SPD_JERK, 1);
     }
     S.spd = Math.max(SIM_SPD_BACK, Math.min(SIM_SPD_MAX, S.spd + simAcc * dt));
 
@@ -482,7 +535,8 @@ function simFly(dt) {
   }
 
   // ── 페달 → 기수 ──
-  if (a.yaw) {
+  // HDG·NAV 가 기수를 잡고 있으면 페달은 무시한다(선택 헤딩으로 되돌리며 싸운다)
+  if (a.yaw && !simAfcsLat()) {
     S.hdg = normA(S.hdg + a.yaw * SIM_YAW_RATE * dt);
     selHdg = ((Math.round(S.hdg) + 359) % 360) + 1;
   }
@@ -491,11 +545,20 @@ function simFly(dt) {
   // 레버 자리가 곧 토크다. 토크는 천천히 따라 오른다(엔진·로터 관성).
   // 컬렉티브 축을 배정하지 않았으면 레버가 없는 셈이다 — 지금 고도를 지킬
   // 만큼만 걸어 둔다(조이스틱 없이 켰다고 저절로 떠오르지 않게).
+  // ALT·CRHT 가 걸려 있으면 고도는 AFCS 가 정하고(07-sim.js) 레버는 무시한다 —
+  // 토크는 AFCS 가 내는 상승률에 드는 만큼으로 따라간다(속도를 줄이며 돌려받는
+  // 운동에너지 몫은 빼고).
+  const vert = simAfcsVert();
   const cfg = (typeof joyAxes === 'object' && joyAxes) ? joyAxes.coll : null;
   let tTgt;
+  if (vert) {
+    let add = (vsPow / SIM_COLL_GAIN) / TQ_PER_FPM;
+    try { if (typeof perfTqForVs === 'function') add = perfTqForVs(vsPow / SIM_COLL_GAIN); } catch (e) { _swallow(e); }
+    tTgt = onGnd ? S.tq : tqRequired() + add;
+  }
   // 레버가 없으면: 땅에서는 그대로 서 있고(출력 0), 공중에서는 수평 비행에 드는
   // 만큼 건다(속도를 바꾸면 그 운동에너지만큼은 오르내린다)
-  if (!cfg) tTgt = onGnd ? 0 : tqRequired();
+  else if (!cfg) tTgt = onGnd ? 0 : tqRequired();
   else if (cfg.abs) {
     // 스로틀·컬렉티브처럼 '세워 두는' 레버는 자리 자체가 출력이다.
     // 맨 아래 0% … 맨 위 110%(연속한계 100% 를 조금 넘을 수 있게).
@@ -509,6 +572,10 @@ function simFly(dt) {
   const dT = (tTgt - S.tq) * Math.min(1, dt / TQ_TAU);
   S.tq += Math.sign(dT) * Math.min(Math.abs(dT), TQ_RATE * dt);
 
+  // ALT·CRHT 중에는 상승률을 AFCS 가 정한다. 상승률의 변화 빠르기만 비워 두어
+  // 모드를 풀었을 때 그 자리에서 이어 가게 한다.
+  if (vert) { simVsAcc = 0; return; }
+
   // ── 남는 토크 → 상승·강하 ──
   // 필요한 토크보다 남으면 오르고, 모자라면 내려간다. 그래서 같은 레버라도
   // 선회를 걸면 가라앉고(필요 토크 증가), 속도가 붙으면 저절로 떠오른다.
@@ -519,18 +586,19 @@ function simFly(dt) {
   try { vRaw = (typeof perfVsForTq === 'function') ? perfVsForTq(dTq) : dTq * TQ_PER_FPM; }
   catch (e) { vRaw = dTq * TQ_PER_FPM; }
   if (!Number.isFinite(vRaw)) vRaw = dTq * TQ_PER_FPM;
-  vRaw *= SIM_COLL_GAIN;                // 레버를 움직인 만큼의 오르내림(속도 변화도 따라 커진다)
+  vRaw *= SIM_COLL_GAIN;
   // 같은 토크라도 속도에 따라 오르는 정도가 다르다. 최대상승속도(Vy)에서
   // 가장 잘 오르고, 그보다 빠르거나 느릴수록 덜 오른다(PERF 의 Vy 를 쓴다).
   if (vRaw > 0) vRaw *= simClimbEff();
   const vTgt = Math.max(-SIM_VS_DN_MAX, Math.min(SIM_VS_UP_MAX, vRaw));
-  _simVs1 += (vTgt - _simVs1) * Math.min(1, dt / VS_TAU1);
-  // 출력 몫은 유입류를 거쳐 천천히, 운동에너지 몫은 가감속과 함께 바로 붙는다
-  const vsP = vsPow + (_simVs1 - vsPow) * Math.min(1, dt / VS_TAU2);
+  // 출력 몫은 점점 빨라지며 붙고(simVsAcc), 운동에너지 몫은 가감속과 함께 바로 붙는다
+  simVsAcc = simJerkStep(vTgt - vsPow, simVsAcc, dt, VS_ACC_MAX, VS_JERK, 50);
+  const vsP = vsPow + simVsAcc * dt;
   // 기수를 숙여 가속하며 레버를 내려도 강하는 4,000fpm 에서 멎는다(운동에너지 몫 포함)
   S.vs = Math.max(-SIM_VS_DN_MAX, vsP + simKeVs(onGnd));
+  if (S.vs <= -SIM_VS_DN_MAX && simVsAcc < 0) simVsAcc = 0;   // 한계에 눌린 채 쌓이지 않게
   // 땅 아래로는 내려가지 않는다 — 바닥은 해수면이 아니라 '발밑의 지면' 이다
-  if (S.alt <= gnd + 0.5 && S.vs < 0) { S.vs = 0; S.alt = gnd; if (_simVs1 < 0) _simVs1 = 0; }
+  if (S.alt <= gnd + 0.5 && S.vs < 0) { S.vs = 0; S.alt = gnd; if (simVsAcc < 0) simVsAcc = 0; }
 
 }
 
