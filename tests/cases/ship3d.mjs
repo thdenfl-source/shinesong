@@ -75,24 +75,26 @@ export async function run(page, t) {
     `함정 위치가 선체 한가운데다 (앞 ${geo.hull.fwdMax.toFixed(1)} · 뒤 ${geo.hull.fwdMin.toFixed(1)}m)`);
   t.ok(geo.hull.h === 7 && geo.bridge.h === 17 && geo.bow.h === 10,
     `갑판 7m · 함교 17m · 함수 구조물 10m (${geo.hull.h} · ${geo.bridge.h} · ${geo.bow.h})`);
-  t.ok(Math.abs(geo.bridge.len - 26.3) < 0.5 && Math.abs(geo.bridge.beam - 11.1) < 0.5
-       && geo.bridge.fwdMax < 12 && geo.bridge.fwdMin > -17,
-    `함교는 지도 모형 그대로 배 가운데에 있다 (${geo.bridge.len.toFixed(1)} × ${geo.bridge.beam.toFixed(1)}m)`);
+  t.ok(Math.abs(geo.bridge.len - 26.3) < 0.5 && Math.abs(geo.bridge.beam - 11.1) < 0.5,
+    `함교는 지도 모형 크기 그대로다 (${geo.bridge.len.toFixed(1)} × ${geo.bridge.beam.toFixed(1)}m)`);
+  t.ok(Math.abs((geo.bridge.fwdMin - geo.hull.fwdMin) - 40) < 0.1,
+    `함교 뒤 비행갑판은 40m 다 (${(geo.bridge.fwdMin - geo.hull.fwdMin).toFixed(1)}m · 함정 ${geo.hull.len.toFixed(0)}m)`);
   t.ok(geo.bow.fwdMax > 40 && geo.bow.fwdMin > 30, `함수 구조물은 앞쪽에 있다 (${geo.bow.fwdMin.toFixed(0)}…${geo.bow.fwdMax.toFixed(0)}m)`);
   t.ok(geo.dashes.length === 3 && geo.dashes.every(d => d.h > 7 && d.h < 7.2 && d.beam < 1 && d.fwdMin > 10),
     `함교 앞 갑판에는 지도 모형의 점선 중심선 (${geo.dashes.length}토막)`);
   // ── 비행갑판 표시 ──
   const m = geo.marks;
-  t.ok(m.lineup.c === '#ffd200' && m.lineup.beam < 0.5 && Math.abs(m.lineup.fwdMax + 15.8) < 0.1
+  t.ok(m.lineup.c === '#ffd200' && m.lineup.beam < 0.5 && Math.abs(m.lineup.fwdMax + 10) < 0.1
        && m.lineup.fwdMin < -48 && m.lineup.h > 7 && m.lineup.h < 7.1,
     `노란 정렬선이 함교 뒷면에서 함미까지 갑판 중심선을 따라간다 (${m.lineup.fwdMax.toFixed(1)} → ${m.lineup.fwdMin.toFixed(1)}m)`);
-  t.ok(m.wall.c === '#ffd200' && m.wall.h === 17 && Math.abs(m.wall.fwdMax + 15.8) < 0.1 && m.wall.len < 0.2,
+  t.ok(m.wall.c === '#ffd200' && m.wall.h === 17 && Math.abs(m.wall.fwdMax + 10) < 0.1 && m.wall.len < 0.2,
     `함교 뒷면 한가운데를 위에서 갑판까지 노란 세로선이 내려온다 (높이 ${m.wall.h}m)`);
   t.ok(m.td.c === '#ffffff' && m.tdRings === 2 && Math.abs(m.td.len - 10) < 0.1 && Math.abs(m.td.beam - 10) < 0.1
        && Math.abs(m.holeR - 4.4) < 0.05,
     `흰 착함 원 (지름 ${m.td.len.toFixed(1)}m · 선 굵기 ${(5 - m.holeR).toFixed(1)}m)`);
-  t.ok(m.xs.length === 2 && m.xs.every(x => x.c === '#ffffff' && Math.abs((x.fwdMax + x.fwdMin) / 2 + 31) < 0.1),
+  t.ok(m.xs.length === 2 && m.xs.every(x => x.c === '#ffffff' && Math.abs((x.fwdMax + x.fwdMin) / 2 + 30) < 0.1),
     '원 한가운데에 흰 X');
+  t.ok(Math.abs((m.td.fwdMax + m.td.fwdMin) / 2 + 30) < 0.1, '착함 원은 40m 비행갑판의 한가운데(30m 뒤)에 있다');
   t.ok(m.shoulder.c === '#ffffff' && Math.abs(m.shoulder.fwdMin - m.td.fwdMax) < 0.01 && m.shoulder.beam >= 9.9,
     `어깨선은 원 앞쪽에 맞닿은 흰 가로선이다 (원 앞 ${m.td.fwdMax.toFixed(1)} · 어깨선 ${m.shoulder.fwdMin.toFixed(1)}m)`);
   {
@@ -231,9 +233,12 @@ export async function run(page, t) {
       return { fwd: n * Math.cos(h) + e * Math.sin(h), right: e * Math.cos(h) - n * Math.sin(h) };
     };
     const floorAt = (fwd, right) => { [S.lat, S.lon] = at(fwd, right); simTerrainFt(); return simFloorFt(); };
+    const DECK = 7 / 0.3048;
+    S.hdg = 0;
     const floors = { stern: floorAt(-35, 0), bridge: floorAt(-3, 0), bow: floorAt(40, 0),
                      side: floorAt(-35, 20), far: floorAt(-80, 0),
-                     tdX: floorAt(-31, 0), lineup: floorAt(-40, 0), shoulder: floorAt(-25.8, 0) };
+                     tdX: floorAt(-30, 0), lineup: floorAt(-40, 0), shoulder: floorAt(-24.8, 0),
+                     overBridge: floorAt(-15, 0) };   // 기체 앞쪽 5m 가 함교 위
     let ts = 1000;
     const fly = sec => {
       S.running = true; S.lastT = ts;
@@ -284,16 +289,35 @@ export async function run(page, t) {
     _pad.axes[3] = -1;
     S.running = true; S.lastT = ts; ts += 50; joyPoll(ts); simStep(ts); S.running = false;
     const touch = { deck: simOnDeck(), spd: S.spd };
+    // 기체(앞뒤 20m)는 함교·선체 옆면에 부딪히면 그 앞에서 선다
+    shipHdg = 0; shipSpd = 0; updateShipMarker();
+    _pad.axes[3] = (tqRequired() / 110) * 2 - 1;            // 레버는 높이 유지
+    const push = (fwd, right, hdg, alt, sec) => {
+      [S.lat, S.lon] = at(fwd, right); S.hdg = hdg; S.alt = alt; S.vs = 0; _simVs1 = 0;
+      S.spd = 8; simLat = 0; simAcc = 0; S.pit = pitchFromSpd(8); simTrimHoldSpeed();
+      S.running = true; S.lastT = ts;
+      for (let i = 0; i < sec * 20; i++) { ts += 50; joyPoll(ts); simStep(ts); }
+      S.running = false;
+      return { ...rel(), spd: S.spd, alt: S.alt };
+    };
+    const intoBridge = push(-28, 0, 0, DECK + 5, 8);          // 갑판 위 5ft 로 함교 쪽으로
+    const intoSide = push(-30, 30, 270, 10, 8);               // 수면 위 10ft 로 우현 옆면 쪽으로
     // 정리
     _tcElev = realElev; shipSpd = 0; updateShipMarker();
     toggleSimMode(false);
-    return { floors, landed, view, ride, paused, turned, lift, touch };
+    return { floors, landed, view, ride, paused, turned, lift, touch, intoBridge, intoSide };
   });
   const DECK_FT = 7 / 0.3048;
   t.ok(Math.abs(land.floors.stern - DECK_FT) < 0.01 && Math.abs(land.floors.bridge - 17 / 0.3048) < 0.01
        && Math.abs(land.floors.bow - 10 / 0.3048) < 0.01,
     `함정 위에서는 그 부분의 윗면이 바닥이다 (갑판 ${land.floors.stern.toFixed(1)} · 함교 ${land.floors.bridge.toFixed(1)} · 함수 ${land.floors.bow.toFixed(1)}ft)`);
   t.ok(land.floors.side === 0 && land.floors.far === 0, '함정 옆·뒤 바다는 해수면(0ft)이 바닥이다');
+  t.ok(Math.abs(land.floors.overBridge - 17 / 0.3048) < 0.01,
+    `기체(앞뒤 20m) 앞쪽이 함교 위에 있으면 함교에 걸린다 (${land.floors.overBridge.toFixed(1)}ft)`);
+  t.ok(land.intoBridge.fwd < -19.4 && land.intoBridge.fwd > -21 && Math.abs(land.intoBridge.spd) < 0.5,
+    `갑판 위를 앞으로 나가면 기수(10m 앞)가 함교에 닿는 자리에서 선다 (함정 가운데에서 ${land.intoBridge.fwd.toFixed(1)}m · 함교 뒷면 -10m)`);
+  t.ok(land.intoSide.right > 22 && land.intoSide.right < 23.6,
+    `갑판보다 낮게 옆에서 다가가면 선체 옆면 앞에서 선다 (중심선에서 ${land.intoSide.right.toFixed(1)}m · 옆면 12.5m)`);
   t.ok([land.floors.tdX, land.floors.lineup, land.floors.shoulder].every(f => Math.abs(f - 7 / 0.3048) < 0.01),
     '착함 원·X·정렬선·어깨선 위도 갑판 높이 그대로다(칠한 선이다)');
   t.ok(Math.abs(land.landed.alt - DECK_FT) < 0.6 && land.landed.vs === 0 && land.landed.deck,

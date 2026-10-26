@@ -1,6 +1,6 @@
 // VFR Flight Sim — Service Worker
 // 버전을 올리면 캐시가 갱신됩니다
-const CACHE = 'vfr-flight-v429';
+const CACHE = 'vfr-flight-v430';
 const CORE  = [
   './index.html',
   './manifest.json',
@@ -84,12 +84,16 @@ self.addEventListener('fetch', e => {
     return;
   }
 
-  // Esri 위성 타일: 캐시 우선
+  // Esri 위성 타일: 캐시 우선. 받은 타일(2D 지도의 opaque 응답 포함)만 넣는다 —
+  // 3D 는 없는 타일을 404 로 받아 위 단계 사진으로 메우므로(04-map.js) 404·오류는 넣지 않는다.
   if (url.includes('arcgisonline.com')) {
     e.respondWith(
       caches.open('vfr-sat-tiles').then(c =>
         c.match(e.request).then(cached => {
-          const fresh = fetch(e.request).then(res => { c.put(e.request, res.clone()); return res; });
+          const fresh = fetch(e.request).then(res => {
+            if (res && (res.ok || res.type === 'opaque')) c.put(e.request, res.clone());
+            return res;
+          });
           return cached || fresh;
         })
       )
