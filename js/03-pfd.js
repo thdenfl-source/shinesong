@@ -441,13 +441,37 @@ function drawTqGauge(x, y, w, h) {
     ctx.strokeStyle = col.edge; ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(barX, topY + 0.5); ctx.lineTo(barX + barW, topY + 0.5); ctx.stroke();
 
-    // 필요 토크 표식(여기에 맞추면 고도가 유지된다) — CDU PERF 의 호버 토크 기준
-    const ny = Math.round(vToY(need)) + 0.5;
-    ctx.strokeStyle = '#ffcc44'; ctx.lineWidth = 1.5;
-    ctx.beginPath(); ctx.moveTo(barX - 2, ny); ctx.lineTo(barX + barW + 4, ny); ctx.stroke();
+    // 기준선 세 개 — 이름표는 막대 오른쪽에 적고, 겹치면 아래로 비켜 적는다
+    //   HOV(노랑) : 지금 수평 비행에 필요한 토크 — 여기에 맞추면 고도가 유지된다
+    //   Vy (흰색) : PERF 의 Vy 로 수평 비행할 때 필요한 토크 — 가장 적게 드는 토크
+    //   MTA(청록) : 그날 엔진이 낼 수 있는 최대 토크(PERF 의 MTA(30)) — 넘겨 당기면 RPM LOW
+    // Vy 선과 MTA 선 사이가 그날 오를 수 있는 여유다.
+    let vyTq = null, mta = null;
+    try { vyTq = tqAtVy(); mta = mtaNow(); } catch (e) { _swallow(e); }
+    const marks = [{ v: need, txt: 'HOV', col: '#ffcc44', w: 1.5 }];
+    if (Number.isFinite(vyTq)) marks.push({ v: vyTq, txt: 'Vy', col: '#ffffff', w: 1.2 });
+    if (Number.isFinite(mta) && mta < TQ_MAX) marks.push({ v: mta, txt: 'MTA', col: '#00e5ff', w: 2 });
+    marks.forEach(m => {
+      m.y = Math.round(vToY(m.v)) + 0.5;
+      ctx.strokeStyle = m.col; ctx.lineWidth = m.w;
+      ctx.beginPath(); ctx.moveTo(barX - 2, m.y); ctx.lineTo(barX + barW + 4, m.y); ctx.stroke();
+    });
     ctx.textAlign = 'left';
-    ctx.font = 'bold 7px Helvetica, Arial'; ctx.fillStyle = '#ffcc44';
-    ctx.fillText('HOV', barX + barW + 6, ny + 2.5);
+    ctx.font = 'bold 7px Helvetica, Arial';
+    marks.slice().sort((a, b) => a.y - b.y).forEach((m, i, arr) => {
+      m.ly = i ? Math.max(m.y, arr[i - 1].ly + 8) : m.y;
+      ctx.fillStyle = m.col;
+      ctx.fillText(m.txt, barX + barW + 6, m.ly + 2.5);
+    });
+
+    // 레버 표식(SIM) — 레버가 MTA 를 넘겨 토크보다 위에 있으면 그 자리를 흰 삼각형으로
+    const cmd = (simModeOn && typeof simTqCmd === 'number') ? simTqCmd : null;
+    if (cmd != null && cmd > tq + 1) {
+      const cy = Math.round(vToY(cmd)) + 0.5;
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath(); ctx.moveTo(barX - 1, cy); ctx.lineTo(barX - 7, cy - 4); ctx.lineTo(barX - 7, cy + 4);
+      ctx.closePath(); ctx.fill();
+    }
 
     // 구간 경계 — 연속 사용 한계(100%) 노란 선 · 오버토크(113%) 붉은 선
     [[TQ_LIMIT, '#ffcc00'], [TQ_RED, '#ff4444']].forEach(([v, c]) => {
@@ -466,6 +490,20 @@ function drawTqGauge(x, y, w, h) {
     ctx.font = 'bold 8px Helvetica, Arial';
     ctx.fillStyle = '#ff5555';
     ctx.fillText('OVER TQ', x + w / 2, y + h - 18);
+  }
+  // RPM LOW(SIM) — 레버를 MTA 넘게 당겨 로터 회전이 처졌다. 막대 가운데에 띄우고
+  // 바탕을 붉게 깜박인다(글자는 늘 보인다)
+  let rpmLow = false;
+  try { rpmLow = (typeof simRpmLow === 'function') && simRpmLow(); } catch (e) { _swallow(e); }
+  if (rpmLow) {
+    const cy = y + h * 0.5, blink = Math.floor(performance.now() / 400) % 2 === 0;
+    ctx.fillStyle = blink ? 'rgba(220,30,30,0.9)' : 'rgba(0,0,0,0.85)';
+    ctx.fillRect(x + 2, cy - 15, w - 4, 26);
+    ctx.font = 'bold 8px Helvetica, Arial';
+    ctx.fillStyle = blink ? '#ffffff' : '#ff5555';
+    ctx.fillText('RPM LOW', x + w / 2, cy - 4);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText('NR ' + simNr.toFixed(0) + '%', x + w / 2, cy + 7);
   }
   ctx.restore();
 }

@@ -968,8 +968,14 @@ function _ml3dSimCamera() {
 const CHIN_YAW   = 15;    // 좌우로 벌린 각(°)
 const CHIN_PITCH = -50;   // 기체 기준으로 내려다보는 각(°)
 let _simEye = null;       // 마지막으로 놓은 눈 자리 { lon, lat, alt(m, 그려진 높이), agl(m) }
-function _ml3dChinCamera() {
+let _chinCamT = 0;
+function _ml3dChinCamera(force) {
   if (typeof _chinMaps === 'undefined' || !_chinMaps.length || !_simEye) return;
+  // 화질에 따라 덜 자주 그린다(04-map.js MAP3D_QUALITY.chinHz)
+  const hz = (typeof map3dQuality !== 'undefined') ? MAP3D_QUALITY[map3dQuality].chinHz : 0;
+  const now = performance.now();
+  if (!force && hz && now - _chinCamT < 1000 / hz - 2) return;
+  _chinCamT = now;
   const eye = _simEye;
   _chinMaps.forEach(c => {
     const m = c.map;

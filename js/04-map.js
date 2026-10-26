@@ -131,6 +131,26 @@ let _ml3dMarker = null;    // aircraft marker on 3D map
 // 3D 지도의 지형 과장비 — 화면에 보이는 땅은 실제 표고의 이 배다.
 // 1인칭 카메라를 땅 위에 놓으려면 같은 값을 써야 한다(05-gps.js).
 const MAP3D_EXAG = 1.5;
+// ── 3D 화질(상·중·하) ──
+// 화면을 몇 배 해상도로 그리는가(ratio · CHIN 창은 chin)와 위성 사진·지형을 몇 단계까지
+// 자세히 받는가(satMax · demMax). 낮출수록 그릴 픽셀과 받을 타일이 줄어 낮게 빨리 날 때도
+// 부드럽다. 고른 값은 이 기기에 적어 둔다.
+// CHIN 창(지도 두 장)은 정면만큼 자주 다시 그리지 않아도 된다 — 발밑을 내려다보는
+// 창이라 덜 자주 그려도 티가 덜 난다. 그리는 횟수를 chinHz 로 묶는다(0 = 매 프레임).
+// (그래픽을 셈하는 데 CHIN 창 두 장이 정면 한 장만큼 든다 — 화질을 낮춰도 이것을
+//  묶지 않으면 덜 부드러워진다)
+const MAP3D_QUALITY = {
+  high: { name: '상', ratio: Infinity, chin: 1.5, chinHz: 0,  satMax: 19, demMax: 15 },   // 기기 해상도 그대로
+  mid:  { name: '중', ratio: 1.25,     chin: 1,   chinHz: 30, satMax: 17, demMax: 14 },
+  low:  { name: '하', ratio: 0.8,      chin: 0.6, chinHz: 15, satMax: 15, demMax: 12 },
+};
+const MAP3D_QUALITY_ORDER = ['high', 'mid', 'low'];
+let map3dQuality = 'mid';
+try { const v = localStorage.getItem('map3dQuality'); if (MAP3D_QUALITY[v]) map3dQuality = v; } catch (e) { /* 저장소를 못 쓰면 기본값 */ }
+function map3dPixelRatio(chin) {
+  const q = MAP3D_QUALITY[map3dQuality];
+  return Math.min(window.devicePixelRatio || 1, chin ? q.chin : q.ratio);
+}
 let _view3dOn = false;
 // 3D 가 화면에 떠 있는가 — 2D 위에 겹쳐 있거나, 제 창(탭의 '3D')을 쓰고 있거나.
 // 창 배치는 07-sim.js 가 쥐고 있고 그쪽이 나중에 로드되므로 있을 때만 묻는다.
@@ -223,9 +243,9 @@ function _satKnownMissing(z, x, y) {
   for (let k = 0; k <= z; k++) if (_satMissing.has(`${z - k}/${x >> k}/${y >> k}`)) return true;
   return false;
 }
-async function _satFetch(z, x, y, signal) {
+async function _satFetch(z, x, y) {
   if (_satKnownMissing(z, x, y)) return null;
-  const r = await fetch(`${SAT_URL}/${z}/${y}/${x}?blankTile=false`, { signal });
+  const r = await fetch(`${SAT_URL}/${z}/${y}/${x}?blankTile=false`);
   if (r.status === 404) { _satMissing.add(`${z}/${x}/${y}`); return null; }   // 그 단계에는 사진이 없다
   if (!r.ok) throw new Error('sat ' + r.status);                              // 그 밖의 오류는 그대로 던진다
   return r.blob();
@@ -244,13 +264,18 @@ function _mapCanvas(w, h) {
   if (typeof OffscreenCanvas === 'function') return new OffscreenCanvas(w, h);
   const c = document.createElement('canvas'); c.width = w; c.height = h; return c;
 }
-function _canvasToBuffer(cv) {
-  if (cv.convertToBlob) return cv.convertToBlob({ type: 'image/png' }).then(b => b.arrayBuffer());
-  return new Promise(res => cv.toBlob(b => res(b.arrayBuffer()), 'image/png'));
+function _canvasToBlob(cv, type, q) {
+  if (cv.convertToBlob) return cv.convertToBlob({ type, quality: q });
+  return new Promise(res => cv.toBlob(res, type, q));
 }
-async function _satTile(z, x, y, signal) {
-  const own = await _satFetch(z, x, y, signal);
-  if (own) return own.arrayBuffer();
+// 위성 타일(ArrayBuffer) — 다 만든 것은 타일 저장소(_tileGet)에 두고 지도 세 장이 함께 쓴다
+async function _satTile(z, x, y) {
+  const b = await _tileGet('sat', z, x, y, () => _satMake(z, x, y));
+  return b.arrayBuffer();
+}
+async function _satMake(z, x, y) {
+  const own = await _satFetch(z, x, y);
+  if (own) return own;
   const cv = _mapCanvas(256, 256), ctx = cv.getContext('2d');
   for (let k = 1; k <= SAT_UP_LEVELS && z - k >= 0; k++) {
     const bmp = await _satAncestor(z - k, x >> k, y >> k);
@@ -258,10 +283,10 @@ async function _satTile(z, x, y, signal) {
     const n = 1 << k, sz = bmp.width / n;
     ctx.imageSmoothingEnabled = true;
     ctx.drawImage(bmp, (x & (n - 1)) * sz, (y & (n - 1)) * sz, sz, sz, 0, 0, 256, 256);
-    return _canvasToBuffer(cv);
+    return _canvasToBlob(cv, 'image/jpeg', 0.9);   // 사진이다 — PNG 보다 빨리 만들고 작다
   }
   ctx.fillStyle = SAT_SEA; ctx.fillRect(0, 0, 256, 256);
-  return _canvasToBuffer(cv);
+  return _canvasToBlob(cv, 'image/png');
 }
 
 // ── 바다는 무조건 평평하게 ──
@@ -280,8 +305,13 @@ function seaFlatM(m) {
   return (m - SEA_FLAT_M) * SEA_BLEND_M / (SEA_BLEND_M - SEA_FLAT_M);
 }
 const DEM_URL = 'https://s3.amazonaws.com/elevation-tiles-prod/terrarium';
-async function _demTile(z, x, y, signal) {
-  const r = await fetch(`${DEM_URL}/${z}/${x}/${y}.png`, { signal });
+// 지형 타일(ArrayBuffer) — 바다를 편 것을 타일 저장소에 두고 함께 쓴다
+async function _demTile(z, x, y) {
+  const b = await _tileGet('dem', z, x, y, () => _demMake(z, x, y));
+  return b.arrayBuffer();
+}
+async function _demMake(z, x, y) {
+  const r = await fetch(`${DEM_URL}/${z}/${x}/${y}.png`);
   if (!r.ok) throw new Error('dem ' + r.status);
   const blob = await r.blob();
   // 색 보정·알파 곱셈이 끼면 높이 값(RGB)이 틀어진다 — 받은 값 그대로 읽는다
@@ -298,23 +328,119 @@ async function _demTile(z, x, y, signal) {
     d[i] = vi >> 8; d[i + 1] = vi & 255; d[i + 2] = Math.min(255, Math.round((v - vi) * 256)); d[i + 3] = 255;
     sea = true;
   }
-  if (!sea) return blob.arrayBuffer();         // 바다·낮은 땅이 없는 타일은 받은 그대로
+  if (!sea) return blob;                       // 바다·낮은 땅이 없는 타일은 받은 그대로
   ctx.putImageData(img, 0, 0);
-  return _canvasToBuffer(cv);
+  return _canvasToBlob(cv, 'image/png');       // 높이 값이다 — 손실 없이(PNG)
 }
+
+// ── 3D 타일 저장소 — 20NM 안의 지형·사진을 들고 있는다 ──
+// 3D 본 화면과 CHIN 창 둘(지도 세 장)이 같은 타일을 저마다 받고 저마다 고치면(바다 펴기 ·
+// 빈 칸 메우기) 같은 일을 세 번 한다 — 낮게 빨리 날 때 화면이 버벅이던 큰 까닭이다.
+// 다 고친 타일을 한 곳에 두고 함께 쓴다. 한 지도가 그 타일을 버려도(화면 밖으로 지나감)
+// 받기를 끊지 않는다 — 다른 지도가 기다리고 있을 수 있고, 다시 오면 바로 쓴다.
+//   · 항공기에서 20NM(TILE_KEEP_NM) 밖으로 벗어난 타일은 지운다
+//   · 20NM 안의 덜 자세한 단계(11·12)와 발밑 4NM 의 지형(14)은 미리 받아 둔다 —
+//     낮게 빨리 날 때도 먼 곳·발밑이 비지 않는다
+//   · 그래도 너무 많아지면(TILE_MAX) 오래 안 쓴 것부터 지운다
+const TILE_KEEP_NM = 20;
+const TILE_MAX = { sat: 900, dem: 400 };
+const _tileStore = { sat: new Map(), dem: new Map() };     // 'z/x/y' → Promise<Blob>
+function _tileGet(kind, z, x, y, make) {
+  const m = _tileStore[kind], key = `${z}/${x}/${y}`;
+  let p = m.get(key);
+  if (p) { m.delete(key); m.set(key, p); return p; }       // 최근에 쓴 것으로 옮긴다
+  p = make().catch(e => { if (m.get(key) === p) m.delete(key); throw e; });
+  m.set(key, p);
+  if (m.size > TILE_MAX[kind]) m.delete(m.keys().next().value);
+  return p;
+}
+function tileStoreClear() {
+  _tileStore.sat.clear(); _tileStore.dem.clear();
+  _pfQueue = []; _pfFail.clear(); _pfAt = null;
+}
+// 타일 한가운데와 반 대각선(NM)
+function _tileCenter(z, x, y) {
+  const n = 1 << z, lon = (x + 0.5) / n * 360 - 180;
+  const lat = Math.atan(Math.sinh(Math.PI * (1 - 2 * (y + 0.5) / n))) / D2R;
+  return { lat, lon, half: 40075 / 1.852 * Math.cos(lat * D2R) / n * 0.7072 };
+}
+function _tileXY(z, lat, lon) {
+  const n = 1 << z, r = lat * D2R;
+  return { x: Math.floor((lon + 180) / 360 * n),
+           y: Math.floor((1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2 * n) };
+}
+// 항공기에서 nm 안에 걸치는 타일인가
+function _tileNear(z, x, y, lat, lon, nm) {
+  const c = _tileCenter(z, x, y);
+  return distance(lat, lon, c.lat, c.lon) - c.half <= nm;
+}
+// 20NM 밖으로 벗어난 타일을 지운다(아주 덜 자세한 단계 — 8 아래 — 는 넓어서 그대로 둔다)
+function tileStoreTrim(lat = S.lat, lon = S.lon) {
+  let n = 0;
+  for (const kind of ['sat', 'dem']) {
+    const m = _tileStore[kind];
+    for (const key of [...m.keys()]) {
+      const [z, x, y] = key.split('/').map(Number);
+      if (z >= 8 && !_tileNear(z, x, y, lat, lon, TILE_KEEP_NM)) { m.delete(key); n++; }
+    }
+  }
+  return n;
+}
+// 미리 받아 둘 것 — [종류, 단계, 반경 NM]. 화질이 그 단계를 쓰지 않으면 건너뛴다
+const TILE_PREFETCH = [['dem', 11, 20], ['sat', 11, 20], ['dem', 12, 20], ['sat', 12, 20], ['dem', 14, 4]];
+const TILE_PF_PAR = 4;          // 한꺼번에 받는 수
+let _pfQueue = [], _pfActive = 0, _pfAt = null;
+const _pfFail = new Map();      // 받지 못한 타일 — 1분 동안은 다시 묻지 않는다
+function _tilePrefetchList(lat, lon) {
+  const q = MAP3D_QUALITY[map3dQuality], out = [];
+  TILE_PREFETCH.forEach(([kind, z, nm]) => {
+    if (z > (kind === 'sat' ? q.satMax : q.demMax)) return;
+    const c = _tileXY(z, lat, lon), span = Math.ceil(nm / _tileCenter(z, c.x, c.y).half / 1.4) + 1;
+    for (let dy = -span; dy <= span; dy++) for (let dx = -span; dx <= span; dx++) {
+      const x = c.x + dx, y = c.y + dy;
+      if (y < 0 || y >= (1 << z) || !_tileNear(z, x, y, lat, lon, nm)) continue;
+      const cc = _tileCenter(z, x, y);
+      out.push({ kind, z, x, y, d: distance(lat, lon, cc.lat, cc.lon) });
+    }
+  });
+  return out.sort((a, b) => a.d - b.d);               // 가까운 것부터
+}
+function _pfPump() {
+  while (_pfActive < TILE_PF_PAR && _pfQueue.length) {
+    const t = _pfQueue.shift(), key = `${t.z}/${t.x}/${t.y}`;
+    if (_tileStore[t.kind].has(key)) continue;
+    const f = _pfFail.get(t.kind + key);
+    if (f && Date.now() - f < 60000) continue;
+    _pfActive++;
+    (t.kind === 'sat' ? _satTile : _demTile)(t.z, t.x, t.y)
+      .catch(() => { _pfFail.set(t.kind + key, Date.now()); })
+      .finally(() => { _pfActive--; _pfPump(); });
+  }
+}
+// 3D 가 떠 있는 동안 몇 초마다 — 20NM 밖은 지우고, 1NM 넘게 옮겨 왔으면 받을 목록을 새로 짠다
+function tilePrefetchTick() {
+  if (!_ml3d || !_map3dShown()) return;
+  tileStoreTrim(S.lat, S.lon);
+  if (!_pfAt || distance(_pfAt[0], _pfAt[1], S.lat, S.lon) > 1) {
+    _pfAt = [S.lat, S.lon];
+    _pfQueue = _tilePrefetchList(S.lat, S.lon);
+  }
+  _pfPump();
+}
+setInterval(() => { try { tilePrefetchTick(); } catch (e) { _swallow(e); } }, 4000);
 
 try {
   if (typeof maplibregl !== 'undefined' && maplibregl.addProtocol) {
     const zxy = (re, url) => { const m = re.exec(url); return m ? [+m[1], +m[2], +m[3]] : null; };
-    maplibregl.addProtocol('sat', (params, abortController) => {
+    maplibregl.addProtocol('sat', (params) => {
       const t = zxy(/^sat:\/\/(\d+)\/(\d+)\/(\d+)/, params.url);
       if (!t) return Promise.reject(new Error('bad sat url ' + params.url));
-      return _satTile(t[0], t[1], t[2], abortController && abortController.signal).then(data => ({ data }));
+      return _satTile(t[0], t[1], t[2]).then(data => ({ data }));
     });
-    maplibregl.addProtocol('dem', (params, abortController) => {
+    maplibregl.addProtocol('dem', (params) => {
       const t = zxy(/^dem:\/\/(\d+)\/(\d+)\/(\d+)/, params.url);
       if (!t) return Promise.reject(new Error('bad dem url ' + params.url));
-      return _demTile(t[0], t[1], t[2], abortController && abortController.signal).then(data => ({ data }));
+      return _demTile(t[0], t[1], t[2]).then(data => ({ data }));
     });
   }
 } catch (e) { _swallow(e); }
@@ -328,8 +454,11 @@ const MAP3D_SKY = {
   'fog-color': '#aabbcc',
   'fog-ground-blend': 0.9
 };
-// 3D 지도의 바탕(위성 사진 + 지형) — 본 화면과 CHIN 창이 같이 쓴다
+// 3D 지도의 바탕(위성 사진 + 지형) — 본 화면과 CHIN 창이 같이 쓴다.
+// 몇 단계까지 자세히 받는지는 화질(map3dQuality)을 따른다. 그보다 가까이 가면 그 단계를
+// 늘려 쓴다(타일을 더 받지 않는다).
 function _map3dStyle() {
+  const q = MAP3D_QUALITY[map3dQuality];
   return {
     version: 8,
     sources: {
@@ -337,22 +466,63 @@ function _map3dStyle() {
         type: 'raster',
         tiles: ['sat://{z}/{x}/{y}'],      // 빈 칸은 위 단계 사진으로 메운다(_satTile)
         tileSize: 256,
-        maxzoom: 19,
+        maxzoom: q.satMax,
         attribution: 'Tiles © Esri'
       },
       terrain: {
         type: 'raster-dem',
         encoding: 'terrarium',
         tiles: ['dem://{z}/{x}/{y}'],      // 바다 밑은 0m 로 편다(_demTile)
-        minzoom: 0, maxzoom: 15,
+        minzoom: 0, maxzoom: q.demMax,
         tileSize: 256,
         attribution: 'Terrain © Tilezen/AWS'
       }
     },
     layers: [
-      { id: 'satellite', type: 'raster', source: 'satellite' }
+      // 새 타일이 들어올 때 서서히 나타나게(0.3초) 하지 않는다 — 그동안 화면을 계속
+      // 다시 그려야 해서, 타일이 쉴 새 없이 들어오는 저고도 비행에서 버벅임이 된다
+      { id: 'satellite', type: 'raster', source: 'satellite', paint: { 'raster-fade-duration': 0 } }
     ]
   };
+}
+// 지도가 지금 어느 화질의 바탕으로 그려져 있는가 — { q: 화질, loaded: 바탕을 다 얹었나 }
+const _map3dQ = new WeakMap();
+// 이미 뜬 지도의 바탕을 지금 화질로 바꿔 얹는다(위성 사진 맨 아래 · 지형)
+function _map3dApplyQuality(map, chin) {
+  const st = _map3dQ.get(map);
+  try { map.setPixelRatio(map3dPixelRatio(chin)); } catch (e) { _swallow(e); }
+  if (!st || !st.loaded || st.q === map3dQuality) return;
+  const sty = _map3dStyle(), layers = map.getStyle().layers;
+  const i = layers.findIndex(l => l.id === 'satellite');
+  const before = (i >= 0 && layers[i + 1]) ? layers[i + 1].id : undefined;
+  const terr = !!map.getTerrain();
+  if (terr) map.setTerrain(null);
+  map.removeLayer('satellite'); map.removeSource('satellite');
+  map.addSource('satellite', sty.sources.satellite);
+  map.addLayer(sty.layers[0], before);
+  map.removeSource('terrain'); map.addSource('terrain', sty.sources.terrain);
+  if (terr) map.setTerrain({ source: 'terrain', exaggeration: MAP3D_EXAG });
+  st.q = map3dQuality;
+}
+function setMap3dQuality(q) {
+  if (!MAP3D_QUALITY[q]) return;
+  map3dQuality = q;
+  try { localStorage.setItem('map3dQuality', q); } catch (e) { _swallow(e); }
+  _q3dBtnSync();
+  if (_ml3d) { try { _map3dApplyQuality(_ml3d, false); } catch (e) { _swallow(e); } }
+  // CHIN 창은 새로 연다(작은 지도라 금방이다)
+  if (_chinMaps.length) { _chinDestroy(); try { syncChinView(); } catch (e) { _swallow(e); } }
+  _pfAt = null;                                  // 미리 받을 목록도 새 화질로
+  requestAnimationFrame(() => { try { if (_ml3d) _applyFollow(); } catch (e) { _swallow(e); } });
+}
+// 화질 버튼 — 상 → 중 → 하 → 상
+function cycleMap3dQuality() {
+  const i = MAP3D_QUALITY_ORDER.indexOf(map3dQuality);
+  setMap3dQuality(MAP3D_QUALITY_ORDER[(i + 1) % MAP3D_QUALITY_ORDER.length]);
+}
+function _q3dBtnSync() {
+  const b = document.getElementById('q3d-btn');
+  if (b) b.textContent = '화질 ' + MAP3D_QUALITY[map3dQuality].name;
 }
 
 function _init3dMap() {
@@ -375,14 +545,17 @@ function _init3dMap() {
       // SIM 모드 1인칭은 기수를 들면 하늘을 봐야 하므로 90° 너머까지 연다
       // (평소 3D 추종·기울기 버튼은 종전대로 85° 안에서 쓴다)
       maxPitch: 180,
+      pixelRatio: map3dPixelRatio(false),          // 화질(상·중·하)
       attributionControl: false
     });
+    _map3dQ.set(_ml3d, { q: map3dQuality, loaded: false });
   } catch (e) {
     console.error('[3D] map init failed:', e);
     return;
   }
 
   _ml3dReady = true;   // 카메라는 지금부터 움직일 수 있다(타일을 기다리지 않는다)
+  _q3dBtnSync();       // 이 기기에 적어 둔 화질을 버튼에 적는다
 
   _ml3d.on('error', (e) => console.warn('[3D] map error:', e && e.error ? e.error.message : e));
   // 사용자가 3D 지도를 수동 회전할 때도 마커가 실제 기수를 가리키도록 갱신
@@ -394,6 +567,8 @@ function _init3dMap() {
     try { _ml3d.setTerrain({ source: 'terrain', exaggeration: MAP3D_EXAG }); }
     catch (e) { console.warn('[3D] terrain unavailable:', e); }
     try { _ml3d.setSky(MAP3D_SKY); } catch (e) { /* sky optional */ }
+    // 다 뜨기 전에 화질을 바꿨으면 이제 바꿔 얹는다
+    try { _map3dQ.get(_ml3d).loaded = true; _map3dApplyQuality(_ml3d, false); } catch (e) { _swallow(e); }
 
     // Aircraft marker. Maplibre controls the OUTER element's transform for
     // positioning, so heading rotation is applied to an INNER wrapper instead.
@@ -495,8 +670,8 @@ function _chinCreate() {
         container: el, style: _map3dStyle(),
         center: [S.lon, S.lat], zoom: 14, pitch: 45, bearing: S.hdg, maxPitch: 180,
         interactive: false, attributionControl: false,
-        // 작은 창이다 — 고해상도 화면에서도 1.5배까지만 그려 그래픽 부담을 줄인다
-        pixelRatio: Math.min(1.5, window.devicePixelRatio || 1)
+        // 작은 창이다 — 화질(상 1.5배 · 중 1배 · 하 0.6배)을 넘지 않게 그려 그래픽 부담을 줄인다
+        pixelRatio: map3dPixelRatio(true)
       });
     } catch (e) { console.warn('[3D] chin view failed:', e); return; }
     const c = { map, side, ship: false };
@@ -511,7 +686,7 @@ function _chinCreate() {
     try { if (map.setCenterClampedToGround) map.setCenterClampedToGround(false); } catch (e) { _swallow(e); }
     _chinMaps.push(c);
   });
-  try { if (typeof _ml3dChinCamera === 'function') _ml3dChinCamera(); } catch (e) { _swallow(e); }
+  try { if (typeof _ml3dChinCamera === 'function') _ml3dChinCamera(true); } catch (e) { _swallow(e); }
 }
 function _chinDestroy() {
   _chinMaps.forEach(c => { try { c.map.remove(); } catch (e) { _swallow(e); } });

@@ -2169,6 +2169,7 @@ appRegister({
   tiltAdj,
   toggle3dMap,
   toggleChinView,
+  cycleMap3dQuality,
   toggleAltHold,
   toggleAspcPanel,
   toggleAwyLayer,

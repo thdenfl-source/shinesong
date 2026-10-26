@@ -148,8 +148,8 @@ let simLat = 0;
 // 그래서 같은 레버 위치라도 뱅크를 주거나 속도가 바뀌면 오르내림이 달라진다.
 const TQ_HOVER   = 60;         // 무풍·수평·제자리에서 필요한 토크(%)
 const TQ_SPAN    = 45;         // 컬렉티브 끝까지 = ±45%
-const TQ_MAX     = 125;        // 계기 최대 눈금
-// 계기 구간 — 0~100% 녹색(연속 사용) · 100~113% 노랑(주의) · 113~125% 빨강(오버토크)
+const TQ_MAX     = 140;        // 계기 최대 눈금 = 컬렉티브 맨 위
+// 계기 구간 — 0~100% 녹색(연속 사용) · 100~113% 노랑(주의) · 113~140% 빨강(오버토크)
 const TQ_LIMIT   = 100;        // 연속 사용 한계 — 여기까지 녹색
 const TQ_RED     = 113;        // 이 위는 빨강 — 오버토크
 const TQ_RATE    = 60;         // 토크가 따라가는 속도(%/s)
@@ -181,11 +181,26 @@ function hoverTqRef() {
 }
 
 // 지금 '수평 비행' 에 필요한 토크(%)
-function tqRequired() {
-  const bank = Math.min(60, Math.abs(S.bnk));
+function tqRequired() { return tqRequiredAt(S.spd, S.bnk); }
+// 그 속도·뱅크로 수평 비행할 때 필요한 토크(%) — 계기의 Vy 선도 이것으로 긋는다
+function tqRequiredAt(spd, bnk) {
+  const bank = Math.min(60, Math.abs(bnk));
   const lift = (1 / Math.cos(bank * D2R) - 1) * TQ_BANK;      // 선회 중 더 필요
-  const tl   = Math.min(1, Math.abs(S.spd) / TLIFT_KT) * TQ_TLIFT;     // 전진 양력
+  const tl   = Math.min(1, Math.abs(spd) / TLIFT_KT) * TQ_TLIFT;       // 전진 양력
   return hoverTqRef() + lift - tl;
+}
+// 그날의 MTA(최대 가용 토크, %) — CDU PERF 의 MTA(30)(09-cdu.js perfMta).
+// PERF 의 고도·온도를 기준으로 지금 고도에서 셈한다. PERF 를 못 읽으면 계기 끝.
+function mtaNow(altFt = S.alt) {
+  let v = null;
+  try { v = (typeof perfMta === 'function') ? perfMta(altFt) : null; } catch (e) { _swallow(e); }
+  return Number.isFinite(v) ? Math.min(TQ_MAX, v) : TQ_MAX;
+}
+// Vy 로 수평 비행할 때 필요한 토크(%) — 이 선과 MTA 선 사이가 그날 오를 수 있는 여유다
+function tqAtVy() {
+  let vy = null;
+  try { vy = (typeof perfVy === 'function') ? perfVy() : null; } catch (e) { _swallow(e); }
+  return Number.isFinite(vy) ? tqRequiredAt(vy, 0) : null;
 }
 // 계기에 보일 토크. SIM 모드에서는 실제 레버 값, 평소에는 지금 비행 상태에서
 // 들 법한 값을 거꾸로 셈해 보여 준다(계기가 비어 보이지 않게).

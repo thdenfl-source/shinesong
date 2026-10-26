@@ -545,10 +545,13 @@ html, body {
 /* 3D 가 제 창을 쓸 때 */
 #map3d.panel-3d.chin-on { bottom: auto; height: calc(100% * 2 / 3); }
 #map3d.panel-3d.chin-on + #chin-row { top: calc(100% * 2 / 3); height: calc(100% / 3); z-index: 1; }
-#chin-btn { display: none; position: absolute; top: 8px; right: 8px; z-index: 900; padding: 5px 10px; }
+#q3d-btn { position: absolute; top: 8px; right: 8px; z-index: 900; padding: 5px 10px; }
+#chin-btn { display: none; position: absolute; top: 40px; right: 8px; z-index: 900; padding: 5px 10px; }
 #chin-btn.show { display: block; }
 #chin-btn.on { color: #00e5ff; border-color: #00e5ff; }
-#map-wrap #chin-btn { top: 48px; }   /* 2D 위에 겹쳐 쓸 때는 지도 툴바 아래로 */
+/* 2D 위에 겹쳐 쓸 때는 지도 툴바 아래로 */
+#map-wrap #q3d-btn { top: 48px; }
+#map-wrap #chin-btn { top: 80px; }
 /* When 3D is on, hide the 2D Leaflet map so its panes never paint through */
 #map-wrap.map3d-on #map { visibility: hidden; }
 #layer-btn-3d { background: rgba(0,10,30,0.82); border: 1px solid #333; color: #aaa; }
@@ -1767,9 +1770,20 @@ body.night-mode::after {
             <b>레버를 그대로 둬도</b> 선회를 걸면 필요 토크가 올라 가라앉고(뱅크 30° ≈ +3%),
             <b>속도가 붙으면</b> 전진 양력으로 필요 토크가 줄어 떠오릅니다(최대 −9%).
             오르내림은 속도와 맞바뀝니다 — 올라가면 느려지고 내려가면 빨라집니다.<br>
-            계기는 <b>0~100% 녹색</b>(연속 사용) · <b>100~113% 노랑</b>(주의) · <b>113~125% 빨강</b>(오버토크)
+            계기는 <b>0~100% 녹색</b>(연속 사용) · <b>100~113% 노랑</b>(주의) · <b>113~140% 빨강</b>(오버토크)
             구간으로 칠해져 있고, 막대는 지금 값이 든 구간의 색으로 찹니다.
-            노란 구간에서는 숫자도 노랗게, <b>113%</b>(붉은 선)를 넘으면 막대와 숫자가 붉어지고 <b>OVER TQ</b> 가 뜹니다.
+            노란 구간에서는 숫자도 노랗게, <b>113%</b>(붉은 선)를 넘으면 막대와 숫자가 붉어지고 <b>OVER TQ</b> 가 뜹니다.<br>
+            계기에는 기준선이 셋 있습니다 — <b>HOV</b>(노랑 · 지금 수평 비행에 필요한 토크),
+            <b>Vy</b>(흰색 · PERF 의 Vy 로 수평 비행할 때 필요한 토크 — 가장 적게 드는 토크),
+            <b>MTA</b>(청록 · 그날의 최대 가용 토크). <b>Vy 선과 MTA 선 사이가 그날 오를 수 있는 여유</b>입니다.<br>
+            <b>그날의 MTA</b> 는 CDU <b>PERF</b> 의 <b>MTA(30)</b> 입니다 — PERF 에 넣은 <b>고도·온도</b>가 그날의 기준이고,
+            다른 고도에서는 그 온도에서 표준 기온감률(2°C/1000ft)로 셈한 온도를 씁니다
+            (PERF 고도에서는 PERF 화면 값과 같고, 올라갈수록·더울수록 줄어듭니다).
+            레버 맨 위는 <b>140%</b> 지만 엔진이 내는 토크는 <b>MTA 에서 멈춥니다</b>. 그보다 더 당기면
+            모자란 힘을 로터 회전(NR)이 내주며 처져 <b>RPM LOW</b>(계기 가운데 깜박임 · NR 값)가 뜨고,
+            양력이 줄어 <b>가라앉습니다</b> — 조금 넘기면 덜 오르고, 더 당길수록 NR 이 더 처지고 더 빨리
+            가라앉습니다(MTA +8% 면 1,000fpm 넘게). 레버를 <b>MTA 아래로 내리면 NR 이 돌아옵니다</b>.
+            레버가 MTA 를 넘겨 있으면 그 자리에 흰 삼각형이 섭니다.
             컬렉티브 축을 배정하지 않았으면 고도를 지킬 만큼만 저절로 걸립니다.<br>
             <b>4방향 햇</b>을 트림 ▲▼◀▶ 에 배정해 두면 SIM 모드에서 <b>사이클릭 비퍼 트림</b>이 됩니다 —
             <b>좌우는 뱅크 1°</b>, <b>전후는 피치 0.5°</b> 씩 <b>한 번 누를 때</b> 옮기고, 누르고 있으면
@@ -1780,8 +1794,8 @@ body.night-mode::after {
             시선은 기체 자세 위에 얹히므로 오른쪽 뱅크에서 오른쪽을 보면 땅 쪽을 보게 됩니다.
             설정 → 조종 장치 버튼 배정의 「시야 둘러보기」에서 다른 버튼으로 바꿀 수 있습니다.<br>
             <b>스로틀처럼 세워 두는 레버</b>를 컬렉티브로 쓰면 축 행의 <b>레버식</b>을 켜십시오 —
-            레버 자리가 그대로 <b>토크 0…110%</b> 가 됩니다(맨 아래 0% · 가운데 55% · 맨 위 110%).
-            가운데로 돌아오는 축이면 끄십시오(호버 60% 기준 ±45%). 컬렉티브로 잡을 때
+            레버 자리가 그대로 <b>토크 0…140%</b> 가 됩니다(맨 아래 0% · 가운데 70% · 맨 위 140%).
+            가운데로 돌아오는 축이면 끄십시오(호버 기준 · 끝까지 올리면 140% · 끝까지 내리면 −45%). 컬렉티브로 잡을 때
             쉬는 자리가 가운데가 아니면 <b>레버식이 저절로 켜집니다</b>.<br>
             아무것도 배정하지 않은 장치에는 흔한 배치를 먼저 넣어 줍니다 —
             <b>축 0 좌우(롤) · 축 1 전후(피치) · 축 2 스로틀(컬렉티브) · 축 5 비틀기(요)</b>,
@@ -1807,6 +1821,12 @@ body.night-mode::after {
             나눕니다. 발밑 창은 헬기의 CHIN BUBBLE 처럼 <b>정면보다 50° 아래</b>를 좌·우로 15° 벌려 보며,
             기체 자세를 따라 돕니다(고개 돌리기는 따르지 않습니다). 함정도 그려지므로 착함할 때 갑판을
             내려다볼 수 있습니다. 3D 창 오른쪽 위 <b>CHIN</b> 버튼으로 끄고 켭니다.<br>
+            <b>3D 화질(상·중·하)</b> — 3D 창 오른쪽 위 <b>화질</b> 버튼을 누를 때마다 상 → 중 → 하 로 바뀝니다
+            (기본 <b>중</b>, 고른 값은 이 기기에 남습니다). 낮출수록 그리는 해상도와 받는 타일이 줄어
+            <b>저고도에서도 부드럽습니다</b> — 상: 기기 해상도 · 사진 19 · 지형 15 단계 / 중: 1.25배 · 17 · 14 /
+            하: 0.8배 · 15 · 12. CHIN 창은 중에서 1초에 30번, 하에서 15번만 다시 그립니다.<br>
+            <b>지형·사진은 20NM 안의 것을 들고 있습니다</b> — 3D 와 CHIN 창이 같은 타일을 함께 쓰고(한 번 받고 한 번
+            고친다), 20NM 안의 덜 자세한 단계와 발밑 4NM 의 지형은 미리 받아 둡니다. 20NM 밖으로 벗어난 것은 지웁니다.<br>
             땅 위에서는 그려진 지형 위로 눈높이(8m)만큼 떠 있습니다.
             끄면 <b>원래 보던 창으로 되돌아옵니다</b>.<br>
             켤 때 <b>AFCS(NAV·HDG·ALT·CRHT·GSPD)는 풀립니다</b>. 켠 뒤 <b>상위모드를 다시 걸면 그 축은 AFCS 가
@@ -2421,6 +2441,8 @@ body.night-mode::after {
       <div id="map3d">
         <!-- 3D 가 제 창(탭의 '3D')을 쓸 때의 SHIP — 메뉴·설정창을 이 창 안에서 연다 -->
         <button class="sim-btn" id="ship3d-btn" data-act="toggleShip3d">⛵ SHIP</button>
+        <!-- 3D 화질 — 상 → 중 → 하(낮출수록 부드럽다 · 04-map.js) -->
+        <button class="sim-btn" id="q3d-btn" data-act="cycleMap3dQuality" title="3D 화질 — 누를 때마다 상 → 중 → 하. 낮출수록 저고도에서도 부드럽습니다">화질 중</button>
         <!-- SIM 1인칭에서만 보인다 — 아래 1/3 CHIN 창을 끄고 켠다 -->
         <button class="sim-btn" id="chin-btn" data-act="toggleChinView" title="CHIN BUBBLE — 발밑 창(좌·우)을 끄고 켭니다">CHIN</button>
         <div id="tilt-ctrl">
