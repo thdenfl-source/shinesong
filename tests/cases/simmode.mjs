@@ -543,6 +543,36 @@ export async function run(page, t) {
   t.ok(Math.abs(law.inv[0] - 500) < 15 && Math.abs(law.inv[1] + 500) < 15,
     `토크 → 상승률 되짚기도 맞는다 (${law.inv[0].toFixed(0)} · ${law.inv[1].toFixed(0)}fpm)`);
 
+  // ── 컬렉티브 감도 2배 · 강하는 4,000fpm 까지 ──
+  const coll2 = await page.evaluate(`(() => {
+    (${SETUP.toString()})();
+    const fly = ${FLY};
+    joyAxes = { coll: { i: 3, inv: false, abs: true } };
+    S.bnk = 0; S.spd = 70; S.alt = 5000; _simGndFt = 0;
+    simTrim.pitch = -pitchFromSpd(70);
+    const lever = tq => _ax(3, Math.max(-1, Math.min(1, tq / 110 * 2 - 1)));
+    lever(tqRequired()); fly(10);
+    const pow = () => S.vs - simKeVs(false);
+    // 남는 토크 +5% — PERF 표 값의 2배로 오른다
+    S.spd = 70; simAcc = 0; S.vs = 0; _simVs1 = 0; S.alt = 5000;
+    lever(tqRequired() + 5); fly(10);
+    const up = { pow: pow(), want: SIM_COLL_GAIN * perfVsForTq(5) * simClimbEff() };
+    // 기수를 숙이고 레버를 끝까지 내린다
+    simTrim.pitch = 10; S.spd = 120; simAcc = 0; S.vs = 0; _simVs1 = 0; S.alt = 8000;
+    _ax(3, -1);
+    let minPow = 0, minAll = 0;
+    S.running = true; let ts = 1000; S.lastT = ts;
+    for (let i = 0; i < 15 * 20; i++) { ts += 50; joyPoll(ts); simStep(ts); minPow = Math.min(minPow, pow()); minAll = Math.min(minAll, S.vs); }
+    S.running = false;
+    simTrimReset();
+    return { up, minPow, minAll, gain: SIM_COLL_GAIN };
+  })()`);
+  t.eq(coll2.gain, 2, '컬렉티브 감도는 2배다');
+  t.ok(Math.abs(coll2.up.pow - coll2.up.want) < coll2.up.want * 0.05,
+    `레버 +5% 면 PERF 표 상승률의 2배로 오른다 (${coll2.up.pow.toFixed(0)} · 기대 ${coll2.up.want.toFixed(0)}fpm)`);
+  t.ok(coll2.minPow < -3900 && coll2.minPow >= -4000.01,
+    `기수를 숙이고 레버를 끝까지 내리면 4,000fpm 까지 강하한다 (출력 몫 ${coll2.minPow.toFixed(0)} · 계기 ${coll2.minAll.toFixed(0)}fpm)`);
+
   // ── Vy 에서 가장 잘 오른다 ──
   // 같은 토크라도 최대상승속도(Vy)에서 상승률이 가장 크고, 그보다 빠르거나
   // 느려질수록 떨어진다. PERF 의 Vy 를 그대로 쓴다.
@@ -1177,6 +1207,10 @@ export async function run(page, t) {
     hat(-1); hat(REST);                            // ▲
     hat(-3/7); hat(REST);                          // ▶
     const beep = { refF: gspdRefFwd, refL: gspdRefLat, trimP: simTrim.pitch, trimR: simTrim.roll };
+    // 기준이 1kt 씩 옮겨 가도 자세(PFD·3D 시점)는 그대로다 — GSPD 가 알아서 따라간다
+    const att0 = { pit: S.pit, bnk: S.bnk };
+    fly(1.5);
+    const beepAtt = { dPit: S.pit - att0.pit, bnk: S.bnk, fwd: gspdActFwd, lat: gspdActLat };
     gspdRefFwd = 0; gspdRefLat = 0; fly(4);
     // ② 조종간을 앞으로 반쯤 밀고 있으면 앞으로 지상속도가 붙는다(기준은 그대로)
     _ax(1, 0.54); fly(3);
@@ -1204,13 +1238,16 @@ export async function run(page, t) {
     const after = { spd: S.spd };
     simTrimReset();
     joyBinds = savedBinds; joySave();
-    return { eng, beep, push, back, synced, held, side, sideBack, spd0, off, after };
+    return { eng, beep, beepAtt, push, back, synced, held, side, sideBack, spd0, off, after };
   })()`);
   t.ok(gs.eng.on && gs.eng.refF === 0 && gs.eng.refL === 0 && Math.abs(gs.eng.fwd) < 0.5,
     `SIM 모드에서도 GSPD 가 걸린다 (기준 ${gs.eng.refF}/${gs.eng.refL}kt)`);
   t.ok(gs.beep.refF === 1 && gs.beep.refL === 1,
     `GSPD 중 4방향 트림은 기준속도를 1kt 씩 옮긴다 (전후 ${gs.beep.refF} · 좌우 ${gs.beep.refL}kt)`);
   t.ok(gs.beep.trimP === 0 && gs.beep.trimR === 0, 'GSPD 중에는 자세 트림이 바뀌지 않는다');
+  t.ok(Math.abs(gs.beepAtt.dPit) < 0.3 && Math.abs(gs.beepAtt.bnk) < 0.3 && gs.beepAtt.fwd > 0.5 && gs.beepAtt.lat > 0.5,
+    `트림으로 기준이 1kt 씩 옮겨 가도 자세는 흔들리지 않는다 (피치 ${gs.beepAtt.dPit.toFixed(2)}° · 뱅크 ${gs.beepAtt.bnk.toFixed(2)}° · ` +
+    `속도는 따라간다 ${gs.beepAtt.fwd.toFixed(1)}/${gs.beepAtt.lat.toFixed(1)}kt)`);
   t.ok(gs.push.fwd > 3 && gs.push.refF === 0,
     `조종간을 밀고 있으면 지상속도가 붙는다 — 기준은 그대로 (${gs.push.fwd.toFixed(1)}kt · 기준 ${gs.push.refF})`);
   t.ok(gs.push.pit < gs.push.base - 2,

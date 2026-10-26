@@ -203,6 +203,54 @@ function toggle3dMap() {
   }
 }
 
+// ── 위성 사진의 빈 칸 메우기 ──
+// Esri 위성 사진은 넓은 바다나 일부 시골처럼 자세한 사진이 없는 곳에서 확대 단계가
+// 높으면 회색 'Map data not yet available' 그림을 대신 보낸다. 1인칭으로 바다·땅에
+// 가까이 내려가면 발밑에 그 높은 단계 타일이 깔려 화면이 깨진 것처럼 보였다
+// (가까운 것까지 그리려고 카메라 확대 단계를 올린 뒤로 더 잦아졌다).
+// 없는 타일은 404 로 받고(blankTile=false), 한 단계씩 위(덜 자세한) 타일에서 그
+// 자리를 잘라 늘려 채운다. 끝내 없으면 바다 빛으로 채운다.
+const SAT_URL = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile';
+const SAT_UP_LEVELS = 8;          // 이만큼 위 단계까지 찾아 올라간다
+const SAT_SEA = '#0b2638';        // 끝내 사진이 없을 때의 바다 빛
+async function _satFetch(z, x, y, signal) {
+  const r = await fetch(`${SAT_URL}/${z}/${y}/${x}?blankTile=false`, { signal });
+  return r.ok ? r.blob() : null;          // 404 = 그 단계에는 사진이 없다(네트워크 오류는 그대로 던진다)
+}
+function _satCanvas() {
+  if (typeof OffscreenCanvas === 'function') return new OffscreenCanvas(256, 256);
+  const c = document.createElement('canvas'); c.width = 256; c.height = 256; return c;
+}
+function _satToBuffer(cv) {
+  if (cv.convertToBlob) return cv.convertToBlob({ type: 'image/png' }).then(b => b.arrayBuffer());
+  return new Promise(res => cv.toBlob(b => res(b.arrayBuffer()), 'image/png'));
+}
+async function _satTile(z, x, y, signal) {
+  const own = await _satFetch(z, x, y, signal);
+  if (own) return own.arrayBuffer();
+  const cv = _satCanvas(), ctx = cv.getContext('2d');
+  for (let k = 1; k <= SAT_UP_LEVELS && z - k >= 0; k++) {
+    const b = await _satFetch(z - k, x >> k, y >> k, signal);
+    if (!b) continue;
+    const bmp = await createImageBitmap(b);
+    const n = 1 << k, sz = bmp.width / n;
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(bmp, (x & (n - 1)) * sz, (y & (n - 1)) * sz, sz, sz, 0, 0, 256, 256);
+    return _satToBuffer(cv);
+  }
+  ctx.fillStyle = SAT_SEA; ctx.fillRect(0, 0, 256, 256);
+  return _satToBuffer(cv);
+}
+try {
+  if (typeof maplibregl !== 'undefined' && maplibregl.addProtocol) {
+    maplibregl.addProtocol('sat', (params, abortController) => {
+      const m = /^sat:\/\/(\d+)\/(\d+)\/(\d+)/.exec(params.url);
+      if (!m) return Promise.reject(new Error('bad sat url ' + params.url));
+      return _satTile(+m[1], +m[2], +m[3], abortController && abortController.signal).then(data => ({ data }));
+    });
+  }
+} catch (e) { _swallow(e); }
+
 function _init3dMap() {
   if (_ml3d) {
     // Already initialised — just jump to current aircraft position
@@ -229,7 +277,7 @@ function _init3dMap() {
         sources: {
           satellite: {
             type: 'raster',
-            tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],
+            tiles: ['sat://{z}/{x}/{y}'],      // 빈 칸은 위 단계 사진으로 메운다(_satTile)
             tileSize: 256,
             maxzoom: 19,
             attribution: 'Tiles © Esri'

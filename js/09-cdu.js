@@ -269,7 +269,7 @@ let shipInputMode = 'SPD', shipInput = '';
 
 function shipIcon() {
   return L.divIcon({
-    html: `<div data-act="openShipPanel" style="transform:rotate(${shipHdg}deg);transform-origin:12px 20px;line-height:0;cursor:pointer;"><svg width="24" height="40" viewBox="0 0 24 40" xmlns="http://www.w3.org/2000/svg"><path d="M12 1 Q20 7 21 17 L21 33 Q21 39 12 39 Q3 39 3 33 L3 17 Q4 7 12 1Z" fill="#1a5fa8" stroke="#7ab8f5" stroke-width="1.5"/><rect x="8" y="16" width="8" height="10" rx="2" fill="#2277bb" stroke="#7ab8f5" stroke-width="0.7"/><circle cx="12" cy="5" r="2.5" fill="#7ab8f5" opacity="0.9"/><line x1="12" y1="1" x2="12" y2="39" stroke="#88ccff" stroke-width="0.5" stroke-dasharray="2,3" opacity="0.4"/></svg></div>`,
+    html: `<div data-act="openShipPanel" style="transform:rotate(${shipHdg}deg);transform-origin:12px 20px;line-height:0;cursor:pointer;"><svg width="24" height="40" viewBox="0 0 24 40" xmlns="http://www.w3.org/2000/svg"><path d="M12 1 Q20 7 21 17 L21 33 Q21 39 12 39 Q3 39 3 33 L3 17 Q4 7 12 1Z" fill="#1a5fa8" stroke="#7ab8f5" stroke-width="1.5"/><rect x="8" y="13.8" width="8" height="10" rx="2" fill="#2277bb" stroke="#7ab8f5" stroke-width="0.7"/><circle cx="12" cy="5" r="2.5" fill="#7ab8f5" opacity="0.9"/><line x1="12" y1="1" x2="12" y2="39" stroke="#88ccff" stroke-width="0.5" stroke-dasharray="2,3" opacity="0.4"/></svg></div>`,
     iconSize: [24, 40], iconAnchor: [12, 20], className: ''
   });
 }
@@ -487,8 +487,10 @@ function _ship3dQuad(out, p0, c, p1, n) {   // 2차 베지어(Q)를 점으로 �
 //   · 전방한계선(흰색) — 어깨선 2m 앞을 가로로
 // 모두 갑판에 칠한 것이라 갑판 위로 5cm 만 나온다(착함 바닥은 갑판 그대로).
 // 단위 m. 여기서만 [오른쪽 +, 앞 +] 로 그리고(반시계가 바깥 고리) 함정 좌표로 바꾼다.
-const SHIP3D_BRIDGE_AFT = -(26 - 20) * SHIP3D_LEN / 38;   // 함교 뒷면(가운데에서 15.8m 뒤)
-const SHIP3D_TD = { fwd: -31, r: 5, w: 0.6 };              // 착함 원 — 중심·바깥 반지름·선 굵기
+const SHIP3D_DECK_LEN = 40;                                // 비행갑판 길이(함교 뒷면 → 함미)
+const SHIP3D_BRIDGE_AFT = -SHIP3D_LEN / 2 + SHIP3D_DECK_LEN; // 함교 뒷면(가운데에서 10m 뒤)
+const SHIP3D_BRIDGE_Y = 20 - SHIP3D_BRIDGE_AFT * 38 / SHIP3D_LEN - 10;   // 아이콘 좌표의 함교 윗변(13.8)
+const SHIP3D_TD = { fwd: (SHIP3D_BRIDGE_AFT - SHIP3D_LEN / 2) / 2, r: 5, w: 0.6 };   // 착함 원 — 갑판 한가운데(30m 뒤)
 const SHIP3D_SHOULDER = SHIP3D_TD.fwd + SHIP3D_TD.r + 0.2;  // 어깨선(굵기 0.4m) 가운데
 const SHIP3D_FWD_LIMIT = SHIP3D_SHOULDER + 2;              // 전방한계선 — 어깨선 2m 앞
 const SHIP3D_DECK_MARKS = (() => {
@@ -536,9 +538,10 @@ const SHIP3D_PARTS = (() => {
   _ship3dQuad(hull, [12, 39], [3, 39], [3, 33], 6);
   hull.push([3, 17]);
   _ship3dQuad(hull, [3, 17], [4, 7], [12, 1], 10);
-  // 함교 — rect x8 y16 w8 h10 rx2 (모서리를 둥글게)
-  const bridge = [];
-  [[10, 18, 180], [14, 18, 270], [14, 24, 0], [10, 24, 90]].forEach(([cx, cy, a0]) => {
+  // 함교 — rect x8 y13.8 w8 h10 rx2 (모서리를 둥글게). 뒷면을 함미에서 40m 에 두어
+  // 함교 뒤 비행갑판이 40m 가 되게 한다(SHIP3D_BRIDGE_AFT).
+  const bridge = [], by = SHIP3D_BRIDGE_Y;
+  [[10, by + 2, 180], [14, by + 2, 270], [14, by + 8, 0], [10, by + 8, 90]].forEach(([cx, cy, a0]) => {
     for (let i = 0; i <= 4; i++) {
       const a = (a0 + i * 22.5) * D2R;
       bridge.push([cx + 2 * Math.cos(a), cy + 2 * Math.sin(a)]);
@@ -555,7 +558,7 @@ const SHIP3D_PARTS = (() => {
   ];
   // 중심선 — x=12, 점선(2 칸 긋고 3 칸 띄움), 굵기 0.5. 갑판 위로 살짝(5cm)만 나온다.
   // 함교 앞쪽만 둔다 — 함교 뒤 비행갑판에는 노란 정렬선이 있다.
-  for (let y = 1; y < 16; y += 5) {
+  for (let y = 1; y + 2 < SHIP3D_BRIDGE_Y; y += 5) {
     parts.push({ ring: [[11.75, y], [12.25, y], [12.25, y + 2], [11.75, y + 2], [11.75, y]],
                  h: SHIP3D_DECK + 0.05, c: '#88ccff', k: 'dash', line: true });
   }

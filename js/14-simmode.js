@@ -48,6 +48,11 @@ const SPD_JERK_TAU = 1.2;     // 가감속이 붙는 데 걸리는 시간(s) —
 const VS_TAU1      = 0.5;     // 토크가 바뀐 뒤 유입류가 바뀌는 시간(s)
 const VS_TAU2      = 1.5;     // 그 힘이 상승률로 옮겨 가는 시간(s)
 const TQ_TAU       = 0.5;     // 토크가 레버를 따라가는 시간(s) — 엔진·로터 관성
+// 컬렉티브 감도 — 남는 토크가 만드는 상승·강하율을 PERF 표의 이 배로 쓴다.
+// (레버를 조금만 움직여도 고도·속도가 눈에 띄게 바뀌게 — 종전의 2배)
+const SIM_COLL_GAIN = 2;
+// 상승·강하율의 한계(fpm). 기수를 숙인 채 레버를 끝까지 내리면 4,000fpm 까지 떨어진다.
+const SIM_VS_UP_MAX = 2000, SIM_VS_DN_MAX = 4000;
 let simAcc = 0;               // 지금의 가감속(kt/s)
 let _simVs1 = 0;              // 상승률로 가기 전 단계(fpm)
 // ── 위치에너지 ↔ 운동에너지 ──
@@ -122,14 +127,18 @@ function simGspdFly(v, k, dt, lo, hi) {
 // 자세(SIM 자세-속도 식)에 가감속에 드는 기울기(atan a/g)를 얹은 것이다 —
 // 앞으로 붙으면 기수가 숙고, 옆으로 붙으면 그쪽으로 기운다. 가감속은
 // 운동에너지 ↔ 고도 교환(simKeVs)에도 그대로 쓰인다.
-function simGspdAfter(dt, f0, l0) {
+function simGspdAfter(dt, f0, l0, fly) {
   if (!simModeOn || !(dt > 0)) return;
   if (_simOnGnd) {
     // 땅 위에서는 스키드가 잡는다 — 금방 선다
     const k = Math.max(0, 1 - 1.2 * dt);
     gspdActFwd *= k; gspdActLat *= k;
   }
-  const accF = (gspdActFwd - f0) / dt, accL = (gspdActLat - l0) / dt;
+  // 자세를 기울이는 것은 조종사가 조종간으로 미는 몫(fly-through)뿐이다. 4방향 트림으로
+  // 기준속도를 1kt 씩 옮길 때 GSPD 가 따라가는 가감속까지 자세에 실으면, 딸깍할
+  // 때마다 PFD 와 3D 시점이 그 축으로 흔들린다(AFCS 가 알아서 하는 몫이다).
+  const accF = (fly && fly.fwd) ? (gspdActFwd - f0) / dt : 0;
+  const accL = (fly && fly.lat) ? (gspdActLat - l0) / dt : 0;
   // 속도가 바뀐 만큼 운동에너지 몫의 상승률도 바로 고친다. simFly 는 이 구간의
   // 속도가 바뀌기 전에 상승률을 써 두었으므로, 여기서 맞추지 않으면 다음 구간에
   // 그 차이가 출력 몫으로 섞여 1~2초 뒤 사라져 버린다.
@@ -244,10 +253,37 @@ function simGroundFt() { return _simGndFresh ? _simGndFt : 0; }
 // 함정(09-cdu.js) 위에서는 그 자리 함정 부분의 윗면이 바닥이다 — 갑판 7m · 함수
 // 구조물 10m · 함교 17m. 함정은 수면(지면) 위에 서 있으므로 그 높이를 지면에 더한다.
 // 갑판에 앉아 있으면 함정과 함께 간다(07-sim.js 의 함정 이동 · 09-cdu.js 의 침로 변경).
-function simDeckFt() {
+// 기체는 앞뒤 20m(로터 포함)로 본다. 그 길이 아래 어디라도 함정이 있으면 가장 높은
+// 윗면이 바닥이다 — 기수가 함교 위로 들어가 있으면 내려앉지 못하고 함교에 걸린다.
+const SIM_AC_LEN = 20;               // m
+function simShipTopM(lat, lon, hdg) {
   if (typeof shipDeckTopM !== 'function') return null;
-  const m = shipDeckTopM(S.lat, S.lon);
+  const h = hdg * D2R, cl = Math.cos(lat * D2R);
+  let top = null;
+  for (let d = -SIM_AC_LEN / 2; d <= SIM_AC_LEN / 2 + 1e-9; d += 1) {
+    const m = shipDeckTopM(lat + d * Math.cos(h) / 111320, lon + d * Math.sin(h) / (111320 * cl));
+    if (m != null && (top === null || m > top)) top = m;
+  }
+  return top;
+}
+function simDeckFt() {
+  const m = simShipTopM(S.lat, S.lon, S.hdg);
   return (m == null) ? null : simGroundFt() + m / 0.3048;
+}
+// 함정에 옆으로 부딪히지 않는다 — 옮겨 간 자리에서 기체(20m) 아래에 지금 높이보다
+// 높은 함정 부분(선체 옆면·함교·함수 구조물)이 있으면 옮겨 가기 전 자리로 되돌리고
+// 그 자리에 세운다(07-sim.js 가 위치를 옮긴 뒤 부른다). 원래 겹쳐 있던 자리에서는
+// 빠져나갈 수 있게 막지 않는다.
+function simShipBlocked(lat, lon) {
+  const m = simShipTopM(lat, lon, S.hdg);
+  return m != null && S.alt < simGroundFt() + m / 0.3048 - 0.5;
+}
+function simShipCollide(lat0, lon0) {
+  if (!simModeOn || !simShipBlocked(S.lat, S.lon) || simShipBlocked(lat0, lon0)) return false;
+  S.lat = lat0; S.lon = lon0;
+  S.spd = 0; simLat = 0; simAcc = 0;
+  if (gspdOn) { gspdActFwd = 0; gspdActLat = 0; }
+  return true;
 }
 // 내려앉을 수 있는 바닥(ft) — 지면, 함정 위에서는 갑판
 function simFloorFt() {
@@ -310,7 +346,7 @@ function toggleSimMode(on, opt) {
     simLookReset();
     // 지금 날고 있는 상태를 유지할 만큼의 토크로 레버를 맞춰 둔다(진입 충격 방지)
     let add = (S.vs || 0) / TQ_PER_FPM;
-    try { if (typeof perfTqForVs === 'function') add = perfTqForVs(S.vs || 0); } catch (e) { _swallow(e); }
+    try { if (typeof perfTqForVs === 'function') add = perfTqForVs((S.vs || 0) / SIM_COLL_GAIN); } catch (e) { _swallow(e); }
     S.tq = Math.max(0, Math.min(TQ_MAX, tqRequired() + add));
     if (!S.running) toggleSim();        // 멈춰 있으면 바로 날기 시작한다
     if (opt && opt.ground) simStartGround();
@@ -483,10 +519,11 @@ function simFly(dt) {
   try { vRaw = (typeof perfVsForTq === 'function') ? perfVsForTq(dTq) : dTq * TQ_PER_FPM; }
   catch (e) { vRaw = dTq * TQ_PER_FPM; }
   if (!Number.isFinite(vRaw)) vRaw = dTq * TQ_PER_FPM;
+  vRaw *= SIM_COLL_GAIN;                // 레버를 움직인 만큼의 오르내림(속도 변화도 따라 커진다)
   // 같은 토크라도 속도에 따라 오르는 정도가 다르다. 최대상승속도(Vy)에서
   // 가장 잘 오르고, 그보다 빠르거나 느릴수록 덜 오른다(PERF 의 Vy 를 쓴다).
   if (vRaw > 0) vRaw *= simClimbEff();
-  const vTgt = Math.max(-2000, Math.min(2000, vRaw));
+  const vTgt = Math.max(-SIM_VS_DN_MAX, Math.min(SIM_VS_UP_MAX, vRaw));
   _simVs1 += (vTgt - _simVs1) * Math.min(1, dt / VS_TAU1);
   // 출력 몫은 유입류를 거쳐 천천히, 운동에너지 몫은 가감속과 함께 바로 붙는다
   const vsP = vsPow + (_simVs1 - vsPow) * Math.min(1, dt / VS_TAU2);

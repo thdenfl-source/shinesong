@@ -349,7 +349,7 @@ function simStep(ts){
               gspdActFwd += Math.sign(dFwd) * Math.min(Math.abs(dFwd), rFwd * dt);
               if (Math.abs(gspdRefFwd - gspdActFwd) < 0.05) gspdActFwd = gspdRefFwd;
             }
-            if (fly) simGspdAfter(dt, f0, l0);   // 자세·가감속(SIM 모드)
+            if (fly) simGspdAfter(dt, f0, l0, fly);   // 자세·가감속(SIM 모드)
           }
           // Body frame → ground frame (ignores wind; this is direct
           // ground-speed control)
@@ -384,8 +384,13 @@ function simStep(ts){
           gsE = S.spd * sh + lat * ch + wEff * Math.sin(wt);
         }
         const sc = 1852/3600 * dt / 111320;
+        const _lat0 = S.lat, _lon0 = S.lon;
         S.lat += gsN * sc;
         S.lon += gsE * sc / Math.cos(S.lat * D2R);
+        // SIM 모드: 함정 선체 옆면·함교에 부딪히면 그 앞에서 선다(14-simmode.js)
+        if (simModeOn && typeof simShipCollide === 'function') {
+          try { simShipCollide(_lat0, _lon0); } catch (e) { _swallow(e); }
+        }
         // Altitude update — hold modes override manual VS while engaged
         // G/S 를 잡고 있으면 고도는 강하선이 정한다(ALT·CRHT 보다 앞선다).
         try { gsCaptureCheck(); } catch(e) { _swallow(e); }
