@@ -306,7 +306,7 @@ export async function run(page, t) {
     const touch = { deck: simOnDeck(), spd: S.spd };
     // 기체(앞뒤 20m)는 함교·선체 옆면에 부딪히면 그 앞에서 선다
     shipHdg = 0; shipSpd = 0; updateShipMarker();
-    _pad.axes[3] = (tqRequired() / 110) * 2 - 1;            // 레버는 높이 유지
+    _pad.axes[3] = (tqRequired() / SIM_LEVER_TOP) * 2 - 1;            // 레버는 높이 유지
     const push = (fwd, right, hdg, alt, sec) => {
       [S.lat, S.lon] = at(fwd, right); S.hdg = hdg; S.alt = alt; S.vs = 0; simVsAcc = 0;
       S.spd = 8; simLat = 0; simAcc = 0; S.pit = pitchFromSpd(8); simTrimHoldSpeed();
@@ -418,9 +418,24 @@ export async function run(page, t) {
       return p.x > 0 && p.x < cv.clientWidth && p.y > 0 && p.y < cv.clientHeight;
     });
     // 오른쪽으로 20° 기울이면 오른쪽 창은 더 아래를, 왼쪽 창은 덜 아래를 본다
-    S.bnk = 20; _applyFollow();
+    // (CHIN 창은 화질에 따라 덜 자주 그리므로 여기서는 바로 그리게 한다)
+    S.bnk = 20; _applyFollow(); _ml3dChinCamera(true);
     out.bank = _chinMaps.map(c => ({ side: c.side, pitch: c.map.getPitch() }));
-    S.bnk = 0; _applyFollow();
+    S.bnk = 0; _applyFollow(); _ml3dChinCamera(true);
+    // 화질에 따라 CHIN 창을 덜 자주 그린다 — '하' 는 1초에 15번, '상' 은 매 프레임
+    const moves = c => { let k = 0; const f = () => k++; c.map.on('move', f); return () => { c.map.off('move', f); return k; }; };
+    const burst = () => {
+      _ml3dChinCamera(true);
+      const done = moves(_chinMaps[0]);
+      for (let i = 0; i < 5; i++) { S.hdg = (S.hdg + 1) % 360; _ml3dChinCamera(); }
+      return done();
+    };
+    setMap3dQuality('low'); await wait(400); _applyFollow();
+    out.throttle = { low: burst() };
+    setMap3dQuality('high'); await wait(400); _applyFollow();
+    out.throttle.high = burst();
+    setMap3dQuality('mid'); await wait(400); S.hdg = 0; _applyFollow();
+    out.chinRatio = _chinMaps.map(c => c.map.getPixelRatio());
     // CHIN 버튼으로 끄고 켠다
     toggleChinView(); await wait(50);
     out.off = { n: _chinMaps.length, main: box('map3d'), rowShown: getComputedStyle(document.getElementById('chin-row')).display };
@@ -454,6 +469,10 @@ export async function run(page, t) {
   t.ok(br.pitch < cr.pitch - 0.5 && bl.pitch > cl.pitch + 5,
     `기체를 따라 돈다 — 오른쪽 뱅크면 오른쪽 창은 더 아래, 왼쪽 창은 덜 아래를 본다 ` +
     `(오른쪽 ${cr.pitch.toFixed(0)}→${br.pitch.toFixed(0)}° · 왼쪽 ${cl.pitch.toFixed(0)}→${bl.pitch.toFixed(0)}°)`);
+  t.ok(chin.throttle.low === 0 && chin.throttle.high === 5,
+    `화질 '하' 는 CHIN 창을 덜 자주 그리고 '상' 은 매번 그린다 (곧바로 5번 → 하 ${chin.throttle.low} · 상 ${chin.throttle.high})`);
+  t.ok(chin.chinRatio.length === 2 && chin.chinRatio.every(r => r <= 1),
+    `화질 '중' 의 CHIN 창은 1배 해상도까지만 그린다 (${chin.chinRatio.join(' · ')})`);
   t.ok(chin.off.n === 0 && chin.off.rowShown === 'none' && chin.off.main.h > chin.main.h * 1.4,
     `CHIN 버튼으로 끄면 정면 시야가 다시 창 가득 (${chin.off.main.h.toFixed(0)}px)`);
   t.eq(chin.on, 2, '다시 누르면 CHIN 창이 열린다');

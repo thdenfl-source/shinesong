@@ -76,6 +76,22 @@ const TQ_TAU       = 0.5;     // 토크가 레버를 따라가는 시간(s) — 
 const SIM_COLL_GAIN = 1;
 // 상승·강하율의 한계(fpm). 기수를 숙인 채 레버를 끝까지 내리면 4,000fpm 까지 떨어진다.
 const SIM_VS_UP_MAX = 2000, SIM_VS_DN_MAX = 4000;
+// ── 컬렉티브 레버와 그날의 MTA ──
+// 레버 맨 위는 토크 140% 다. 하지만 엔진이 낼 수 있는 토크는 그날의 MTA(CDU PERF 의
+// MTA(30) — 고도·온도로 정해진다 · mtaNow)까지다. 그보다 더 당기면 토크는 MTA 에
+// 멈추고, 모자란 힘을 로터 회전(NR)이 내주며 처진다(RPM LOW). 양력은 NR² 로 줄어
+// 오르던 힘이 빠지고 가라앉는다 — 더 당길수록 NR 이 더 처지고 더 빨리 가라앉는다.
+// 레버를 MTA 아래로 내리면 NR 이 돌아온다.
+const SIM_LEVER_TOP = 140;     // 레버 맨 위의 토크(%)
+const SIM_NR_DROOP  = 0.6;     // MTA 를 1% 넘길 때마다 처지는 NR(%)
+const SIM_NR_MIN    = 85;      // NR 이 처지는 바닥(%)
+const SIM_NR_LOW    = 97;      // 이 아래면 RPM LOW
+const NR_TAU_DN     = 1.0;     // NR 이 처지는 시간(s)
+const NR_TAU_UP     = 1.5;     // NR 이 돌아오는 시간(s)
+const SIM_NR_SINK   = 40000;   // 양력이 다(100%) 모자랄 때의 강하율(fpm) — 2% 모자라면 800fpm
+let simNr = 100;               // 로터 회전(NR, %)
+let simTqCmd = 0;              // 레버가 요구하는 토크(%) — MTA 를 넘어도 그대로(계기의 레버 표식)
+function simRpmLow() { return simModeOn && simNr < SIM_NR_LOW; }
 // 남은 차이(d)를 향해 '바뀌는 빠르기(acc)' 를 한 구간 옮긴다. acc 는 jerk 의 빠르기로
 // 커진다(그래서 점점 빨라진다). 목표가 가까워지면 그 빠르기의 반으로 풀 수 있는 만큼
 // (√(j·|d|))으로 줄여 넘치지 않고, 아주 가까우면 곧게(d 에 비례해) 붙어 떨지 않는다.
@@ -350,7 +366,7 @@ function simDeckHandoff(toDeck) {
 }
 
 function simStartGround() {
-  S.vs = 0; S.spd = 0; simLat = 0; simAcc = 0; simVsAcc = 0;
+  S.vs = 0; S.spd = 0; simLat = 0; simAcc = 0; simVsAcc = 0; simNr = 100;
   S.pit = 0; S.bnk = 0; bankTarget = 0;
   S.tq = 0;                      // 레버를 내려 둔 상태에서 올리며 뜬다
   S.alt = simTerrainFt();        // 지면 높이 = AGL 0
@@ -386,12 +402,12 @@ function toggleSimMode(on, opt) {
     // 손을 떼면 그 자리에서 날던 대로 — 지금 자세를 그대로 이어받는다
     bankTarget = S.bnk;
     simTrimReset();
-    simAcc = 0; simVsAcc = 0;            // 지금 날던 대로 이어 간다
+    simAcc = 0; simVsAcc = 0; simNr = 100; // 지금 날던 대로 이어 간다
     simLookReset();
     // 지금 날고 있는 상태를 유지할 만큼의 토크로 레버를 맞춰 둔다(진입 충격 방지)
     let add = (S.vs || 0) / TQ_PER_FPM;
     try { if (typeof perfTqForVs === 'function') add = perfTqForVs((S.vs || 0) / SIM_COLL_GAIN); } catch (e) { _swallow(e); }
-    S.tq = Math.max(0, Math.min(TQ_MAX, tqRequired() + add));
+    S.tq = Math.max(0, Math.min(mtaNow(), tqRequired() + add)); simTqCmd = S.tq;
     if (!S.running) toggleSim();        // 멈춰 있으면 바로 날기 시작한다
     if (opt && opt.ground) simStartGround();
     else if (S.alt < 50) S.alt = SIM_AIR_MIN_FT;   // 공중에서 시작하는데 땅에 붙어 있으면 띄운다
@@ -399,7 +415,7 @@ function toggleSimMode(on, opt) {
   } else {
     simExitView();
     // 손을 뗀 자리에서 수평으로 돌려 놓는다(기울어진 채 남지 않게)
-    bankTarget = 0; S.vs = 0; simLat = 0; simAcc = 0; simVsAcc = 0;
+    bankTarget = 0; S.vs = 0; simLat = 0; simAcc = 0; simVsAcc = 0; simNr = 100;
     simLookReset();
     selHdg = ((Math.round(S.hdg) + 359) % 360) + 1;
   }
@@ -561,13 +577,23 @@ function simFly(dt) {
   else if (!cfg) tTgt = onGnd ? 0 : tqRequired();
   else if (cfg.abs) {
     // 스로틀·컬렉티브처럼 '세워 두는' 레버는 자리 자체가 출력이다.
-    // 맨 아래 0% … 맨 위 110%(연속한계 100% 를 조금 넘을 수 있게).
-    tTgt = (joyAxRaw('coll') + 1) / 2 * 110;
+    // 맨 아래 0% … 맨 위 140%(그날의 MTA 를 넘겨 당길 수 있게).
+    tTgt = (joyAxRaw('coll') + 1) / 2 * SIM_LEVER_TOP;
   } else {
-    // 가운데로 돌아오는 축은 호버 토크를 기준으로 오르내린다
-    tTgt = hoverTqRef() + a.coll * TQ_SPAN;
+    // 가운데로 돌아오는 축은 호버 토크를 기준으로 오르내린다 — 끝까지 올리면 140%,
+    // 끝까지 내리면 호버 −45%
+    const hov = hoverTqRef();
+    tTgt = hov + a.coll * (a.coll > 0 ? SIM_LEVER_TOP - hov : TQ_SPAN);
   }
   tTgt = Math.max(0, Math.min(TQ_MAX, tTgt));
+  simTqCmd = tTgt;
+  // ── 그날의 MTA ── 엔진은 그 이상 내지 못한다. 레버가 넘긴 만큼 NR 이 처진다
+  // (AFCS·레버 없음일 때는 MTA 까지만 건다 — 넘겨 당기는 손이 없다)
+  const mta = mtaNow();
+  const overMta = (cfg && !vert) ? Math.max(0, tTgt - mta) : 0;
+  tTgt = Math.min(tTgt, mta);
+  const nrTgt = Math.max(SIM_NR_MIN, 100 - SIM_NR_DROOP * overMta);
+  simNr += (nrTgt - simNr) * Math.min(1, dt / (nrTgt < simNr ? NR_TAU_DN : NR_TAU_UP));
   // 레버를 따라 천천히 붙되(TQ_TAU), 한 번에 TQ_RATE 보다 빨리 변하지는 않는다
   const dT = (tTgt - S.tq) * Math.min(1, dt / TQ_TAU);
   S.tq += Math.sign(dT) * Math.min(Math.abs(dT), TQ_RATE * dt);
@@ -590,6 +616,9 @@ function simFly(dt) {
   // 같은 토크라도 속도에 따라 오르는 정도가 다르다. 최대상승속도(Vy)에서
   // 가장 잘 오르고, 그보다 빠르거나 느릴수록 덜 오른다(PERF 의 Vy 를 쓴다).
   if (vRaw > 0) vRaw *= simClimbEff();
+  // RPM LOW — 양력이 NR² 로 줄어 오르던 힘이 빠지고 그만큼 가라앉는다
+  const nrDef = 1 - (simNr / 100) * (simNr / 100);
+  if (nrDef > 1e-4) vRaw = vRaw * Math.max(0, 1 - 5 * nrDef) - SIM_NR_SINK * nrDef;
   const vTgt = Math.max(-SIM_VS_DN_MAX, Math.min(SIM_VS_UP_MAX, vRaw));
   // 출력 몫은 점점 빨라지며 붙고(simVsAcc), 운동에너지 몫은 가감속과 함께 바로 붙는다
   simVsAcc = simJerkStep(vTgt - vsPow, simVsAcc, dt, VS_ACC_MAX, VS_JERK, 50);

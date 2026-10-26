@@ -249,7 +249,7 @@ export async function run(page, t) {
     const trim = { pit: S.pit, spd: S.spd, vs: S.vs, alt: S.alt, tq: S.tq };
     // 2단계: 같은 자세에서 레버를 쥐고 내린다
     joyAxes.coll = { i: 3, inv: false, abs: true };
-    const lever = (tq) => _ax(3, Math.max(-1, Math.min(1, tq / 110 * 2 - 1)));
+    const lever = (tq) => _ax(3, Math.max(-1, Math.min(1, tq / SIM_LEVER_TOP * 2 - 1)));
     lever(trim.tq - 20);
     fly(25);
     const sink = { pit: S.pit, spd: S.spd, vs: S.vs, alt: S.alt };
@@ -278,7 +278,7 @@ export async function run(page, t) {
     joyAxes = { pitch: { i: 1, inv: false }, coll: { i: 3, inv: false, abs: true } };
     S.alt = 4000; _simGndFt = 0; S.bnk = 0; S.spd = 120; S.pit = 0; simAcc = 0; S.vs = 0; simVsAcc = 0;
     simTrimReset();
-    const lever = () => _ax(3, Math.max(-1, Math.min(1, tqRequired() / 110 * 2 - 1)));
+    const lever = () => _ax(3, Math.max(-1, Math.min(1, tqRequired() / SIM_LEVER_TOP * 2 - 1)));
     lever(); fly(10); lever(); fly(10);            // 수평 120kt 에 자리잡는다(레버는 고도 유지)
     const lvl = { spd: S.spd, vs: S.vs, alt: S.alt };
     const run = (sec) => {
@@ -431,18 +431,19 @@ export async function run(page, t) {
     S.alt = g; S.vs = 0; S.tq = 0;
     _ax(3, -1); fly(8);                           // 레버를 바닥까지 내려도
     const onGnd = { alt: S.alt, vs: S.vs, gndFt: g };
-    _ax(3, 1); fly(12);                           // 올리면 지면 위로 뜬다(상승률은 천천히 붙는다)
+    _ax(3, 0.65); fly(12);                        // 올리면 지면 위로 뜬다(상승률은 천천히 붙는다 · MTA 아래)
+    const liftTq = { tq: S.tq, mta: mtaNow() };
     const lifted = S.alt;
     window._tcElev = real;
-    return { onGnd, lifted };
+    return { onGnd, lifted, liftTq };
   })()`);
   t.ok(Math.abs(gnd.onGnd.gndFt - 1000) < 5,
     `지형 표고를 피트로 읽는다 (305m → ${gnd.onGnd.gndFt.toFixed(0)}ft)`);
   t.ok(Math.abs(gnd.onGnd.alt - gnd.onGnd.gndFt) < 2,
     `지면 아래로 꺼지지 않는다 (${gnd.onGnd.alt.toFixed(0)}ft · 지면 ${gnd.onGnd.gndFt.toFixed(0)}ft)`);
   t.eq(gnd.onGnd.vs, 0, '땅에 닿아 있으면 강하율도 0 이다');
-  t.ok(gnd.lifted > gnd.onGnd.gndFt + 50,
-    `레버를 올리면 지면 위로 뜬다 (${gnd.lifted.toFixed(0)}ft)`);
+  t.ok(gnd.lifted > gnd.onGnd.gndFt + 50 && gnd.liftTq.tq < gnd.liftTq.mta,
+    `레버를 올리면 지면 위로 뜬다 (${gnd.lifted.toFixed(0)}ft · 토크 ${gnd.liftTq.tq.toFixed(0)}% < MTA ${gnd.liftTq.mta.toFixed(0)}%)`);
 
   // ── 컬렉티브 → 토크 → 오르내린다 ──
   // 컬렉티브는 '상승률 레버' 가 아니라 '출력 레버' 다. 올린 만큼 토크가 오르고,
@@ -451,7 +452,7 @@ export async function run(page, t) {
     (${SETUP.toString()})();
     const fly = ${FLY};
     const a0 = S.alt, tq0 = S.tq;
-    _ax(3, 1); fly(6);
+    _ax(3, 0.5); fly(6);                  // 반쯤 올린다(MTA 아래 — 끝까지 올리면 RPM LOW 로 가라앉는다)
     const up = { alt: S.alt, vs: S.vs, tq: S.tq };
     _ax(3, -1); fly(10);
     return { tq0, up, gain: up.alt - a0, dn: { alt: S.alt, vs: S.vs, tq: S.tq } };
@@ -512,7 +513,7 @@ export async function run(page, t) {
     (${SETUP.toString()})();
     const fly = ${FLY};
     S.bnk = 0; S.spd = 120; S.alt = 3000; _simGndFt = 0;
-    // 레버식 컬렉티브로 토크를 정확히 지정한다(0…110% 가 축 -1…1)
+    // 레버식 컬렉티브로 토크를 정확히 지정한다(0…140% 가 축 -1…1)
     joyAxes = { coll: { i: 3, inv: false, abs: true } };
     // 속도가 변하면 전진 양력 때문에 기준 토크도 변한다 — 120kt 로 안정시켜 둔다
     _ax(3, 0); fly(20);
@@ -520,7 +521,7 @@ export async function run(page, t) {
     const need = tqRequired();
     // 재는 동안 속도가 변하면 그 운동에너지도 오르내림이 된다 — 120kt 정속에서 잰다
     const run = (tq) => {
-      _ax(3, Math.max(-1, Math.min(1, tq / 110 * 2 - 1)));
+      _ax(3, Math.max(-1, Math.min(1, tq / SIM_LEVER_TOP * 2 - 1)));
       // 토크도 그 값에서 시작한다(레버를 따라가는 지연은 아래 '점진적으로' 검사에서 본다)
       S.spd = 120; simAcc = 0; S.vs = 0; simVsAcc = 0; S.alt = 3000; S.tq = tq; fly(10);
       return S.vs;
@@ -551,7 +552,7 @@ export async function run(page, t) {
     joyAxes = { coll: { i: 3, inv: false, abs: true } };
     S.bnk = 0; S.spd = 70; S.alt = 5000; _simGndFt = 0;
     simTrim.pitch = -pitchFromSpd(70);
-    const lever = tq => _ax(3, Math.max(-1, Math.min(1, tq / 110 * 2 - 1)));
+    const lever = tq => _ax(3, Math.max(-1, Math.min(1, tq / SIM_LEVER_TOP * 2 - 1)));
     lever(tqRequired()); fly(10);
     const pow = () => S.vs - simKeVs(false);
     // 남는 토크 +5% — PERF 표 값대로 오른다
@@ -596,7 +597,7 @@ export async function run(page, t) {
       fly(20);                                        // 그 속도로 자리잡을 때까지
       const settled = S.spd;
       joyAxes.coll = { i: 3, inv: false, abs: true }; // 이제 레버를 쥐고 25% 더 준다
-      _ax(3, Math.max(-1, Math.min(1, (tqRequired() + 25) / 110 * 2 - 1)));
+      _ax(3, Math.max(-1, Math.min(1, (tqRequired() + 25) / SIM_LEVER_TOP * 2 - 1)));
       S.alt = 4000; fly(10);
       return { vs: S.vs, spd: settled };
     };
@@ -651,7 +652,7 @@ export async function run(page, t) {
     (${SETUP.toString()})();
     const fly = ${FLY};
     S.spd = 100;
-    _ax(3, 1); fly(8);                    // 세게 올라간다
+    _ax(3, 0.5); fly(8);                  // 세게 올라간다(MTA 아래)
     return { spd: S.spd, vs: S.vs };
   })()`);
   t.ok(trade.vs > 500 && trade.spd < 100,
@@ -662,7 +663,7 @@ export async function run(page, t) {
     (${SETUP.toString()})();
     const fly = ${FLY};
     selectPanel('left', 'pfd', true);
-    _ax(3, 1); fly(6);                    // 토크를 올려 둔다
+    _ax(3, 0.5); fly(6);                  // 토크를 올려 둔다
     // 그려진 글자와 자리(세로)를 가로채 본다
     const seen = [];
     const proto = CanvasRenderingContext2D.prototype, orig = proto.fillText;
@@ -717,7 +718,7 @@ export async function run(page, t) {
     };
     return { g: at(80), y: at(110), r: at(118), max: TQ_MAX, lim: [TQ_LIMIT, TQ_RED] };
   })()`);
-  t.eq(over.max, 125, '계기 눈금은 125% 까지다');
+  t.eq(over.max, 140, '계기 눈금은 140%(레버 맨 위)까지다');
   t.eq(JSON.stringify(over.lim), '[100,113]', '구간 경계는 100% · 113% 다');
   t.ok(over.g.band === 'green' && over.g.bars.includes('#22dd55') && !over.g.bars.includes('#00e5ff'),
     `0~100% 는 녹색 막대다 — 종전 청록색이 아니다 (80% → ${over.g.band})`);
@@ -732,6 +733,110 @@ export async function run(page, t) {
   t.ok(['rgba(0,200,80,0.16)', 'rgba(255,204,0,0.22)', 'rgba(255,60,60,0.25)']
          .every(c => over.g.bars.includes(c.replace(/,/g, ', ')) || over.g.bars.includes(c)),
     '바탕에 녹색·노랑·빨강 세 구간이 늘 칠해져 있다');
+
+  // ── 그날의 MTA · RPM LOW ──
+  // 레버 맨 위는 140% 지만 엔진이 내는 토크는 그날의 MTA(CDU PERF 의 MTA(30))까지다.
+  // PERF 의 고도·온도가 그날의 기준이고, 다른 고도에서는 표준 기온감률(2°C/1000ft)로
+  // 셈한다. 넘겨 당기면 토크는 MTA 에 멈추고 로터 회전(NR)이 처져 가라앉는다(RPM LOW).
+  const mta = await page.evaluate(`(() => {
+    (${SETUP.toString()})();
+    joyAxes.coll = { i: 3, inv: false, abs: true };
+    const lever = tq => _ax(3, Math.max(-1, Math.min(1, tq / SIM_LEVER_TOP * 2 - 1)));
+    const step = (sec, f) => { S.running = true; let ts = 1000; S.lastT = ts;
+      for (let i = 1; i <= sec * 20; i++) { ts += 50; joyPoll(ts); simStep(ts); if (f) f(i); } S.running = false; };
+    // PERF 화면의 MTA(30) 칸에 적힌 값
+    selectPanel('right', 'cdu', true);
+    const pageMta = () => {
+      switchMode('PERF');
+      const t = [...document.querySelectorAll('#cdu-wrap .perf-result-title')].find(e => e.textContent.trim() === 'MTA(30)');
+      return t ? parseFloat(t.nextElementSibling.textContent) : null;
+    };
+    const typeIn = (target, txt) => {
+      switchMode('PERF_INPUT', target);
+      [...txt].forEach(c => {
+        const k = [...document.querySelectorAll('#cdu-wrap [data-act="addInput"]')]
+          .find(b => JSON.parse(b.dataset.arg || '[]')[0] === c);
+        if (k) k.click();
+      });
+      document.querySelector('#cdu-wrap [data-act="confirmPerfInput"]').click();
+    };
+    const out = { page0: pageMta(), at0: perfMta(), at2k: mtaNow(2000), at8k: mtaNow(8000) };
+    typeIn('alt', '2000');                       // PERF 고도를 2,000ft 로
+    out.page2k = pageMta(); out.now2k = mtaNow(2000);
+    typeIn('temp', '35');                        // 더운 날
+    out.hot2k = mtaNow(2000);
+    typeIn('temp', '20'); typeIn('alt', '0');    // 되돌려 놓는다
+    switchMode('HOME');
+    // 70kt · 2,000ft 에서 레버를 MTA 언저리로 — 넘긴 만큼에 따라 오르내림이 달라진다
+    const run = extra => {
+      S.alt = 2000; S.spd = 70; simTrimHoldSpeed(); S.vs = 0; simVsAcc = 0; simNr = 100;
+      S.tq = mtaNow(); lever(mtaNow() + extra); step(8);
+      return { tq: S.tq, mta: mtaNow(), nr: simNr, vs: S.vs, low: simRpmLow(), cmd: simTqCmd };
+    };
+    out.under = run(-10); out.at = run(0); out.bit = run(3); out.more = run(8); out.top = run(99);
+    // 레버를 MTA 아래로 내리면 NR 이 돌아온다
+    lever(mtaNow() - 10); step(4);
+    out.back = { nr: simNr, low: simRpmLow() };
+    simTrimReset();
+    return out;
+  })()`);
+  t.ok(Math.abs(mta.at0 - mta.page0) < 0.06,
+    `PERF 고도에서는 PERF 화면의 MTA(30) 와 같다 (${mta.at0.toFixed(1)} · 화면 ${mta.page0}%)`);
+  t.ok(mta.at2k < mta.at0 - 3 && mta.at8k < mta.at2k - 10,
+    `올라갈수록 MTA 가 준다 (0ft ${mta.at0.toFixed(0)} · 2,000ft ${mta.at2k.toFixed(0)} · 8,000ft ${mta.at8k.toFixed(0)}%)`);
+  t.ok(Math.abs(mta.now2k - mta.page2k) < 0.06,
+    `PERF 고도를 2,000ft 로 넣으면 그 고도의 화면 값이 기준이 된다 (${mta.now2k.toFixed(1)} · 화면 ${mta.page2k}%)`);
+  t.ok(mta.hot2k < mta.now2k - 3, `더운 날은 MTA 가 준다 (20°C ${mta.now2k.toFixed(0)} → 35°C ${mta.hot2k.toFixed(0)}%)`);
+  t.ok(mta.under.vs > 800 && !mta.under.low && mta.under.nr > 99.9,
+    `MTA 아래에서는 NR 그대로 오른다 (MTA−10% → ${mta.under.vs.toFixed(0)}fpm)`);
+  t.ok(mta.top.cmd > 139 && Math.abs(mta.top.tq - mta.top.mta) < 1,
+    `레버를 끝까지 당겨도 토크는 MTA 에서 멈춘다 (레버 ${mta.top.cmd.toFixed(0)}% · 토크 ${mta.top.tq.toFixed(0)}% · MTA ${mta.top.mta.toFixed(0)}%)`);
+  t.ok(mta.bit.nr < 99.9 && mta.bit.vs < mta.at.vs,
+    `조금 넘기면 NR 이 처지며 덜 오른다 (+3% → NR ${mta.bit.nr.toFixed(1)}% · ${mta.bit.vs.toFixed(0)}fpm · MTA 에서 ${mta.at.vs.toFixed(0)}fpm)`);
+  t.ok(mta.more.low && mta.more.vs < -1000,
+    `더 넘기면 RPM LOW 로 가라앉는다 (+8% → NR ${mta.more.nr.toFixed(1)}% · ${mta.more.vs.toFixed(0)}fpm)`);
+  t.ok(mta.top.low && mta.top.vs <= mta.more.vs && mta.top.nr < mta.more.nr,
+    `더 당길수록 더 처지고 더 빨리 가라앉는다 (끝까지 → NR ${mta.top.nr.toFixed(1)}% · ${mta.top.vs.toFixed(0)}fpm)`);
+  t.ok(mta.back.nr > 98 && !mta.back.low, `레버를 MTA 아래로 내리면 NR 이 돌아온다 (${mta.back.nr.toFixed(1)}%)`);
+
+  // ── 계기의 기준선 — HOV · Vy · MTA ──
+  // Vy 선은 PERF 의 Vy 로 수평 비행할 때 필요한 토크, MTA 선은 그날의 MTA 다.
+  // 레버가 MTA 를 넘겨 있으면 그 자리에 흰 삼각형, RPM LOW 면 계기 가운데 경고가 뜬다.
+  const lines = await page.evaluate(`(() => {
+    (${SETUP.toString()})();
+    selectPanel('left', 'pfd', true);
+    const cv = document.getElementById('pfd');
+    const grab = () => {
+      const txt = [];
+      const proto = CanvasRenderingContext2D.prototype, oT = proto.fillText;
+      proto.fillText = function (tx, px, py, ...a) {
+        if (px < cv.width * 0.2) txt.push({ t: String(tx), col: this.fillStyle, y: py });
+        return oT.call(this, tx, px, py, ...a);
+      };
+      drawPFD();
+      proto.fillText = oT;
+      const i = txt.findIndex(v => v.t === 'TQ %');
+      return i < 0 ? [] : txt.slice(i);
+    };
+    S.spd = 0; S.alt = 2000; S.bnk = 0; S.tq = 70; simTqCmd = 70; simNr = 100;
+    const calm = grab();
+    simTqCmd = 135; S.tq = mtaNow(); simNr = 94;
+    const low = grab();
+    simNr = 100; simTqCmd = S.tq;
+    const lbl = (rows, k) => rows.find(r => r.t === k);
+    return { vy: tqAtVy(), vyKt: perfVy(), mta: mtaNow(), hov: tqRequired(),
+             calm: ['HOV', 'Vy', 'MTA'].map(k => { const r = lbl(calm, k); return r ? { col: r.col, y: r.y } : null; }),
+             rpm: !!lbl(low, 'RPM LOW'), nr: (lbl(low, 'NR 94%') || {}).t, calmRpm: !!lbl(calm, 'RPM LOW') };
+  })()`);
+  t.ok(lines.calm.every(Boolean), `계기에 HOV · Vy · MTA 이름표가 붙는다`);
+  t.eq(lines.calm[1] && lines.calm[1].col, '#ffffff', 'Vy 선은 흰색이다');
+  t.eq(lines.calm[2] && lines.calm[2].col, '#00e5ff', 'MTA 선은 PERF 화면의 MTA(30) 와 같은 청록색이다');
+  t.ok(lines.calm[2].y < lines.calm[0].y && lines.calm[0].y < lines.calm[1].y,
+    `위에서부터 MTA · HOV · Vy 차례다(제자리에서는 Vy 가 가장 덜 든다)`);
+  t.ok(Math.abs(lines.vy - (lines.hov - 9)) < 0.5 && lines.vyKt > 60,
+    `Vy 선은 Vy(${lines.vyKt.toFixed(0)}kt)로 수평 비행할 때 필요한 토크다 (${lines.vy.toFixed(0)}% · 제자리 ${lines.hov.toFixed(0)}%)`);
+  t.ok(!lines.calmRpm && lines.rpm && lines.nr === 'NR 94%',
+    'NR 이 처지면 계기 가운데 RPM LOW 와 NR 값이 뜬다');
 
   // SIM 모드가 아니어도 계기는 지금 비행 상태에 맞는 값을 보여 준다
   const idle = await page.evaluate(`(() => {
@@ -1301,7 +1406,8 @@ export async function run(page, t) {
     `타력 비행 중에 SIM 에 들어와도 그 속도를 넘겨 받는다 (옆 ${coast.lat} · 앞 ${coast.spd}kt)`);
 
   // ── 스로틀처럼 세워 두는 레버(레버식) ──
-  // 자리 자체가 출력이다. 맨 아래면 토크가 바닥, 맨 위면 110%.
+  // 자리 자체가 출력이다. 맨 아래면 토크가 바닥, 가운데 70%, 맨 위면 140% — 하지만
+  // 토크는 그날의 MTA 에서 멈추고 넘겨 당긴 만큼 RPM LOW 다.
   const lever = await page.evaluate(`(() => {
     (${SETUP.toString()})();
     const fly = ${FLY};
@@ -1311,16 +1417,18 @@ export async function run(page, t) {
     _ax(3, 0); fly(4);                          // 가운데
     const mid = S.tq;
     _ax(3, 1); fly(4);                          // 맨 위
-    const up = { tq: S.tq, over: tqOver(), band: tqBand() };
+    const up = { tq: S.tq, over: tqOver(), band: tqBand(), cmd: simTqCmd, mta: mtaNow(), low: simRpmLow() };
     return { down, mid, up, lbl: joyAxLabel('coll') };
   })()`);
   t.eq(trim.rolled.axis, 0, '레버식은 중립을 빼지 않는다 — 자리 그대로 읽는다');
   t.ok(lever.down.tq < 10, `맨 아래면 토크가 바닥이다 (${lever.down.tq.toFixed(0)}%)`);
   t.ok(lever.down.vs < -500, `그러면 내려간다 (${lever.down.vs.toFixed(0)}fpm)`);
-  t.ok(Math.abs(lever.mid - 55) < 8, `가운데면 호버 언저리다 (${lever.mid.toFixed(0)}%)`);
-  t.ok(lever.up.tq > 100, `맨 위면 연속한계를 넘는다 (${lever.up.tq.toFixed(0)}%)`);
-  t.ok(lever.up.band === 'yellow' && !lever.up.over,
-    `노란 구간(100~113%)에 든다 — 빨간 구간(오버토크)까지는 아니다 (${lever.up.band})`);
+  t.ok(Math.abs(lever.mid - 70) < 8, `가운데면 70% 언저리다(호버 근처) (${lever.mid.toFixed(0)}%)`);
+  t.ok(Math.abs(lever.up.cmd - 140) < 0.5, `맨 위는 140% 다 (레버 ${lever.up.cmd.toFixed(0)}%)`);
+  t.ok(Math.abs(lever.up.tq - lever.up.mta) < 1 && lever.up.low,
+    `토크는 그날의 MTA 에서 멈추고 RPM LOW 다 (${lever.up.tq.toFixed(0)}% · MTA ${lever.up.mta.toFixed(0)}%)`);
+  t.ok(lever.up.band === 'red' && lever.up.over,
+    `MTA(${lever.up.mta.toFixed(0)}%)가 113% 를 넘는 날은 빨간 구간(오버토크)까지 쓴다 (${lever.up.band})`);
   t.ok(lever.lbl.includes('레버식'), `설정에도 그렇게 적힌다 (${lever.lbl})`);
 
   // 가운데로 돌아오는 축이면 종전대로 호버 토크 기준이다
@@ -1344,7 +1452,7 @@ export async function run(page, t) {
     S.alt = 4000; _simGndFt = 0; S.bnk = 0;
     // ① 속도 — 수평(120kt)에서 기수를 10° 숙인다(목표 140kt)
     S.spd = 120; S.pit = 0; simAcc = 0;
-    _ax(3, (tqRequired() / 110) * 2 - 1); fly(3);  // 레버를 고도 유지 언저리에 둔다
+    _ax(3, (tqRequired() / SIM_LEVER_TOP) * 2 - 1); fly(3);  // 레버를 고도 유지 언저리에 둔다
     S.spd = 120; simAcc = 0; S.vs = 0; simVsAcc = 0;
     simTrim.pitch = 10;                            // 트림으로 기수 10° 내림(조종간은 가운데)
     const spd = []; let maxAcc = 0, prev = S.spd;
@@ -1359,14 +1467,14 @@ export async function run(page, t) {
     // ② 상승률 — 70kt 자세(기수 5°)로 자리잡은 뒤 레버를 한 번에 20% 올린다
     simTrim.pitch = -pitchFromSpd(70);
     S.spd = 70; S.alt = 4000;
-    _ax(3, (tqRequired() / 110) * 2 - 1); fly(12);
-    _ax(3, (tqRequired() / 110) * 2 - 1); fly(8);
+    _ax(3, (tqRequired() / SIM_LEVER_TOP) * 2 - 1); fly(12);
+    _ax(3, (tqRequired() / SIM_LEVER_TOP) * 2 - 1); fly(8);
     // 출력(토크)이 만든 몫만 따로 본다 — 오르는 동안 속도가 줄며 돌려주는
     // 운동에너지 몫은 유입류 지연과 상관없이 가감속과 함께 붙는다.
     const pow = () => S.vs - simKeVs(false);
     const base = pow(), baseAll = S.vs;
     const lever = S.tq + 20;
-    _ax(3, Math.min(1, (lever / 110) * 2 - 1));
+    _ax(3, Math.min(1, (lever / SIM_LEVER_TOP) * 2 - 1));
     S.running = true; ts = 1000; S.lastT = ts;
     const vs = [], tq = [], all = []; let peak = 0;
     for (let i = 1; i <= 10 * 20; i++) {
@@ -1414,7 +1522,7 @@ export async function run(page, t) {
   const flare = await page.evaluate(`(() => {
     (${SETUP.toString()})();
     joyAxes = { coll: { i: 3, inv: false, abs: true } };
-    const lever = tq => _ax(3, Math.max(-1, Math.min(1, tq / 110 * 2 - 1)));
+    const lever = tq => _ax(3, Math.max(-1, Math.min(1, tq / SIM_LEVER_TOP * 2 - 1)));
     const run = (dTq) => {
       S.alt = 3000; _simGndFt = 0; S.bnk = 0; S.spd = 120; S.pit = 0;
       S.tq = tqRequired(); simAcc = 0; S.vs = 0; simVsAcc = 0; simTrimReset();
@@ -1453,7 +1561,7 @@ export async function run(page, t) {
   const accel = await page.evaluate(`(() => {
     (${SETUP.toString()})();
     joyAxes = { coll: { i: 3, inv: false, abs: true } };
-    const lever = tq => _ax(3, Math.max(-1, Math.min(1, tq / 110 * 2 - 1)));
+    const lever = tq => _ax(3, Math.max(-1, Math.min(1, tq / SIM_LEVER_TOP * 2 - 1)));
     S.alt = 3000; _simGndFt = 0; S.bnk = 0; S.spd = 0; S.pit = pitchFromSpd(0);
     S.tq = tqRequired(); simAcc = 0; S.vs = 0; simVsAcc = 0; simTrimReset();
     simTrim.pitch = 5;                       // 기수 5° 숙이기
@@ -1480,7 +1588,7 @@ export async function run(page, t) {
     const fly = ${FLY};
     joyAxes = { roll: { i: 0, inv: false }, pitch: { i: 1, inv: false },
                 yaw: { i: 2, inv: false }, coll: { i: 3, inv: false, abs: true } };
-    const lever = tq => _ax(3, Math.max(-1, Math.min(1, tq / 110 * 2 - 1)));
+    const lever = tq => _ax(3, Math.max(-1, Math.min(1, tq / SIM_LEVER_TOP * 2 - 1)));
     const out = {};
     S.alt = 3000; _simGndFt = 0; S.hdg = 90; S.bnk = 0; S.spd = 100; S.pit = pitchFromSpd(100);
     simAcc = 0; S.vs = 0; simVsAcc = 0; simTrimHoldSpeed();
@@ -1511,7 +1619,7 @@ export async function run(page, t) {
     // ALT 를 풀면 레버가 다시 고도를 정한다(레버가 바닥이므로 내려간다)
     toggleAltHold(); fly(4); out.offVs = S.vs; out.offAlt = S.alt;
     // CRHT — 지금 고도를 지킨다. 레버를 끝까지 올려도
-    _ax(3, 1); toggleCrht(); const c0 = selCrht;
+    lever(tqRequired() + 30); toggleCrht(); const c0 = selCrht;
     fly(12); out.crht = S.alt - c0; out.tqCrht = S.tq;
     toggleCrht(); fly(3); out.crhtOffVs = S.vs;
     _ax(3, 0); simTrimReset();
@@ -1534,7 +1642,7 @@ export async function run(page, t) {
   t.ok(upper.offVs < -300 && upper.offAlt < 3300,
     `ALT 를 풀면 레버가 다시 고도를 정한다 (바닥 레버 → ${upper.offVs.toFixed(0)}fpm)`);
   t.ok(Math.abs(upper.crht) < 2 && upper.tqCrht < 100,
-    `CRHT 는 레버를 끝까지 올려도 고도를 지킨다 (${upper.crht.toFixed(1)}ft · 토크 ${upper.tqCrht.toFixed(0)}%)`);
+    `CRHT 는 레버를 크게 올려도 고도를 지킨다 (${upper.crht.toFixed(1)}ft · 토크 ${upper.tqCrht.toFixed(0)}%)`);
   t.ok(upper.crhtOffVs > 300, `CRHT 를 풀면 올려 둔 레버만큼 오른다 (${upper.crhtOffVs.toFixed(0)}fpm)`);
 
   // ── GSPD 의 4방향 트림 — 기준속도가 1초마다 1kt 씩 옮겨 가도 계단 없이 따라간다 ──
