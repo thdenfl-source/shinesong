@@ -305,6 +305,8 @@ function _init3dMap() {
 
     _update3dMarker();
     _update3dTrail();
+    // 함정(09-cdu.js) — 실제 크기 모형과 항적
+    try { if (typeof _ship3dEnsure === 'function') _ship3dEnsure(); } catch (e) { _swallow(e); }
     if (_fdrTrack.length) _fdrDraw3dTrackRoute();
     // 레이더가 이미 켜져 있으면 3D에도 적용
     if (rainActive && _rainFrames.length) {

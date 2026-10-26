@@ -2203,6 +2203,7 @@ appRegister({
   toggleRain,
   toggleRuler,
   toggleShip,
+  toggleShip3d,
   toggleSim,
   setSimSpeed,
   toggleHoldEntry,
