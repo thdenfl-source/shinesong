@@ -343,7 +343,7 @@ async function _demMake(z, x, y) {
 //     낮게 빨리 날 때도 먼 곳·발밑이 비지 않는다
 //   · 그래도 너무 많아지면(TILE_MAX) 오래 안 쓴 것부터 지운다
 const TILE_KEEP_NM = 20;
-const TILE_MAX = { sat: 900, dem: 400 };
+const TILE_MAX = { sat: 600, dem: 300 };   // 휴대 기기에서도 수십 MB 를 넘지 않게
 const _tileStore = { sat: new Map(), dem: new Map() };     // 'z/x/y' → Promise<Blob>
 function _tileGet(kind, z, x, y, make) {
   const m = _tileStore[kind], key = `${z}/${x}/${y}`;
