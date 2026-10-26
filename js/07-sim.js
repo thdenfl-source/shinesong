@@ -314,7 +314,8 @@ function simStep(ts){
         if(Math.abs(bt-S.bnk)<0.3) S.bnk=bt;
       }
       // GSPD 중 피치도 수평(0°)으로 수렴 — 지상속도 제어라 자세 지시 없음
-      if (gspdOn && Math.abs(S.pit) > 0.05) {
+      // (SIM 모드에서는 GSPD 가 가감속에 맞춰 자세를 잡는다 — simGspdAfter)
+      if (gspdOn && !simModeOn && Math.abs(S.pit) > 0.05) {
         S.pit -= Math.sign(S.pit) * Math.min(Math.abs(S.pit), 15 * dt);
       }
 
@@ -325,20 +326,30 @@ function simStep(ts){
           // engaged; in coasting state we keep integrating at constant
           // body velocity until the next engagement.
           if (gspdOn) {
+            // SIM 모드: 조종간을 중립 밖으로 밀고 있는 축은 조종사가 몬다(fly-through) —
+            // 그동안은 기준속도로 끌어가지 않는다. 놓으면 다시 기준으로 수렴하고,
+            // FORCE TRIM 을 누르면 그 순간의 속도가 새 기준이 된다.
+            const fly = (typeof simGspdStick === 'function') ? simGspdStick() : null;
+            const f0 = gspdActFwd, l0 = gspdActLat;
             // Rate is scaled by current actual speed magnitude so that
             // the last few kt slew at ~1 kt/sec for a smooth arrival.
-            if (gspdRefLat !== null) {
+            if (fly && fly.lat) {
+              gspdActLat = simGspdFly(gspdActLat, fly.lat, dt, -SIDE_MAX_KT, SIDE_MAX_KT);
+            } else if (gspdRefLat !== null) {
               const dLat = gspdRefLat - gspdActLat;
               const rLat = gspdSlewRate(gspdActLat);
               gspdActLat += Math.sign(dLat) * Math.min(Math.abs(dLat), rLat * dt);
               if (Math.abs(gspdRefLat - gspdActLat) < 0.05) gspdActLat = gspdRefLat;
             }
-            if (gspdRefFwd !== null) {
+            if (fly && fly.fwd) {
+              gspdActFwd = simGspdFly(gspdActFwd, fly.fwd, dt, SIM_SPD_BACK, SIM_SPD_MAX);
+            } else if (gspdRefFwd !== null) {
               const dFwd = gspdRefFwd - gspdActFwd;
               const rFwd = gspdSlewRate(gspdActFwd);
               gspdActFwd += Math.sign(dFwd) * Math.min(Math.abs(dFwd), rFwd * dt);
               if (Math.abs(gspdRefFwd - gspdActFwd) < 0.05) gspdActFwd = gspdRefFwd;
             }
+            if (fly) simGspdAfter(dt, f0, l0);   // 자세·가감속(SIM 모드)
           }
           // Body frame → ground frame (ignores wind; this is direct
           // ground-speed control)

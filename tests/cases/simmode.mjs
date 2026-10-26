@@ -969,8 +969,8 @@ export async function run(page, t) {
   t.ok(gndCam.onGround > rendGnd + 5 && gndCam.onGround < rendGnd + 12,
     `땅에 앉아 있어도 눈높이(8m)만큼 떠 있다 (${(gndCam.onGround - rendGnd).toFixed(1)}m)`);
 
-  // ── 4방향 햇 = 사이클릭 비퍼 트림(1° 씩) ──
-  // 실제 헬기의 사이클릭 햇은 트림이다. 한 번 누르면 뱅크·피치가 1° 씩 옮겨 가고,
+  // ── 4방향 햇 = 사이클릭 비퍼 트림(뱅크 1° · 피치 0.5° 씩) ──
+  // 실제 헬기의 사이클릭 햇은 트림이다. 한 번 누르면 뱅크 1° · 피치 0.5° 씩 옮겨 가고,
   // 누르고 있으면 계속 옮겨 간다. 조종간을 가운데 두어도 그 자세로 난다.
   const trim = await page.evaluate(`(async () => {
     (${SETUP.toString()})();
@@ -992,7 +992,7 @@ export async function run(page, t) {
     const back = S.bnk;
     simTrimReset(); fly(4);
     const level = S.bnk;
-    for (let i = 0; i < 10; i++) simTrimNudge('F');     // 전후는 피치 — 10번이면 10°
+    for (let i = 0; i < 20; i++) simTrimNudge('F');     // 전후는 피치 — 한 번에 0.5°, 20번이면 10°
     fly(4);
     const nose = { pit: S.pit, trim: simTrim.pitch };
     simTrimReset();
@@ -1022,20 +1022,20 @@ export async function run(page, t) {
              holdMs: SIM_TRIM_HOLD_MS, repMs: SIM_TRIM_REP_MS };
   })()`);
   t.ok(trim.one.roll === 1 && trim.one.pitch === 0, `한 번 누르면 뱅크가 1° 옮겨 간다 (${trim.one.roll}°)`);
-  t.ok(trim.oneP.pitch === 1 && trim.oneP.roll === 0, `피치도 한 번에 1° 다 (${trim.oneP.pitch}°)`);
+  t.ok(trim.oneP.pitch === 0.5 && trim.oneP.roll === 0, `피치는 한 번에 0.5° 다 (${trim.oneP.pitch}°)`);
   t.eq(trim.rolled.axis, 0, '조종간은 가운데 그대로다');
   t.ok(Math.abs(trim.rolled.bnk - 10) < 0.6, `우 트림 10번이면 10° 기운 채 난다 (${trim.rolled.bnk.toFixed(1)}°)`);
   t.ok(Math.abs(trim.back + 10) < 0.6, `반대로 20번 넘기면 왼쪽 10° (${trim.back.toFixed(1)}°)`);
   t.ok(Math.abs(trim.level) < 0.6, `트림을 풀면 수평으로 돌아온다 (${trim.level.toFixed(1)}°)`);
-  t.ok(Math.abs(trim.nose.pit + 10) < 0.6, `앞 트림 10번이면 기수가 10° 내려간다 (${trim.nose.pit.toFixed(1)}°)`);
+  t.ok(Math.abs(trim.nose.pit + 10) < 0.6, `앞 트림 20번이면 기수가 10° 내려간다 (${trim.nose.pit.toFixed(1)}°)`);
   t.ok(trim.holdMs === 500 && trim.repMs === 100,
     `0.5초 넘게 누르면 홀드다 — 그 전에 떼면 딸깍 한 번(1°) (${trim.holdMs}ms · ${trim.repMs}ms 마다)`);
-  t.eq(trim.held, -8, `피치 햇을 누르고 있으면 계속 옮겨 간다 (${trim.held}° — 첫 1° + 0.1초마다 1° × 7)`);
-  t.eq(trim.heldR.roll, 8, `뱅크도 똑같이 이어 간다 (${trim.heldR.roll}°)`);
+  t.eq(trim.held, -4, `피치 햇을 누르고 있으면 계속 옮겨 간다 (${trim.held}° — 첫 0.5° + 0.1초마다 0.5° × 7)`);
+  t.eq(trim.heldR.roll, 8, `뱅크도 똑같이 이어 간다 (${trim.heldR.roll}° — 1° 씩)`);
   t.ok(trim.maxR === 30 && trim.maxP === -20,
     `한없이 쌓이지는 않는다 (뱅크 ±${trim.maxR}° · 피치 ${trim.maxP}°)`);
 
-  // ── 조이스틱 트림 — 딸깍 한 번에 1°, 누르고 있으면 이어 간다 ──
+  // ── 조이스틱 트림 — 딸깍 한 번에 한 칸, 누르고 있으면 이어 간다 ──
   // 4방향 트림(버튼)과 축 9 햇 모두 같다. 햇 한 번이 조이스틱과 방향키 두 길로
   // 함께 들어와도 1° 만 가고, 뒤에 들어온 쪽이 홀드를 끊지 않는다.
   const joyTrim = await page.evaluate(`(() => {
@@ -1087,7 +1087,7 @@ export async function run(page, t) {
     const btnStop = { timer: trimHoldTimer, int: trimHoldInt };
     simTrimReset();
 
-    // ③ 축 9 햇 — 딸깍은 1°, 누르고 있으면 이어 간다
+    // ③ 축 9 햇 — 딸깍은 한 칸(피치 0.5°), 누르고 있으면 이어 간다
     joySetBind('h9N', 'trimF'); joySetBind('h9S', 'trimA');
     joySetBind('h9W', 'trimL'); joySetBind('h9E', 'trimR');
     hat(1/7); polls(12); hat(REST);                                   // ▼ 딸깍
@@ -1104,7 +1104,7 @@ export async function run(page, t) {
     hat(REST);
     simTrimReset();
 
-    // ④ 햇 ▲ 가 방향키(↑)로도 함께 들어온다 — 어느 쪽이 먼저든 1° 이고 홀드가 산다
+    // ④ 햇 ▲ 가 방향키(↑)로도 함께 들어온다 — 어느 쪽이 먼저든 한 칸이고 홀드가 산다
     start = rep = null;
     catching(() => { key('keydown', 'ArrowUp'); hat(-1); });
     const dupKeyFirst = { pitch: simTrim.pitch, armed: trimHoldTimer !== null };
@@ -1132,20 +1132,101 @@ export async function run(page, t) {
   t.ok(joyTrim.btnArmed && joyTrim.btnClick.timer === null && joyTrim.btnClick.int === null,
     '누르는 동안 홀드가 걸려 있다가 떼면 풀린다');
   t.eq(joyTrim.btnThree, 3, `세 번 딸깍이면 3° 다 (${joyTrim.btnThree}°)`);
-  t.eq(joyTrim.btnPitch, 1, `▲ 도 한 번에 1° 다 — 피치가 2° 씩 가지 않는다 (${joyTrim.btnPitch}°)`);
+  t.eq(joyTrim.btnPitch, 0.5, `▲ 는 한 번에 피치 0.5° 다 (${joyTrim.btnPitch}°)`);
   t.eq(joyTrim.btnHeld, 8, `4방향 트림을 누르고 있으면 이어 간다 (${joyTrim.btnHeld}° — 첫 1° + 7번)`);
   t.ok(joyTrim.btnStop.timer === null && joyTrim.btnStop.int === null, '떼면 반복이 멈춘다');
-  t.eq(joyTrim.hatClick, -1, `축 9 햇 ▼ 딸깍 한 번이면 1° 다 (${joyTrim.hatClick}°)`);
-  t.eq(joyTrim.hatThree, -3, `햇 세 번 딸깍이면 3° 다 (${joyTrim.hatThree}°)`);
+  t.eq(joyTrim.hatClick, -0.5, `축 9 햇 ▼ 딸깍 한 번이면 피치 0.5° 다 (${joyTrim.hatClick}°)`);
+  t.eq(joyTrim.hatThree, -1.5, `햇 세 번 딸깍이면 1.5° 다 (${joyTrim.hatThree}°)`);
   t.eq(joyTrim.hatRoll, -1, `햇 ◀ 도 한 번에 1° 다 (${joyTrim.hatRoll}°)`);
-  t.eq(joyTrim.hatHeld, 8, `햇 ▲ 를 누르고 있으면 이어 간다 (${joyTrim.hatHeld}°)`);
-  t.eq(joyTrim.dupKeyFirst.pitch, 1,
-    `햇과 방향키가 함께 들어와도 1° 다 (${joyTrim.dupKeyFirst.pitch}° — 종전에는 2°)`);
-  t.ok(joyTrim.dupKeyFirst.armed && joyTrim.dupHeld === 4,
+  t.eq(joyTrim.hatHeld, 4, `햇 ▲ 를 누르고 있으면 이어 간다 (${joyTrim.hatHeld}° — 0.5° × 8)`);
+  t.eq(joyTrim.dupKeyFirst.pitch, 0.5,
+    `햇과 방향키가 함께 들어와도 한 칸(0.5°)이다 (${joyTrim.dupKeyFirst.pitch}°)`);
+  t.ok(joyTrim.dupKeyFirst.armed && joyTrim.dupHeld === 2,
     `그때도 누르고 있으면 이어 간다 — 뒤에 들어온 쪽이 홀드를 끊지 않는다 (${joyTrim.dupHeld}°)`);
-  t.eq(joyTrim.dupPadFirst, 1, `햇이 먼저 들어와도 1° 다 (${joyTrim.dupPadFirst}°)`);
+  t.eq(joyTrim.dupPadFirst, 0.5, `햇이 먼저 들어와도 한 칸이다 (${joyTrim.dupPadFirst}°)`);
   t.ok(joyTrim.boundKey.alt === 100 && joyTrim.boundKey.pitch === 0,
     `조종 장치에 배정한 키는 키보드 단축키가 또 받지 않는다 (ALT +${joyTrim.boundKey.alt} · 트림 ${joyTrim.boundKey.pitch}°)`);
+
+  // ── SIM 모드에서 GSPD — 트림은 기준속도, 조종간은 fly-through ──
+  // GSPD 가 걸리면 4방향 트림은 자세가 아니라 GSPD 기준속도를 옮긴다. 조종간을
+  // 밀고 있는 동안은 그쪽으로 지상속도가 붙고(기준은 그대로), 놓으면 기준으로
+  // 돌아온다. FORCE TRIM 을 누르면 그 순간의 속도가 새 기준이 된다.
+  const gs = await page.evaluate(`(() => {
+    (${SETUP.toString()})();
+    const fly = ${FLY};
+    _pad.buttons = Array.from({ length: 16 }, () => ({ pressed: false, value: 0 }));
+    _pad.axes = [0, 0, 0, 0, 0, 0, 0, 0, 0, 3.2857142857142856];
+    for (const k in _joyNeutral) delete _joyNeutral[k];
+    const savedBinds = Object.assign({}, joyBinds);
+    joyBinds = {};
+    joySetBind('h9N', 'trimF'); joySetBind('h9S', 'trimA');
+    joySetBind('h9W', 'trimL'); joySetBind('h9E', 'trimR');
+    joySetBind('b1', 'ftr');
+    joyAxes = { roll: { i: 0, inv: false }, pitch: { i: 1, inv: false } };
+    const REST = 3.2857142857142856;
+    let now = 5000; joyPoll(now);
+    S.alt = 2000; _simGndFt = 0; S.spd = 0; S.bnk = 0; S.pit = pitchFromSpd(0);
+    simLat = 0; simAcc = 0; S.vs = 0; _simVs1 = 0;
+    simTrimReset();
+    if (gspdOn) toggleGspd();
+    toggleGspd();                                  // 제자리에서 GSPD ENGAGE
+    fly(2);
+    const eng = { on: gspdOn, refF: gspdRefFwd, refL: gspdRefLat, fwd: gspdActFwd };
+    // ① 4방향 트림 — GSPD 기준속도가 1kt 씩 옮겨 가고 자세 트림은 그대로다
+    const hat = v => { _pad.axes[9] = v; joyPoll(now += 16); };
+    hat(-1); hat(REST);                            // ▲
+    hat(-3/7); hat(REST);                          // ▶
+    const beep = { refF: gspdRefFwd, refL: gspdRefLat, trimP: simTrim.pitch, trimR: simTrim.roll };
+    gspdRefFwd = 0; gspdRefLat = 0; fly(4);
+    // ② 조종간을 앞으로 반쯤 밀고 있으면 앞으로 지상속도가 붙는다(기준은 그대로)
+    _ax(1, 0.54); fly(3);
+    const push = { fwd: gspdActFwd, refF: gspdRefFwd, pit: S.pit, base: pitchFromSpd(gspdActFwd) };
+    // ③ 놓으면 기준(0kt)으로 돌아온다
+    _ax(1, 0); fly(10);
+    const back = gspdActFwd;
+    // ④ 밀어서 붙인 뒤 FORCE TRIM — 그 속도가 새 기준이 되어 놓아도 지킨다
+    _ax(1, 0.54); fly(3);
+    _pad.buttons[1] = { pressed: true, value: 1 }; joyPoll(now += 16);
+    _pad.buttons[1] = { pressed: false, value: 0 }; joyPoll(now += 16);
+    const synced = { ref: gspdRefFwd, fwd: gspdActFwd };
+    _ax(1, 0); fly(6);
+    const held = { fwd: gspdActFwd, ref: gspdRefFwd };
+    // ⑤ 옆으로 밀면 옆으로 가고 그쪽으로 기운다 — 놓으면 기준(0)으로
+    _ax(0, 0.54); fly(2);
+    const side = { lat: gspdActLat, bnk: S.bnk, refL: gspdRefLat };
+    _ax(0, 0); fly(12);
+    const sideBack = gspdActLat;
+    // ⑥ GSPD 를 풀면 지금 속도를 SIM 조종으로 이어 받는다(트림이 그 속도에 맞춰진다)
+    const spd0 = gspdActFwd;
+    toggleGspd();
+    const off = { on: gspdOn, coast: gspdCoasting, spd: S.spd, trim: simTrim.pitch };
+    fly(6);
+    const after = { spd: S.spd };
+    simTrimReset();
+    joyBinds = savedBinds; joySave();
+    return { eng, beep, push, back, synced, held, side, sideBack, spd0, off, after };
+  })()`);
+  t.ok(gs.eng.on && gs.eng.refF === 0 && gs.eng.refL === 0 && Math.abs(gs.eng.fwd) < 0.5,
+    `SIM 모드에서도 GSPD 가 걸린다 (기준 ${gs.eng.refF}/${gs.eng.refL}kt)`);
+  t.ok(gs.beep.refF === 1 && gs.beep.refL === 1,
+    `GSPD 중 4방향 트림은 기준속도를 1kt 씩 옮긴다 (전후 ${gs.beep.refF} · 좌우 ${gs.beep.refL}kt)`);
+  t.ok(gs.beep.trimP === 0 && gs.beep.trimR === 0, 'GSPD 중에는 자세 트림이 바뀌지 않는다');
+  t.ok(gs.push.fwd > 3 && gs.push.refF === 0,
+    `조종간을 밀고 있으면 지상속도가 붙는다 — 기준은 그대로 (${gs.push.fwd.toFixed(1)}kt · 기준 ${gs.push.refF})`);
+  t.ok(gs.push.pit < gs.push.base - 2,
+    `가속하는 동안 기수가 숙는다 (${gs.push.pit.toFixed(1)}° · 그 속도의 자세 ${gs.push.base.toFixed(1)}°)`);
+  t.ok(Math.abs(gs.back) < 0.5, `놓으면 기준속도로 돌아온다 (${gs.back.toFixed(1)}kt)`);
+  t.ok(gs.synced.ref > 3 && gs.synced.ref === Math.round(gs.synced.fwd),
+    `FORCE TRIM 을 누르면 그 순간의 속도가 기준이 된다 (${gs.synced.fwd.toFixed(1)}kt → 기준 ${gs.synced.ref})`);
+  t.ok(Math.abs(gs.held.fwd - gs.held.ref) < 0.6 && gs.held.ref === gs.synced.ref,
+    `놓아도 그 속도를 지킨다 (${gs.held.fwd.toFixed(1)}kt · 기준 ${gs.held.ref})`);
+  t.ok(gs.side.lat > 1.5 && gs.side.bnk > 2 && gs.side.refL === 0,
+    `옆으로 밀면 옆으로 가고 그쪽으로 기운다 (${gs.side.lat.toFixed(1)}kt · 뱅크 ${gs.side.bnk.toFixed(1)}°)`);
+  t.ok(Math.abs(gs.sideBack) < 0.5, `놓으면 옆걸음도 기준(0)으로 돌아온다 (${gs.sideBack.toFixed(1)}kt)`);
+  t.ok(!gs.off.on && !gs.off.coast && Math.abs(gs.off.spd - gs.spd0) < 0.01,
+    `GSPD 를 풀면 그 속도를 SIM 조종으로 이어 받는다 (${gs.off.spd.toFixed(1)}kt · 타력 비행 없음)`);
+  t.ok(Math.abs(gs.after.spd - gs.spd0) < 1.5,
+    `조종간을 가운데 두면 그 속도로 계속 난다 (${gs.spd0.toFixed(1)} → ${gs.after.spd.toFixed(1)}kt · 트림 ${gs.off.trim.toFixed(1)}°)`);
 
   // ── 스로틀처럼 세워 두는 레버(레버식) ──
   // 자리 자체가 출력이다. 맨 아래면 토크가 바닥, 맨 위면 110%.

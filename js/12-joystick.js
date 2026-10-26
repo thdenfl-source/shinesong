@@ -18,8 +18,8 @@ const JOY_ON = 0.6, JOY_OFF = 0.35;   // 히스테리시스(떨림 방지)
 const JOY_REPEAT_DELAY = 350, JOY_REPEAT_INT = 80;   // 화면 버튼 홀드와 같은 값
 
 // kind — press: 누를 때 한 번 · hold: 누르는 동안 · repeat: 누른 뒤 연속
-// 트림(4방향 트림·햇)은 SIM 모드에서 딸깍 한 번에 1°, 누르고 있으면 이어서
-// 옮긴다(01-state.js startTrimHold).
+// 트림(4방향 트림·햇)은 SIM 모드에서 딸깍 한 번에 뱅크 1° · 피치 0.5°, 누르고
+// 있으면 이어서 옮긴다. GSPD 가 걸려 있으면 기준속도를 옮긴다(01-state.js startTrimHold).
 const JOY_ACTIONS = [
   { id: 'sim',    grp: '운항',   label: 'FLY / PAUSE',   kind: 'press',
     run: () => toggleSim() },
