@@ -473,11 +473,20 @@ function gspdTrimNudge(dir) {
 let trimHoldTimer = null, trimHoldInt = null;
 let _trimNonGspdDir = null;
 let _trimGuard = null;
-// opt.click — 조이스틱(4방향 트림·햇)처럼 '딸깍' 으로 세는 입력이다.
-// SIM 모드에서는 한 번 누르면 1° 로 끝내고 누르고 있어도 이어 가지 않는다
-// (반복을 걸면 조금 길게 누른 딸깍 한 번이 2°·3° 로 넘어가 버린다).
-function startTrimHold(dir, opt) {
+// 지금 누르고 있는 트림 방향. 같은 방향이 이미 걸려 있으면 다시 걸지 않는다 —
+// 햇 한 번이 두 길로 들어오는 일이 있다(장치 프로그램이 햇을 방향키로도
+// 내보내는 경우 등). 그러면 1° 가 두 번 들어가 2° 가 되고, 뒤에 들어온 쪽이
+// 앞쪽의 반복 타이머를 끊어 누르고 있어도 이어지지 않았다.
+let _trimDir = null;
+// SIM 모드 자세 트림의 리듬 — 딸깍 한 번이 1°, 0.5초 넘게 누르고 있으면 그때부터
+// 0.1초마다 1° 씩 이어 간다. 홀드 문턱을 넉넉히 두어 조금 길게 누른 딸깍이
+// 2° 로 넘어가지 않게 한다.
+const SIM_TRIM_HOLD_MS = 500;
+const SIM_TRIM_REP_MS  = 100;
+function startTrimHold(dir) {
+  if (_trimDir === dir) return;         // 같은 누름이 겹쳐 들어왔다 — 한 번으로 친다
   stopTrimHold();                       // 중복 시작 방지(이전 홀드가 남아 있으면 정리)
+  _trimDir = dir;
   _trimGuard = setTimeout(stopTrimHold, 20000);   // 런어웨이 방지(최대 20초)
   // SIM 모드에서 '둘러보기' 버튼을 누르고 있으면 햇은 트림이 아니라 시선이다
   if (simModeOn && typeof simLookHeld !== 'undefined' && simLookHeld) {
@@ -488,10 +497,9 @@ function startTrimHold(dir, opt) {
   // 1° 씩 옮겨 둔다(조종간을 가운데 두어도 그 자세로 날게 된다).
   if (simModeOn) {
     simTrimNudge(dir);
-    if (opt && opt.click) return;
     trimHoldTimer = setTimeout(() => {
-      trimHoldInt = setInterval(() => simTrimNudge(dir), 100);
-    }, 300);
+      trimHoldInt = setInterval(() => simTrimNudge(dir), SIM_TRIM_REP_MS);
+    }, SIM_TRIM_HOLD_MS - SIM_TRIM_REP_MS);
     return;
   }
   if (gspdOn) {
@@ -519,6 +527,7 @@ function stopTrimHold() {
   if (trimHoldInt)   { clearInterval(trimHoldInt);  trimHoldInt   = null; }
   if (_trimGuard)    { clearTimeout(_trimGuard);    _trimGuard    = null; }
   _trimNonGspdDir = null;
+  _trimDir = null;
 }
 
 function forceTrim() {

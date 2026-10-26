@@ -269,6 +269,55 @@ export async function run(page, t) {
   t.ok(energy.climb.vs > 120 && energy.climb.spd < energy.sink.spd - 10,
     `반대로 올리면 고도를 얻고 속도를 내준다 (${energy.climb.vs.toFixed(0)}fpm · ${energy.climb.spd.toFixed(0)}kt)`);
 
+  // ── 감속하면 고도를 얻는다(운동에너지 → 위치에너지) ──
+  // 컬렉티브는 그대로 둔 채 기수를 들어 감속하면, 줄어든 운동에너지만큼 떠오른다.
+  // 다시 기수를 내려 가속하면 그만큼 고도로 치른다 — 되풀이해도 고도가 쌓이지 않는다.
+  const ke = await page.evaluate(`(() => {
+    (${SETUP.toString()})();
+    const fly = ${FLY};
+    joyAxes = { pitch: { i: 1, inv: false }, coll: { i: 3, inv: false, abs: true } };
+    S.alt = 4000; _simGndFt = 0; S.bnk = 0; S.spd = 120; S.pit = 0; simAcc = 0; S.vs = 0; _simVs1 = 0;
+    simTrimReset();
+    const lever = () => _ax(3, Math.max(-1, Math.min(1, tqRequired() / 110 * 2 - 1)));
+    lever(); fly(10); lever(); fly(10);            // 수평 120kt 에 자리잡는다(레버는 고도 유지)
+    const lvl = { spd: S.spd, vs: S.vs, alt: S.alt };
+    const run = (sec) => {
+      let maxVs = -Infinity, minVs = Infinity, vsMid = null;
+      S.running = true; let ts = 1000; S.lastT = ts;
+      for (let i = 1; i <= sec * 20; i++) {
+        ts += 50; joyPoll(ts); simStep(ts);
+        maxVs = Math.max(maxVs, S.vs); minVs = Math.min(minVs, S.vs);
+      }
+      S.running = false;
+      return { spd: S.spd, vs: S.vs, alt: S.alt, maxVs, minVs };
+    };
+    simTrim.pitch = -6;                            // 기수 6° 들기 → 60kt 로 감속(레버는 그대로)
+    const flare = run(40);
+    simTrim.pitch = 0;                             // 다시 수평 → 120kt 로 가속
+    const accel = run(60);
+    simTrimReset();
+    // 땅 위에서 미끄러지다 서는 것은 고도가 되지 않는다
+    joyAxes = { pitch: { i: 1, inv: false } };
+    S.alt = 0; _simGndFt = 0; S.spd = 30; S.vs = 0; _simVs1 = 0; simAcc = 0; S.tq = 0;
+    const gnd = run(3);
+    return { lvl, flare, accel, gnd, eff: SIM_KE_EFF };
+  })()`);
+  const keFt = (a, b) => ke.eff * ((a * 0.514444) ** 2 - (b * 0.514444) ** 2) / (2 * 9.80665) / 0.3048;
+  const keUp = keFt(ke.lvl.spd, ke.flare.spd);
+  const gain = ke.flare.alt - ke.lvl.alt;
+  t.ok(Math.abs(ke.lvl.vs) < 100, `레버를 고도 유지에 두고 수평 120kt 로 난다 (${ke.lvl.vs.toFixed(0)}fpm)`);
+  t.ok(Math.abs(ke.flare.spd - 60) < 5, `기수를 6° 들면 60kt 로 준다 (${ke.flare.spd.toFixed(0)}kt)`);
+  t.ok(ke.flare.maxVs > 500, `감속하는 동안 떠오른다 (최대 +${ke.flare.maxVs.toFixed(0)}fpm — 레버는 그대로)`);
+  t.ok(gain > keUp * 0.75 && gain < keUp * 1.25,
+    `줄어든 운동에너지만큼 고도를 얻는다 (+${gain.toFixed(0)}ft · 계산 ${keUp.toFixed(0)}ft)`);
+  t.ok(Math.abs(ke.flare.vs) < 120, `감속이 끝나면 상승도 멎는다 (${ke.flare.vs.toFixed(0)}fpm)`);
+  t.ok(ke.accel.minVs < -300 && Math.abs(ke.accel.spd - 120) < 5,
+    `다시 가속하면 그만큼 고도로 치른다 (${ke.accel.minVs.toFixed(0)}fpm · ${ke.accel.spd.toFixed(0)}kt)`);
+  t.ok(Math.abs(ke.accel.alt - ke.lvl.alt) < keUp * 0.25,
+    `감속·가속을 한 번 되풀이하면 고도가 제자리다 (${(ke.accel.alt - ke.lvl.alt).toFixed(0)}ft)`);
+  t.ok(ke.gnd.alt < 1 && ke.gnd.maxVs <= 0.01,
+    `땅 위에서 서는 것은 고도가 되지 않는다 (${ke.gnd.alt.toFixed(1)}ft · ${ke.gnd.spd.toFixed(0)}kt)`);
+
   // ── 저속에서는 뱅크가 '옆걸음' 이 된다 ──
   // 헬기는 제자리에서 기울이면 선회하지 않고 옆으로 간다. 속도가 붙으면
   // 그 성분이 사라지고 보통의 선회가 된다. 기수와 실제 이동 방향으로 가른다.
@@ -946,16 +995,17 @@ export async function run(page, t) {
     fly(4);
     const nose = { pit: S.pit, trim: simTrim.pitch };
     simTrimReset();
-    // 누르고 있으면 계속 옮겨 간다(0.3초 뒤부터 0.1초마다 1°). 검사 브라우저는 3D 를
+    // 누르고 있으면 계속 옮겨 간다(0.5초부터 0.1초마다 1°). 검사 브라우저는 3D 를
     // 소프트웨어로 그리느라 벽시계 타이머가 제때 돌지 못하므로, 시작·반복 타이머를
-    // 붙잡아 두었다가 손으로 '0.3초 뒤 + 0.1초 × 7번' 을 흘려 본다.
+    // 붙잡아 두었다가 손으로 '반복 시작 + 0.1초 × 7번' 을 흘려 본다.
+    const D0 = SIM_TRIM_HOLD_MS - SIM_TRIM_REP_MS, DR = SIM_TRIM_REP_MS;
     const holdFor = (dir) => {
       const rST = window.setTimeout, rSI = window.setInterval;
       let start = null, rep = null;
-      window.setTimeout = (fn, ms) => (ms === 300 ? (start = fn, 987651) : rST(fn, ms));
-      window.setInterval = (fn, ms) => (ms === 100 ? (rep = fn, 987652) : rSI(fn, ms));
+      window.setTimeout = (fn, ms) => (ms === D0 ? (start = fn, 987651) : rST(fn, ms));
+      window.setInterval = (fn, ms) => (ms === DR ? (rep = fn, 987652) : rSI(fn, ms));
       try { startTrimHold(dir); } finally { window.setTimeout = rST; window.setInterval = rSI; }
-      window.setInterval = (fn, ms) => (ms === 100 ? (rep = fn, 987652) : rSI(fn, ms));
+      window.setInterval = (fn, ms) => (ms === DR ? (rep = fn, 987652) : rSI(fn, ms));
       try { if (start) start(); } finally { window.setInterval = rSI; }
       for (let i = 0; i < 7 && rep; i++) rep();
       stopTrimHold();
@@ -967,7 +1017,8 @@ export async function run(page, t) {
     const held = heldP.pitch;
     const maxR = (() => { for (let i = 0; i < 200; i++) simTrimNudge('R'); const m = simTrim.roll; simTrimReset(); return m; })();
     const maxP = (() => { for (let i = 0; i < 200; i++) simTrimNudge('A'); const m = simTrim.pitch; simTrimReset(); return m; })();
-    return { one, oneP, t1, rolled, back, level, nose, held, heldR, maxR, maxP };
+    return { one, oneP, t1, rolled, back, level, nose, held, heldR, maxR, maxP,
+             holdMs: SIM_TRIM_HOLD_MS, repMs: SIM_TRIM_REP_MS };
   })()`);
   t.ok(trim.one.roll === 1 && trim.one.pitch === 0, `한 번 누르면 뱅크가 1° 옮겨 간다 (${trim.one.roll}°)`);
   t.ok(trim.oneP.pitch === 1 && trim.oneP.roll === 0, `피치도 한 번에 1° 다 (${trim.oneP.pitch}°)`);
@@ -976,20 +1027,23 @@ export async function run(page, t) {
   t.ok(Math.abs(trim.back + 10) < 0.6, `반대로 20번 넘기면 왼쪽 10° (${trim.back.toFixed(1)}°)`);
   t.ok(Math.abs(trim.level) < 0.6, `트림을 풀면 수평으로 돌아온다 (${trim.level.toFixed(1)}°)`);
   t.ok(Math.abs(trim.nose.pit + 10) < 0.6, `앞 트림 10번이면 기수가 10° 내려간다 (${trim.nose.pit.toFixed(1)}°)`);
-  t.eq(trim.held, -8, `피치 햇을 누르고 있으면 계속 옮겨 간다 (1초에 ${trim.held}° — 첫 1° + 0.1초마다 1°)`);
-  t.eq(trim.heldR.roll, 8, `뱅크도 똑같이 이어 간다 (1초에 ${trim.heldR.roll}°)`);
+  t.ok(trim.holdMs === 500 && trim.repMs === 100,
+    `0.5초 넘게 누르면 홀드다 — 그 전에 떼면 딸깍 한 번(1°) (${trim.holdMs}ms · ${trim.repMs}ms 마다)`);
+  t.eq(trim.held, -8, `피치 햇을 누르고 있으면 계속 옮겨 간다 (${trim.held}° — 첫 1° + 0.1초마다 1° × 7)`);
+  t.eq(trim.heldR.roll, 8, `뱅크도 똑같이 이어 간다 (${trim.heldR.roll}°)`);
   t.ok(trim.maxR === 30 && trim.maxP === -20,
     `한없이 쌓이지는 않는다 (뱅크 ±${trim.maxR}° · 피치 ${trim.maxP}°)`);
 
-  // ── 조이스틱 트림은 딸깍 한 번에 1° ──
-  // 4방향 트림(버튼)과 축 9 햇 모두, 누르고 있어도 1° 에서 멈춘다(반복 타이머를
-  // 걸지 않는다). 세 번 딸깍이면 3° 다.
+  // ── 조이스틱 트림 — 딸깍 한 번에 1°, 누르고 있으면 이어 간다 ──
+  // 4방향 트림(버튼)과 축 9 햇 모두 같다. 햇 한 번이 조이스틱과 방향키 두 길로
+  // 함께 들어와도 1° 만 가고, 뒤에 들어온 쪽이 홀드를 끊지 않는다.
   const joyTrim = await page.evaluate(`(() => {
     (${SETUP.toString()})();
     _pad.buttons = Array.from({ length: 16 }, () => ({ pressed: false, value: 0 }));
     _pad.axes = [0, 0, 0, 0, 0, 0, 0, 0, 0, 3.2857142857142856];
     for (const k in _joyNeutral) delete _joyNeutral[k];
     const savedBinds = Object.assign({}, joyBinds);
+    const savedKbd = kbdShortcuts; kbdShortcuts = true;
     joyBinds = {};
     // 한 동작에는 입력 하나뿐이다 — 버튼으로 먼저 재고, 햇으로 바꿔 다시 잰다
     joySetBind('b12', 'trimF'); joySetBind('b13', 'trimA');
@@ -1000,40 +1054,97 @@ export async function run(page, t) {
     simTrimReset();
     const btn = (i, on) => { _pad.buttons[i] = { pressed: on, value: on ? 1 : 0 }; joyPoll(now += 16); };
     const hat = v => { _pad.axes[9] = v; joyPoll(now += 16); };
-    const holdPolls = n => { for (let i = 0; i < n; i++) joyPoll(now += 16); };
-    // 4방향 트림 ▶ 를 1초 넘게 누르고 있는다
-    btn(15, true); holdPolls(70);
-    const btnHeld = { roll: simTrim.roll, timer: trimHoldTimer, int: trimHoldInt };
+    const polls = n => { for (let i = 0; i < n; i++) joyPoll(now += 16); };
+    const key = (type, k) => document.dispatchEvent(new KeyboardEvent(type, { key: k, code: k, bubbles: true }));
+    // 홀드 타이머를 붙잡아 두었다가 손으로 흘린다(벽시계 타이머는 검사에서 믿을 수 없다)
+    const D0 = SIM_TRIM_HOLD_MS - SIM_TRIM_REP_MS, DR = SIM_TRIM_REP_MS;
+    let start = null, rep = null;
+    const catching = fn => {
+      const rST = window.setTimeout, rSI = window.setInterval;
+      window.setTimeout = (f, ms) => (ms === D0 ? (start = f, 987651) : rST(f, ms));
+      window.setInterval = (f, ms) => (ms === DR ? (rep = f, 987652) : rSI(f, ms));
+      try { fn(); } finally { window.setTimeout = rST; window.setInterval = rSI; }
+    };
+    const holdOn = n => { catching(() => { if (start) start(); }); for (let i = 0; i < n && rep; i++) rep(); };
+
+    // ① 4방향 트림 ▶ — 딸깍 한 번(0.2초)이면 1°
+    btn(15, true); polls(12);
+    const btnArmed = trimHoldTimer !== null;          // 누르는 동안 홀드가 걸려 있다
     btn(15, false);
+    const btnClick = { roll: simTrim.roll, timer: trimHoldTimer, int: trimHoldInt };
     btn(15, true); btn(15, false); btn(15, true); btn(15, false);   // 두 번 더 딸깍
     const btnThree = simTrim.roll;
     btn(12, true); btn(12, false);                                    // ▲ 한 번
     const btnPitch = simTrim.pitch;
     simTrimReset();
+    // ② 4방향 트림 ▶ 를 누르고 있으면 이어 간다
+    start = rep = null;
+    catching(() => btn(15, true));
+    holdOn(7);
+    const btnHeld = simTrim.roll;
+    btn(15, false);
+    const btnStop = { timer: trimHoldTimer, int: trimHoldInt };
+    simTrimReset();
+
+    // ③ 축 9 햇 — 딸깍은 1°, 누르고 있으면 이어 간다
     joySetBind('h9N', 'trimF'); joySetBind('h9S', 'trimA');
     joySetBind('h9W', 'trimL'); joySetBind('h9E', 'trimR');
-    // 축 9 햇 ▼ 를 1초 넘게 누르고 있는다
-    hat(1/7); holdPolls(70);
-    const hatHeld = { pitch: simTrim.pitch, timer: trimHoldTimer, int: trimHoldInt };
-    hat(REST);
-    hat(1/7); hat(REST); hat(1/7); hat(REST);                         // 두 번 더 딸깍
+    hat(1/7); polls(12); hat(REST);                                   // ▼ 딸깍
+    const hatClick = simTrim.pitch;
+    hat(1/7); hat(REST); hat(1/7); hat(REST);                         // 두 번 더
     const hatThree = simTrim.pitch;
     hat(5/7); hat(REST);                                              // ◀ 한 번
     const hatRoll = simTrim.roll;
     simTrimReset();
-    joyBinds = savedBinds; joySave();
-    return { btnHeld, btnThree, btnPitch, hatHeld, hatThree, hatRoll };
+    start = rep = null;
+    catching(() => hat(-1));                                          // ▲ 를 누르고 있는다
+    holdOn(7);
+    const hatHeld = simTrim.pitch;
+    hat(REST);
+    simTrimReset();
+
+    // ④ 햇 ▲ 가 방향키(↑)로도 함께 들어온다 — 어느 쪽이 먼저든 1° 이고 홀드가 산다
+    start = rep = null;
+    catching(() => { key('keydown', 'ArrowUp'); hat(-1); });
+    const dupKeyFirst = { pitch: simTrim.pitch, armed: trimHoldTimer !== null };
+    holdOn(3);
+    const dupHeld = simTrim.pitch;
+    key('keyup', 'ArrowUp'); hat(REST);
+    simTrimReset();
+    catching(() => { hat(-1); key('keydown', 'ArrowUp'); });
+    const dupPadFirst = simTrim.pitch;
+    key('keyup', 'ArrowUp'); hat(REST);
+    simTrimReset();
+
+    // ⑤ 조종 장치 설정에서 ↑ 키를 다른 동작(ALT +)에 배정해 두면 키보드 트림은 비켜선다
+    joySetBind('kArrowUp', 'altUp');
+    const alt0 = selAlt;
+    key('keydown', 'ArrowUp'); key('keyup', 'ArrowUp');
+    const boundKey = { pitch: simTrim.pitch, alt: selAlt - alt0 };
+    simTrimReset(); selAlt = alt0; altHoldOn = false;
+
+    joyBinds = savedBinds; joySave(); kbdShortcuts = savedKbd;
+    return { btnArmed, btnClick, btnThree, btnPitch, btnHeld, btnStop,
+             hatClick, hatThree, hatRoll, hatHeld, dupKeyFirst, dupHeld, dupPadFirst, boundKey };
   })()`);
-  t.eq(joyTrim.btnHeld.roll, 1, `4방향 트림을 1초 넘게 누르고 있어도 1° 다 (${joyTrim.btnHeld.roll}°)`);
-  t.ok(joyTrim.btnHeld.timer === null && joyTrim.btnHeld.int === null,
-    '조이스틱 트림에는 반복 타이머가 걸리지 않는다');
-  t.eq(joyTrim.btnThree, 3, `4방향 트림 세 번 딸깍이면 3° 다 (${joyTrim.btnThree}°)`);
-  t.eq(joyTrim.btnPitch, 1, `4방향 트림 ▲ 도 한 번에 1° 다 (${joyTrim.btnPitch}°)`);
-  t.eq(joyTrim.hatHeld.pitch, -1, `축 9 햇 ▼ 를 누르고 있어도 1° 다 (${joyTrim.hatHeld.pitch}°)`);
-  t.ok(joyTrim.hatHeld.timer === null && joyTrim.hatHeld.int === null,
-    '햇에도 반복 타이머가 걸리지 않는다');
+  t.eq(joyTrim.btnClick.roll, 1, `4방향 트림 딸깍 한 번이면 1° 다 (${joyTrim.btnClick.roll}°)`);
+  t.ok(joyTrim.btnArmed && joyTrim.btnClick.timer === null && joyTrim.btnClick.int === null,
+    '누르는 동안 홀드가 걸려 있다가 떼면 풀린다');
+  t.eq(joyTrim.btnThree, 3, `세 번 딸깍이면 3° 다 (${joyTrim.btnThree}°)`);
+  t.eq(joyTrim.btnPitch, 1, `▲ 도 한 번에 1° 다 — 피치가 2° 씩 가지 않는다 (${joyTrim.btnPitch}°)`);
+  t.eq(joyTrim.btnHeld, 8, `4방향 트림을 누르고 있으면 이어 간다 (${joyTrim.btnHeld}° — 첫 1° + 7번)`);
+  t.ok(joyTrim.btnStop.timer === null && joyTrim.btnStop.int === null, '떼면 반복이 멈춘다');
+  t.eq(joyTrim.hatClick, -1, `축 9 햇 ▼ 딸깍 한 번이면 1° 다 (${joyTrim.hatClick}°)`);
   t.eq(joyTrim.hatThree, -3, `햇 세 번 딸깍이면 3° 다 (${joyTrim.hatThree}°)`);
   t.eq(joyTrim.hatRoll, -1, `햇 ◀ 도 한 번에 1° 다 (${joyTrim.hatRoll}°)`);
+  t.eq(joyTrim.hatHeld, 8, `햇 ▲ 를 누르고 있으면 이어 간다 (${joyTrim.hatHeld}°)`);
+  t.eq(joyTrim.dupKeyFirst.pitch, 1,
+    `햇과 방향키가 함께 들어와도 1° 다 (${joyTrim.dupKeyFirst.pitch}° — 종전에는 2°)`);
+  t.ok(joyTrim.dupKeyFirst.armed && joyTrim.dupHeld === 4,
+    `그때도 누르고 있으면 이어 간다 — 뒤에 들어온 쪽이 홀드를 끊지 않는다 (${joyTrim.dupHeld}°)`);
+  t.eq(joyTrim.dupPadFirst, 1, `햇이 먼저 들어와도 1° 다 (${joyTrim.dupPadFirst}°)`);
+  t.ok(joyTrim.boundKey.alt === 100 && joyTrim.boundKey.pitch === 0,
+    `조종 장치에 배정한 키는 키보드 단축키가 또 받지 않는다 (ALT +${joyTrim.boundKey.alt} · 트림 ${joyTrim.boundKey.pitch}°)`);
 
   // ── 스로틀처럼 세워 두는 레버(레버식) ──
   // 자리 자체가 출력이다. 맨 아래면 토크가 바닥, 맨 위면 110%.

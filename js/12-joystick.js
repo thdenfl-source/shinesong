@@ -18,10 +18,8 @@ const JOY_ON = 0.6, JOY_OFF = 0.35;   // 히스테리시스(떨림 방지)
 const JOY_REPEAT_DELAY = 350, JOY_REPEAT_INT = 80;   // 화면 버튼 홀드와 같은 값
 
 // kind — press: 누를 때 한 번 · hold: 누르는 동안 · repeat: 누른 뒤 연속
-// 트림(4방향 트림·햇)은 SIM 모드에서 딸깍 한 번에 1° 다 — 누르고 있어도 더
-// 옮기지 않는다(01-state.js startTrimHold). '누르는 동안' 으로 둔 것은 둘러보기
-// 버튼을 잡고 있을 때 햇이 시선이 되기 때문이다.
-const JOY_TRIM_CLICK = { click: true };
+// 트림(4방향 트림·햇)은 SIM 모드에서 딸깍 한 번에 1°, 누르고 있으면 이어서
+// 옮긴다(01-state.js startTrimHold).
 const JOY_ACTIONS = [
   { id: 'sim',    grp: '운항',   label: 'FLY / PAUSE',   kind: 'press',
     run: () => toggleSim() },
@@ -38,13 +36,13 @@ const JOY_ACTIONS = [
     on: () => simLookHold(true), off: () => simLookHold(false) },
 
   { id: 'trimF',  grp: '트림',   label: '트림 ▲ (전/증속)', kind: 'hold',
-    on: () => startTrimHold('F', JOY_TRIM_CLICK), off: () => stopTrimHold() },
+    on: () => startTrimHold('F'), off: () => stopTrimHold() },
   { id: 'trimA',  grp: '트림',   label: '트림 ▼ (후/감속)', kind: 'hold',
-    on: () => startTrimHold('A', JOY_TRIM_CLICK), off: () => stopTrimHold() },
+    on: () => startTrimHold('A'), off: () => stopTrimHold() },
   { id: 'trimL',  grp: '트림',   label: '트림 ◀ (좌)',     kind: 'hold',
-    on: () => startTrimHold('L', JOY_TRIM_CLICK), off: () => stopTrimHold() },
+    on: () => startTrimHold('L'), off: () => stopTrimHold() },
   { id: 'trimR',  grp: '트림',   label: '트림 ▶ (우)',     kind: 'hold',
-    on: () => startTrimHold('R', JOY_TRIM_CLICK), off: () => stopTrimHold() },
+    on: () => startTrimHold('R'), off: () => stopTrimHold() },
   { id: 'pedL',   grp: '트림',   label: '페달 ◀ (좌)',     kind: 'repeat',
     run: () => applyDelta('yaw', -1) },
   { id: 'pedR',   grp: '트림',   label: '페달 ▶ (우)',     kind: 'repeat',
@@ -288,6 +286,9 @@ function _joyEdge(code, pressed, now) {
 // 같은 입력으로 받아 배정할 수 있게 한다. 배정한 키만 듣는다(배정 대기 제외).
 const _joyKeys = {};              // code → true (지금 눌려 있는 키)
 function joyKeyCode(e) { return 'k' + (e.code || e.keyCode); }
+// 이 키를 조종 장치 설정에서 배정해 두었는가 — 그러면 이쪽이 맡는다.
+// 키보드 단축키(07-sim.js)가 같은 키를 또 받으면 한 번 누름이 두 번 걸린다.
+function joyKeyOwned(e) { return joyOn && !!joyBinds[joyKeyCode(e)]; }
 function _joyKeyTyping(t) {
   return !!(t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable));
 }
