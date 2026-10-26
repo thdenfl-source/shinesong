@@ -179,7 +179,8 @@ export async function run(page, t) {
   t.eq(sim.g, 0, '바다 위에서는 해수면(0ft)이 바닥이다 — 수심만큼 내려가지 않는다');
 
   // ── 착함 — 함정 위에서는 갑판이 바닥이고, 앉으면 함정과 함께 간다 ──
-  const land = await page.evaluate(() => {
+  const land = await page.evaluate(async () => {
+    const wait = ms => new Promise(r => setTimeout(r, ms));
     window._pad = { index: 0, id: 'T', mapping: '', buttons: [], axes: [0, 0, 0, -1] };
     navigator.getGamepads = () => [window._pad];
     joyStop(); joyOn = true; joyAxSaved = true; joyCancelCapture(); joyAxCancelCapture();
@@ -212,8 +213,9 @@ export async function run(page, t) {
     simAcc = 0; _simVs1 = 0; simLat = 0; S.pit = pitchFromSpd(0); simTrimHoldSpeed();
     fly(10);
     const landed = { alt: S.alt, vs: S.vs, deck: simOnDeck(), ...rel() };
-    // 1인칭 시점 — 눈은 갑판 위 8m, 가까운 클립면이 몇 m 라 갑판·함교가 잘리지 않는다
-    _applyFollow();
+    // 1인칭 시점 — 눈은 갑판 위 8m, 가까운 클립면이 몇 m 라 갑판·함교가 잘리지 않는다.
+    // 눈높이 바닥은 실제 시간(0.4초)에 걸쳐 갑판으로 옮겨 가므로 잠깐 화면을 돌린다.
+    for (let i = 0; i < 20; i++) { _applyFollow(); await wait(60); }
     const tr = _ml3d.transform, cl = tr.getCameraLngLat();
     const view = { sim: simModeOn, alt: tr.getCameraAltitude(), near: tr._helper._nearZ / tr._helper._pixelPerMeter,
                    off: distance(cl.lat, cl.lng, S.lat, S.lon) * 1852,
