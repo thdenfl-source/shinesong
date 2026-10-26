@@ -167,7 +167,12 @@ function hoverTqRef() {
   if (!p || !Number.isFinite(p.oge)) return TQ_HOVER;          // PERF 를 못 읽으면 종전 값
   const ige = Number.isFinite(p.ige) ? p.ige : p.oge;
   let agl = 1000;
-  try { agl = S.alt - ((typeof simTerrainFt === 'function') ? simTerrainFt() : 0); }
+  // 지면효과는 발밑 바닥에서 잰다(함정 위에서는 갑판 — simDeckFt)
+  try {
+    const g = (typeof simTerrainFt === 'function') ? simTerrainFt() : 0;
+    const d = (typeof simDeckFt === 'function') ? simDeckFt() : null;
+    agl = S.alt - (d == null ? g : Math.max(g, d));
+  }
   catch (e) { agl = S.alt; }
   const k = Math.max(0, Math.min(1, (agl - IGE_FULL_FT) / (IGE_NONE_FT - IGE_FULL_FT)));
   return ige + (p.oge - ige) * k;                              // IGE → OGE

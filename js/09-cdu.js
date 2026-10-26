@@ -394,7 +394,11 @@ function shipKey(k) {
     const v = parseInt(shipInput, 10);
     if (!isNaN(v)) {
       if (shipInputMode === 'SPD')      shipSpd = Math.min(50, Math.max(0, v));
-      else if (shipInputMode === 'CRS') shipHdg = toTrue(v);   // 입력은 자북 → 내부는 진북
+      else if (shipInputMode === 'CRS') {
+        const was = shipHdg;
+        shipHdg = toTrue(v);                         // 입력은 자북 → 내부는 진북
+        _shipCarryTurn(normAS(shipHdg - was));
+      }
     }
     shipInput = '';
     updateShipDisplay();
@@ -506,7 +510,7 @@ const SHIP3D_PARTS = (() => {
   for (let y = 1; y < 39; y += 5) {
     const y1 = Math.min(39, y + 2);
     parts.push({ ring: [[11.75, y], [12.25, y], [12.25, y1], [11.75, y1], [11.75, y]],
-                 h: SHIP3D_DECK + 0.05, c: '#88ccff' });
+                 h: SHIP3D_DECK + 0.05, c: '#88ccff', line: true });
   }
   // 아이콘은 화면 좌표(아래가 +)라 돌림 방향이 지도와 반대다 — 바깥 고리를 반시계로 맞춘다
   parts.forEach(p => { p.ring = p.ring.map(_ship3dM).reverse(); });
@@ -527,6 +531,41 @@ function _ship3dGeo() {
       geometry: { type: 'Polygon', coordinates: [p.ring.map(_ship3dLngLat)] },
     })),
   };
+}
+// 그 자리 바로 아래에 있는 함정 부분의 윗면 높이(m, 수면 위) — 갑판 7m · 함수
+// 구조물 10m · 함교 17m. 함정 밖이면 null. 착함(14-simmode.js)이 이것을 바닥으로 쓴다.
+function shipDeckTopM(lat, lon) {
+  if (!shipVisible || shipLat === null) return null;
+  const n = (lat - shipLat) * 111320, e = (lon - shipLon) * 111320 * Math.cos(shipLat * D2R);
+  if (n * n + e * e > 60 * 60) return null;            // 함정(반 길이 50m)에서 멀다
+  const h = shipHdg * D2R;
+  const x = e * Math.cos(h) - n * Math.sin(h);           // 오른쪽 +
+  const y = -(n * Math.cos(h) + e * Math.sin(h));        // 함미 쪽 +
+  const inside = ring => {
+    let c = false;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const [xi, yi] = ring[i], [xj, yj] = ring[j];
+      if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) c = !c;
+    }
+    return c;
+  };
+  let top = null;
+  SHIP3D_PARTS.forEach(p => {
+    if (p.line || !inside(p.ring)) return;              // 중심선은 갑판에 칠한 선이다
+    if (top === null || p.h > top) top = p.h;
+  });
+  return top;
+}
+// 함정이 침로를 바꾸면 갑판에 앉아 있는 헬기도 함정 중심을 축으로 같이 돈다
+function _shipCarryTurn(d) {
+  if (!d || typeof simOnDeck !== 'function' || !simOnDeck()) return;
+  const n = (S.lat - shipLat) * 111320, e = (S.lon - shipLon) * 111320 * Math.cos(shipLat * D2R);
+  const r = d * D2R;
+  const n2 = n * Math.cos(r) - e * Math.sin(r), e2 = n * Math.sin(r) + e * Math.cos(r);
+  S.lat = shipLat + n2 / 111320;
+  S.lon = shipLon + e2 / (111320 * Math.cos(shipLat * D2R));
+  S.hdg = normA(S.hdg + d);
+  try { updateAcOnMap(); } catch (e) { _swallow(e); }
 }
 let _ship3dReady = false;
 // 3D 지도가 다 뜨면(04-map.js 의 load) 함정·항적 레이어를 한 번 얹는다
