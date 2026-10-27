@@ -1,4 +1,18 @@
-# Flightsimulator — Claude 작업 지침
+# shinesong — Claude 작업 지침
+
+## 저장소 구분 (요청을 받으면 먼저 확인)
+사용자는 두 저장소를 목적별로 나눠 쓴다. 요청이 **어느 저장소의 일인지 먼저 가린다.**
+
+| 저장소 | 목적 | 해당 작업 예 |
+|---|---|---|
+| **thdenfl-source/shinesong** (이 저장소) | **모든 걸 합친 종합 시뮬레이터** | 조이스틱 직접 조종(SIM 모드), 비행 모델(토크·NR), 3D 조종석 시야·CHIN BUBBLE, 함정 착함 등 |
+| **thdenfl-source/Flightsimulator** | **절차 훈련** | AIP 절차·공항 자료, CDU·FPL, HOVER PAGE, SHIP 접근 훈련 등 |
+
+- 이 저장소는 Flightsimulator 에서 갈라져 나왔다 — 코드 구조(js/00~14, tests/)가 같고,
+  Flightsimulator 에는 SIM 모드가 없다.
+- 요청한 기능이 이 저장소에 없으면 Flightsimulator 에 있는지 확인하고 그쪽에서 작업한다
+  (사용자가 저장소를 잘못 짚어 말하는 일이 있다).
+- 두 저장소에 다 있는 기능(SHIP·PFD·CDU 등)이면 어느 쪽에 반영할지 사용자에게 묻는다.
 
 ## 항상 따를 규칙
 
@@ -9,7 +23,7 @@
 2. `git push -u origin claude/keen-darwin-9c4ek`
 3. GitHub MCP(`mcp__github__create_pull_request`)로 PR 생성
    - owner: `thdenfl-source`
-   - repo: `Flightsimulator`
+   - repo: `shinesong`
    - head: `claude/keen-darwin-9c4ek`
    - base: `main`
 4. **PR 머지는 사용자가 직접 GitHub에서 수행한다. Claude는 절대 머지하지 않는다.**
