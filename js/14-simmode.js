@@ -48,7 +48,8 @@ function simAfcsVert() { return simModeOn && (altHoldOn || crhtOn); }
 const SIM_AFCS_ALT_K = 10;     // 1ft 어긋날 때마다 원하는 상승률(fpm)
 const SIM_AFCS_LEAD  = 2;      // 앞을 내다보는 시간(s)
 function simAfcsVsCmd() {
-  const tgt = altHoldOn ? selAlt : selCrht;
+  // CRHT 는 전파고도(AGL)를 지킨다 — 기압고도로 바꾸면 '발밑 땅 + 선택 높이'
+  const tgt = altHoldOn ? selAlt : selCrht + radarGroundFt();
   const rate = altHoldOn ? Math.max(50, Math.abs(selVS)) : 500;
   const ahead = S.alt + (S.vs || 0) / 60 * SIM_AFCS_LEAD;
   return Math.max(-rate, Math.min(rate, (tgt - ahead) * SIM_AFCS_ALT_K));
@@ -76,17 +77,18 @@ const SIM_SPD_BACK  = -40;     // 후방 비행 한계(kt) — 헬기는 뒤로�
 // 자세나 출력을 바꿔도 속도·고도는 곧바로 따라오지 않는다. 로터 원판이 기울어
 // 힘이 생기고, 그 힘이 기체 무게를 밀어 움직이기까지 시간이 걸린다.
 //   속도: 가감속(simAcc)이 정해진 빠르기(SPD_JERK)로 점점 커진다 — 기수를 숙이거나
-//         들면 처음엔 느리게, 갈수록 빠르게 속도가 바뀐다. 목표 속도가 가까워지면
-//         같은 식으로 풀어 넘치지 않는다. 감속은 가속보다 훨씬 빨리 붙고 세다
-//         (1초에 6kt/s 씩 · 최대 10kt/s — 동고도 감속이 종전의 두 배쯤 빠르다).
+//         들면 처음엔 느리게, 갈수록 빠르게 속도가 바뀐다(가속이 오래 커지도록 한계를
+//         넉넉히 두고 천천히 키운다 — 한계에 금방 닿아 '일정한 빠르기' 로 바뀌지 않게).
+//         목표 속도가 가까워져서야 짧게 풀어 넘치지 않는다(푸는 쪽은 세 배 빠르다).
+//         감속은 가속보다 빨리 붙고 세다(1초에 3kt/s 씩 · 최대 12kt/s — 120→60kt 가 8초쯤).
 //         가속은 속도가 붙을수록(전이양력으로 출력이 남을수록) 세진다.
 //   고도: 상승률도 같은 식이다 — 레버를 움직이면 오르내림이 점점 빨라지며 붙는다.
-const SPD_JERK     = 1.5;     // 가감속이 커지는 빠르기(kt/s²)
-const SPD_ACC_UP0  = 3.0;     // 제자리 언저리에서 낼 수 있는 가속(kt/s)
-const SPD_ACC_UP   = 5.0;     // 전이양력을 다 받은 뒤의 최대 가속(kt/s)
+const SPD_JERK     = 0.8;     // 가감속이 커지는 빠르기(kt/s²)
+const SPD_ACC_UP0  = 3.5;     // 제자리 언저리에서 낼 수 있는 가속(kt/s)
+const SPD_ACC_UP   = 6.5;     // 전이양력을 다 받은 뒤의 최대 가속(kt/s)
 const SPD_ETL_KT   = 40;      // 가속이 다 세지는 속도(kt)
-const SPD_DEC_JERK = 6.0;     // 감속이 커지는 빠르기(kt/s²)
-const SPD_DEC_MAX  = 10.0;    // 최대 감속(kt/s) — 원판을 젖히면 항력까지 같이 받는다
+const SPD_DEC_JERK = 3.0;     // 감속이 커지는 빠르기(kt/s²)
+const SPD_DEC_MAX  = 12.0;    // 최대 감속(kt/s) — 원판을 젖히면 항력까지 같이 받는다
 // 상승·강하율이 바뀌는 빠르기 — 최소·최대 상승률은 그대로 두고 바뀌는 빠르기만 종전의 반
 const VS_JERK      = 250;     // 상승률의 변화가 커지는 빠르기(fpm/s²)
 const VS_ACC_MAX   = 500;     // 상승률이 바뀌는 최대 빠르기(fpm/s)
@@ -99,8 +101,9 @@ const TQ_TAU       = 0.5;     // 토크가 레버를 따라가는 시간(s) — 
 const CLIMB_REF_TQ    = 100;   // 이 토크에서 그 속도의 최대 상승률이 난다(%)
 const CLIMB_VY_MAX    = 2300;  // Vy 에서의 최대 상승률(fpm)
 const CLIMB_HOVER_MAX = 1000;  // 제자리에서의 최대 상승률(fpm)
-// 상승·강하율의 한계(fpm). 기수를 숙인 채 레버를 끝까지 내리면 4,000fpm 까지 떨어진다.
-const SIM_VS_UP_MAX = CLIMB_VY_MAX, SIM_VS_DN_MAX = 4000;
+// 상승·강하율의 한계(fpm). 기수를 숙인 채 레버를 끝까지 내리면 4,000fpm 까지 떨어지고,
+// 토크를 100% 넘게(MTA 까지) 당기면 3,000fpm 까지 오른다(100% 에서는 위의 Vy 2,300fpm).
+const SIM_VS_UP_MAX = 3000, SIM_VS_DN_MAX = 4000;
 // ── 컬렉티브 레버와 그날의 MTA ──
 // 레버 맨 위는 토크 140% 다. 하지만 엔진이 낼 수 있는 토크는 그날의 MTA(CDU PERF 의
 // MTA(30) — 고도·온도로 정해진다 · mtaNow)까지다. 그보다 더 당기면 토크는 MTA 에
@@ -118,13 +121,14 @@ let simNr = 100;               // 로터 회전(NR, %)
 let simTqCmd = 0;              // 레버가 요구하는 토크(%) — MTA 를 넘어도 그대로(계기의 레버 표식)
 function simRpmLow() { return simModeOn && simNr < SIM_NR_LOW; }
 // 남은 차이(d)를 향해 '바뀌는 빠르기(acc)' 를 한 구간 옮긴다. acc 는 jerk 의 빠르기로
-// 커진다(그래서 점점 빨라진다). 목표가 가까워지면 그 빠르기의 반으로 풀 수 있는 만큼
-// (√(j·|d|))으로 줄여 넘치지 않고, 아주 가까우면 곧게(d 에 비례해) 붙어 떨지 않는다.
+// 커진다(그래서 점점 빨라진다). 목표가 가까워지면 풀 수 있는 만큼(√(jb·|d|) — jb 는
+// 푸는 빠르기, 주지 않으면 jerk)으로 줄여 넘치지 않고, 아주 가까우면 곧게(d 에 비례해)
+// 붙어 떨지 않는다. jb 를 크게 주면 끝까지 키우다가 목표 가까이에서 짧게 푼다.
 // 푸는 쪽(줄이거나 반대로 돌리는 쪽)은 세 배 빠르다 — 가속하다 조종간을 당기면 가속이
 // 금방 풀리고 감속이 다시 점점 커진다(원판은 조종간을 곧바로 따른다).
 const JERK_RELEASE = 3;
-function simJerkStep(d, acc, dt, aMax, jerk, d0) {
-  const j = jerk / 2, ad = Math.abs(d);
+function simJerkStep(d, acc, dt, aMax, jerk, d0, jb) {
+  const j = (jb || jerk) / 2, ad = Math.abs(d);
   const brake = ad < d0 ? ad * Math.sqrt(2 * j / d0) : Math.sqrt(2 * j * ad);
   const want = Math.sign(d) * Math.min(aMax, brake);
   const rel = want * acc < 0 || Math.abs(want) < Math.abs(acc);
@@ -236,7 +240,7 @@ function simTrimHoldSpeed() {
 // 밀고 있는 축만 조종사가 몬다 — 미는 쪽으로 지상속도가 붙고, 놓으면 GSPD 가
 // 기준속도로 되돌린다. 새 속도를 지키려면 FORCE TRIM 을 누른다(그 순간의
 // 지상속도가 새 기준이 된다 — forceTrim). 4방향 트림은 기준속도를 옮긴다.
-const GSPD_FLY_ACC = 3.5;           // 조종간을 끝까지 밀었을 때의 가감속(kt/s)
+const GSPD_FLY_ACC = 10.5;          // 조종간을 끝까지 밀었을 때의 가감속(kt/s) — 종전 3.5 의 세 배
 let _simOnGnd = false;              // 마지막 적분 구간에 땅에 붙어 있었는가
 // 조종간 몫 — { lat: 좌우, fwd: 전후 } (-1…1, 중립이면 0). GSPD 가 아니면 null.
 function simGspdStick() {
@@ -568,7 +572,12 @@ function simClimbMax() { return CLIMB_VY_MAX * simClimbEff(); }
 function simClimbSpan() { return Math.max(5, CLIMB_REF_TQ - tqRequired()); }
 // 남는 토크(%) → 상승·강하율(fpm)
 function simVsForTq(dTq) {
-  if (dTq > 0) { const m = simClimbMax(); return Math.min(m, m * dTq / simClimbSpan()); }
+  // 100%(CLIMB_REF_TQ) 에서 그 속도의 최대(Vy 2,300fpm), 그 위로 더 당기면 같은 기울기로
+  // 더 올라 Vy 에서 3,000fpm(SIM_VS_UP_MAX) 까지 — 속도가 다르면 상승 효율만큼 줄어든다
+  if (dTq > 0) {
+    const m = simClimbMax(), top = SIM_VS_UP_MAX * simClimbEff();
+    return Math.min(top, m * dTq / simClimbSpan());
+  }
   let v;
   try { v = (typeof perfVsForTq === 'function') ? perfVsForTq(dTq) : dTq * TQ_PER_FPM; }
   catch (e) { v = dTq * TQ_PER_FPM; }
@@ -658,7 +667,7 @@ function simFly(dt) {
       // 가감속은 점점 커진다 — 기수를 들면 감속이, 숙이면 가속이 갈수록 세진다
       const ds = sTgt - S.spd;
       const lim = simAccLimit(ds);
-      simAcc = simJerkStep(ds, simAcc, dt, lim.max, lim.jerk, 1);
+      simAcc = simJerkStep(ds, simAcc, dt, lim.max, lim.jerk, 1, lim.jerk * JERK_RELEASE);
     }
     S.spd = Math.max(SIM_SPD_BACK, Math.min(SIM_SPD_MAX, S.spd + simAcc * dt));
 

@@ -419,6 +419,30 @@ async function _tcFetch(key, x, y) {
   } catch(e) { _TC.tiles[key] = null; }
   delete _TC.pend[key];
 }
+// 그 자리 지형 높이(ft) — 지형 자료(T-CUT 과 같은 DEM). 바다는 해수면(0)이다
+// (자료의 바다 밑 수심·해안 잔물결은 3D 와 같은 규칙으로 편다 — seaFlatM). 아직 모르면 null.
+function terrainFtAt(lat, lon) {
+  let m = null;
+  try { m = _tcElev(lat, lon); } catch (e) { m = null; }
+  if (m == null) return null;
+  m = (typeof seaFlatM === 'function') ? seaFlatM(m) : Math.max(0, m);
+  return m / 0.3048;
+}
+// ── 전파고도(RA, ft) ──
+// 기압고도가 아니라 발밑 지면에서 잰 높이(AGL)다 — 지형 자료로 그 자리 땅 높이를 빼고,
+// SIM 에서 함정 갑판 위면 갑판에서 잰다(전파가 갑판에서 돌아온다). 지형을 아직 모르면
+// 해수면에서 잰다(바다 위와 같다). PFD 오른쪽 아래 CRHT 창이 이 값이고, CRHT 는 이
+// 높이를 지킨다.
+function radarGroundFt() {
+  try {
+    if (typeof simModeOn !== 'undefined' && simModeOn && typeof _simGndFresh !== 'undefined' && _simGndFresh)
+      return simFloorFt();
+  } catch (e) { _swallow(e); }
+  const g = terrainFtAt(S.lat, S.lon);
+  return g === null ? 0 : g;
+}
+function radarAltFt() { return Math.max(0, S.alt - radarGroundFt()); }
+
 // ── VNAV (수직항법) : 타깃 WP까지 거리 기준 입력 각도의 강하/상승선 ──
 let vnavActive = false, vnavTgtAlt = 0, vnavAngle = -3;   // angle: 음수=강하
 // FT_PER_NM 은 01-state.js 에 있다(DME 경사거리와 같은 값을 쓴다)
@@ -916,9 +940,47 @@ function _simEyeFloorM(physM) {
   return _simEyeFloor;
 }
 
+// ── 3D 화면 속 기체의 높이(m, 그려진 높이) ──
+// 그려진 땅은 지형을 과장해(×MAP3D_EXAG) 그리고, 지형 타일이 더 자세한 것으로 바뀔
+// 때마다 높이가 조금씩 달라진다. '그려진 땅 + AGL' 에 그대로 놓으면 산 위를 지날 때
+// 그 기복(과장된 몫)과 타일이 바뀌는 순간의 튐이 기체·카메라에 그대로 실려 위아래로
+// 튄다. 그래서 '고도(MSL) + (그려진 땅 − 실제 땅)' 에 놓되, 괄호 안은 천천히
+// (VIS_TERR_TAU) 따라가게 거른다. 땅 가까이(AGL VIS_NEAR_M 아래)에서는 그려진 땅에
+// 그대로 앉도록 점점 정확한 값(그려진 땅 + AGL)으로 바꾸고, 그려진 땅 아래로는 내려가지
+// 않는다. 1인칭 카메라와 흰수리 모형(15-heli3d.js)이 같은 값을 쓴다.
+const VIS_TERR_TAU = 1.5;     // 지형 몫을 따라가는 시간(s)
+const VIS_NEAR_M   = 40;      // 이 높이(AGL, m) 아래에서는 점점 그려진 땅에 맞춘다
+let _visOff = null, _visT = 0, _visAt = null;
+function simVisAlt(map) {
+  map = map || _ml3d;
+  let rendM = null;
+  try { rendM = map.queryTerrainElevation([S.lon, S.lat]); } catch (e) { rendM = null; }
+  let physM = null;
+  try {
+    if (typeof simModeOn !== 'undefined' && simModeOn && typeof _simGndFresh !== 'undefined' && _simGndFresh)
+      physM = simGroundFt() * 0.3048;
+  } catch (e) { physM = null; }
+  // 바다는 해수면이 바닥이다 — 지형 자료에는 바다 밑 수심이 들어 있다(simTerrainFt 와 같다)
+  if (physM === null) physM = Number.isFinite(rendM) ? Math.max(0, rendM / MAP3D_EXAG) : 0;
+  const drawnM = Number.isFinite(rendM) ? rendM : physM * MAP3D_EXAG;
+  const altM = S.alt * 0.3048, agl = Math.max(0, altM - physM);
+  const tgt = drawnM - physM;
+  const now = performance.now();
+  const dt = _visT ? (now - _visT) / 1000 : 0;
+  _visT = now;
+  // 처음이거나, 오래 쉬었거나, 멀리 옮겨 왔으면(배치·리셋) 곧바로 맞춘다
+  const moved = !_visAt || Math.abs(_visAt[0] - S.lat) + Math.abs(_visAt[1] - S.lon) > 0.01;
+  if (_visOff === null || moved || dt > 2) _visOff = tgt;
+  else _visOff += (tgt - _visOff) * Math.min(1, dt / VIS_TERR_TAU);
+  _visAt = [S.lat, S.lon];
+  const exact = drawnM + agl, smooth = altM + _visOff;
+  const w = Math.max(0, Math.min(1, agl / VIS_NEAR_M));
+  return { alt: Math.max(drawnM, exact + (smooth - exact) * w), agl, drawn: drawnM, phys: physM };
+}
+
 // ── 1인칭 카메라(SIM 모드) ──
 //   · 자리   = 헬기 위경도
-//   · 높이   = 화면에 그려진 지면(지형 과장비 반영) + 지면 위 높이(AGL)
+//   · 높이   = 화면 속 기체 높이(simVisAlt — 그려진 지면 + AGL, 지형 기복은 걸러서)
 //   · 방위   = 기수(방향지시계)
 //   · 기울기 = 90° + 기수 자세(자세계) — 수평 비행이면 지평선이 화면 한가운데,
 //              기수를 들면 90° 를 넘어 하늘을, 숙이면 땅을 본다
@@ -934,23 +996,20 @@ function _ml3dSimCamera() {
   // 높이는 두 가지를 따로 본다.
   //   · 지면 위 높이(AGL) — 비행 모델의 땅(착지 판정과 같은 값)에서 잰다
   //   · 화면에 그려진 땅  — 지도가 실제로 그린 지형(과장비가 곱해져 있다)
-  // 카메라는 '그려진 땅 + AGL' 에 놓는다. 그래야 지형 타일이 아직 안 왔든
-  // 왔든, 화면 속 땅에서 늘 고도계만큼 떠 있다(파묻히지도 붕 뜨지도 않는다).
-  let rendM = null;
-  try { rendM = _ml3d.queryTerrainElevation([S.lon, S.lat]); } catch (e) { rendM = null; }
-  let physM = null;
-  try { if (typeof _simGndFresh !== 'undefined' && _simGndFresh) physM = simGroundFt() * 0.3048; }
-  catch (e) { physM = null; }
-  // 바다는 해수면이 바닥이다 — 지형 자료에는 바다 밑 수심이 들어 있다(simTerrainFt 와 같다)
-  if (physM === null) physM = Number.isFinite(rendM) ? Math.max(0, rendM / MAP3D_EXAG) : 0;
-  const drawnM = Number.isFinite(rendM) ? rendM : physM * MAP3D_EXAG;
-  const aglM = Math.max(_simEyeFloorM(physM) + SIM_EYE_MIN_M, S.alt * 0.3048 - physM);
-  const camAlt = drawnM + aglM;
+  // 카메라는 '그려진 땅 + AGL' 에 놓는다(simVisAlt). 그래야 지형 타일이 아직 안 왔든
+  // 왔든, 화면 속 땅에서 늘 고도계만큼 떠 있다(파묻히지도 붕 뜨지도 않는다). 다만
+  // 공중에서는 지형의 기복·타일 바뀜이 카메라를 흔들지 않게 걸러서 따라간다.
+  const vis = simVisAlt();
+  const drawnM = vis.drawn;
+  const camAlt = Math.max(vis.alt, drawnM + _simEyeFloorM(vis.phys) + SIM_EYE_MIN_M);
+  const aglM = camAlt - drawnM;
   // 시선(둘러보기)을 기체 자세 위에 얹는다
   let look = { yaw: 0, pitch: 0 };
   try { if (typeof simLookStep === 'function') look = simLookStep(); } catch (e) { _swallow(e); }
   const r = _ml3dCamRot(S.hdg, S.pit, S.bnk, look.yaw, look.pitch);
   const pitch = Math.max(0, Math.min(180, 90 + r.pitch));
+  // 화면 아래 가운데의 내 헬기 기수(15-heli3d.js) — 고개를 돌리면 비켜 간다
+  try { if (typeof heli3dNoseSync === 'function') heli3dNoseSync(look); } catch (e) { _swallow(e); }
   // 화면 중심까지의 거리 — 낮게 날수록 가깝게(눈높이 × 20, 200m…10km)
   const dist = Math.max(200, Math.min(10000, aglM * 20));
   let o;

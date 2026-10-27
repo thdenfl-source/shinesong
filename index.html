@@ -550,6 +550,11 @@ html, body {
 #chin-btn.show { display: block; }
 #chin-btn.on { color: #00e5ff; border-color: #00e5ff; }
 #ext-btn { display: none; position: absolute; top: 72px; right: 8px; z-index: 900; padding: 5px 10px; }
+/* SIM 1인칭 — 화면 아래 가운데의 기수(높이 1/10 · 둘러보기를 하면 그만큼 비켜 간다) */
+#sim-nose { display: none; position: absolute; left: 50%; bottom: 0; width: 34%; height: 10%;
+            transform: translateX(-50%); z-index: 3; pointer-events: none; }
+#sim-nose.show { display: block; }
+#sim-nose svg { display: block; width: 100%; height: 100%; }
 #ext-btn.show { display: block; }
 #ext-btn.on { color: #00e5ff; border-color: #00e5ff; }
 /* 2D 위에 겹쳐 쓸 때는 지도 툴바 아래로 */
@@ -1791,12 +1796,13 @@ body.gate-open #gate-overlay { display: none; }
             항력이 급히 늘어 덜 늡니다). 7.5° 보다 더 들면 뒤로 갑니다.
             오르내리는 동안에는 <b>조금만</b> 어긋납니다(1,000fpm 당 4kt — 올라가면 조금 느리고 내려가면 조금 빠르다,
             제자리에서 곧장 오르내릴 때는 어긋나지 않습니다).<br>
-            <b>속도·고도는 점점 빠르게 바뀝니다</b> — 자세를 바꾸면 가감속이 <b>처음엔 작다가 갈수록 커지고</b>
-            (가속은 1초에 1.5kt/s 씩), 그 자세의 속도에 가까워지면 다시 풀려 넘쳐 지나치지 않습니다.
-            <b>감속은 훨씬 빨리 붙어</b> 1초에 6kt/s 씩 <b>최대 10kt/s</b>(기수를 들면 원판을 젖혀 항력까지 받습니다),
-            <b>가속은 제자리 3kt/s 에서 속도가 붙을수록 커져 40kt 부터 5kt/s</b>(전이양력)입니다
-            (예: 동고도 120kt 에서 60kt 자세로 들면 6초에 70kt · 8초면 60kt / 제자리에서 기수 5° 숙이면
-            10초에 34kt · 20초에 84kt).
+            <b>속도·고도는 점점 빠르게 바뀝니다</b> — 자세를 바꾸면 가감속이 <b>처음엔 작다가 갈수록 커져</b>
+            속도가 <b>점점 가속되며</b> 바뀝니다(일정한 빠르기로 바뀌지 않습니다 — 가속은 1초에 0.8kt/s 씩 오래 커집니다).
+            그 자세의 속도에 가까워져서야 짧게 풀려 넘쳐 지나치지 않습니다.
+            <b>감속은 더 빨리 붙어</b> 1초에 3kt/s 씩 <b>최대 12kt/s</b>(기수를 들면 원판을 젖혀 항력까지 받습니다),
+            <b>가속은 제자리 3.5kt/s 에서 속도가 붙을수록 커져 40kt 부터 6.5kt/s</b>(전이양력)까지 갑니다
+            (예: 120kt 에서 기수 10° 숙이면 1초마다 +0.4 · +1.2 · +2.0 · +2.8kt 로 붙음 / 동고도 120kt 에서
+            60kt 자세로 들면 감속 3 → 6 → 9 → 12kt/s 로 세져 8초면 60kt / 제자리에서 기수 5° 숙이면 10초에 36kt · 20초에 100kt).
             컬렉티브를 올리면 토크가 0.5초쯤에 따라붙고, 상승률도 <b>점점 빨라지며</b> 붙습니다 —
             상승·강하율이 바뀌는 빠르기는 <b>1초에 최대 500fpm</b>(최소·최대 상승률은 그대로)입니다.<br>
             자세는 <b>위아래 60°</b> 까지 잡힙니다(속도는 뒤로 40kt · 앞으로 160kt 에서 멎습니다).
@@ -1868,7 +1874,12 @@ body.gate-open #gate-overlay { display: none; }
             <b>기수를 들면 그만큼 하늘</b>을, <b>숙이면 땅</b>을 봅니다(카메라 자체가 들리므로 앞으로
             나가 보이지 않습니다). 뱅크를 주면 카메라가 그대로 기울어 지평선이 <b>PFD 의 ADI 와 같은 쪽으로</b>
             기웁니다(오른쪽 뱅크면 지평선 오른쪽이 올라갑니다 · 확대되지 않습니다).
-            1인칭에서는 3D 축척과 제 마커(모형)를 숨깁니다.<br>
+            1인칭에서는 3D 축척과 제 마커(모형)를 숨기고, 대신 <b>화면 아래 가운데에 내 헬기의 기수(nose)</b>가
+            높이 1/10 만큼 보입니다(기체에 붙어 있으므로 자세가 바뀌어도 그 자리 · 둘러보기로 고개를 돌리면 비켜 갑니다).<br>
+            <b>지형의 기복에 튀지 않습니다</b> — 3D 지형은 높이를 1.5배 과장해 그리고, 더 자세한 지형 타일이
+            들어올 때마다 높이가 조금씩 바뀝니다. 카메라(와 외부 시점의 헬기)는 그 차이를 <b>천천히(1.5초) 따라가</b>
+            산 위를 지나거나 타일이 바뀌는 순간에도 위아래로 튀지 않습니다. 땅 가까이(AGL 40m 아래)에서는
+            그려진 땅에 그대로 맞춰 내려앉고, 외부 시점의 카메라는 같은 프레임의 헬기 자리를 그대로 씁니다.<br>
             <b>CHIN BUBBLE</b> — 1인칭에서는 <b>정면 시야가 3D 창 가득</b> 차고, 좌·우 발밑 창은 그 위
             <b>아래 왼쪽·오른쪽 모서리에 붙어 겹쳐</b> 뜹니다(창 하나가 너비 약 1/3 · 높이 2/9).
             가운데 앞쪽 아래는 가리지 않아 전방을 넓게 봅니다. 발밑 창은 헬기의 CHIN BUBBLE 처럼 <b>정면보다 50° 아래</b>를 좌·우로 15° 벌려 보며,
@@ -1913,6 +1924,14 @@ body.gate-open #gate-overlay { display: none; }
             NAV·ALT·CRHT 는 버튼으로 풉니다(ALT·CRHT 를 풀면 그 상승률에서 레버가 이어 받습니다).
             조이스틱 <b>B1</b> 은 <b>상위모드 모두 해제</b>입니다(NAV·HDG·ALT·CRHT·G/S·IAS·GSPD).
             끄면 수평으로 돌아오고 종전 방식으로 돌아갑니다.</li>
+        <li><b>전파고도(RA)</b> — PFD 오른쪽 아래 <b>CRHT 창</b>은 기압고도가 아니라 <b>전파고도(지면 위 높이 AGL)</b>입니다.
+            지형 자료(T-CUT 과 같은 DEM)로 그 자리 땅 높이를 빼서 보이고(창의 <b>RA</b> 숫자), SIM 에서 함정 위에서는
+            갑판에서 잽니다. 바다 위에서는 기압고도와 같고, 산 위에서는 그만큼 낮게 읽힙니다(지형 자료를
+            아직 받지 못했으면 해수면 기준). <b>CRHT 는 이 전파고도를 지킵니다</b> — 걸면 지금 RA 가 기준이 되고,
+            땅이 오르내리면 그만큼 따라 오르내립니다(500fpm 까지).</li>
+        <li><b>승강계</b>는 위로 <b>3,000fpm</b>, 아래로 <b>4,000fpm</b> 까지 읽습니다 — ±1,000fpm 까지는 반 칸에 넓게,
+            그 위는 좁혀 담습니다. SIM 에서 상승률은 토크 100% 에서 Vy 2,300fpm, 그보다 더 당기면(MTA 까지)
+            <b>3,000fpm</b> 까지 오르고, 강하는 4,000fpm 까지입니다.</li>
         <li>PFD 하단 FCP에서 <b>IAS·HDG·CRS·VS·ALT·CRHT</b>를 ▲▼/◀▶로 조절.
             <b>CRHT ▲▼</b> 는 10ft 씩 옮기며, 지금 고도로 걸어 끝자리가 남아 있으면(예: 1,237ft)
             먼저 <b>10ft 단위</b>로 맞춥니다(▲ 1,240 · ▼ 1,230).
@@ -2117,7 +2136,10 @@ body.gate-open #gate-overlay { display: none; }
             웨이포인트 카드의 <b>VNAV 고도 · 오프셋</b>, <b>홀딩 설정</b>의 <b>INBD CRS · 시간/거리</b>도 같은 방식입니다.
             홀딩 시간은 이제 <b>아무 값이나</b>(10~600초) 넣을 수 있습니다 — 종전에는 30·60·90·120·150·180초만 골랐습니다.</li>
         <li><b>HOVER PAGE</b>(80kt 미만): 호버 속도·위치 지시. 좌측 HOVER 그룹의 <b>HOVER PAGE / HOVER POS</b> 사각 버튼으로 켜고,
-            기준 속도는 트림 옆 원형 <b>GSPD</b> 버튼으로 잡습니다(실제 조종간 배치에 맞춘 위치).</li>
+            기준 속도는 트림 옆 원형 <b>GSPD</b> 버튼으로 잡습니다(실제 조종간 배치에 맞춘 위치).
+            SIM 에서 GSPD 가 걸려 있을 때 <b>트림을 거슬러 조종간을 밀면(against trim)</b> 그쪽으로
+            지상속도가 붙습니다 — 끝까지 밀면 <b>초당 10.5kt</b>(종전의 세 배). 놓으면 기준속도로 돌아가고,
+            FORCE TRIM 을 누르면 그 순간의 속도가 새 기준이 됩니다.</li>
         <li>HOVER PAGE에는 <b>SHIP</b>(청록)과 <b>비행계획 활성 웨이포인트</b>(빨강 삼각형)가 함께 표시됩니다.
             반경 50 ft 이내면 실제 축척 위치에, 밖이면 방향 니들과 점선으로 나타납니다.</li>
         <li><b>ANTI-TORQUE PEDAL ◀▶</b>(GSPD 우측): 뱅크 없이 기수만 즉시 회전(홀드 시 약 12°/s).
@@ -2537,6 +2559,27 @@ body.gate-open #gate-overlay { display: none; }
         <button class="sim-btn" id="q3d-btn" data-act="cycleMap3dQuality" title="3D 화질 — 누를 때마다 상 → 중 → 하. 낮출수록 저고도에서도 부드럽습니다">화질 중</button>
         <!-- SIM 1인칭에서만 보인다 — 아래 좌·우 CHIN 창을 끄고 켠다 -->
         <button class="sim-btn" id="chin-btn" data-act="toggleChinView" title="CHIN BUBBLE — 발밑 창(좌·우)을 끄고 켭니다">CHIN</button>
+        <!-- SIM 1인칭에서만 — 화면 아래 가운데로 보이는 내 헬기의 기수(nose) · 15-heli3d.js -->
+        <div id="sim-nose" aria-hidden="true">
+          <svg viewBox="0 0 400 100" preserveAspectRatio="xMidYMax meet">
+            <defs>
+              <linearGradient id="nose-side" x1="0" x2="1" y1="0" y2="0">
+                <stop offset="0" stop-color="#9ea4ab"/><stop offset="0.28" stop-color="#e3e6e9"/>
+                <stop offset="0.5" stop-color="#f6f7f8"/><stop offset="0.72" stop-color="#e3e6e9"/>
+                <stop offset="1" stop-color="#9ea4ab"/>
+              </linearGradient>
+              <linearGradient id="nose-shade" x1="0" x2="0" y1="0" y2="1">
+                <stop offset="0" stop-color="#000" stop-opacity="0"/><stop offset="0.7" stop-color="#000" stop-opacity="0.08"/>
+                <stop offset="1" stop-color="#000" stop-opacity="0.45"/>
+              </linearGradient>
+            </defs>
+            <path d="M 14 100 C 52 42, 132 13, 200 11 C 268 13, 348 42, 386 100 Z" fill="url(#nose-side)"/>
+            <path d="M 14 100 C 52 42, 132 13, 200 11 C 268 13, 348 42, 386 100 Z" fill="url(#nose-shade)"/>
+            <ellipse cx="200" cy="15" rx="34" ry="7.5" fill="#2b2e33"/>
+            <line x1="200" y1="23" x2="200" y2="100" stroke="#a3a9b0" stroke-width="1.4"/>
+            <path d="M 14 100 C 52 42, 132 13, 200 11 C 268 13, 348 42, 386 100" fill="none" stroke="#6d737a" stroke-width="1.2"/>
+          </svg>
+        </div>
         <!-- SIM 에서만 보인다 — 1인칭 ↔ 외부 시점(뒤에서 내 헬기를 본다) -->
         <button class="sim-btn" id="ext-btn" data-act="toggleExtView" title="외부 시점 — 뒤에서 따라가며 내 헬기(흰수리)를 봅니다. 시야 둘러보기(B0 + 햇)로 둘레를 돌아봅니다">EXT</button>
         <div id="tilt-ctrl">

@@ -657,6 +657,9 @@ function syncChinView() {
     if (btn.classList.contains('show') !== sim) btn.classList.toggle('show', sim);
     if (btn.classList.contains('on') !== chinViewOn) btn.classList.toggle('on', chinViewOn);
   }
+  // 1인칭의 기수(15-heli3d.js) — 외부 시점·SIM 해제면 숨긴다
+  try { if (typeof heli3dNoseSync === 'function' && !(sim && !((typeof simExtView !== 'undefined') && simExtView))) heli3dNoseSync(null); }
+  catch (e) { _swallow(e); }
   // 외부 시점 버튼(EXT) — SIM 에서만 보인다
   const ext = document.getElementById('ext-btn');
   const extOn = (typeof simExtView !== 'undefined') && simExtView;
