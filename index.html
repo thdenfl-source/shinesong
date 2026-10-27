@@ -557,10 +557,22 @@ html, body {
 #sim-nose svg { display: block; width: 100%; height: 100%; }
 #ext-btn.show { display: block; }
 #ext-btn.on { color: #00e5ff; border-color: #00e5ff; }
+#fly3d-btn { position: absolute; top: 104px; right: 8px; z-index: 900; padding: 5px 10px; }
+/* 출발 공항 고르기(09-cdu.js openStartAirportPicker) */
+.ui-dlg.start-apt { width: min(560px, 94vw); max-width: min(560px, 94vw); }
+.start-apt-sub { font-size: 12px; color: #9aa4ae; }
+.start-apt-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 6px;
+                  max-height: min(52vh, 420px); overflow-y: auto; margin: 0 18px 12px; }
+.start-apt-btn { padding: 8px 6px; background: #10161d; border: 1px solid #2c3a48; color: #d6dde4;
+                 border-radius: 6px; text-align: left; cursor: pointer; font-size: 13px; }
+.start-apt-btn b { color: #7fd4ff; margin-right: 4px; }
+.start-apt-btn:hover, .start-apt-btn:focus { border-color: #4aa8ff; background: #14212e; }
+.start-apt-skip { padding: 7px 12px; }
 /* 2D 위에 겹쳐 쓸 때는 지도 툴바 아래로 */
 #map-wrap #q3d-btn { top: 48px; }
 #map-wrap #chin-btn { top: 80px; }
 #map-wrap #ext-btn { top: 112px; }
+#map-wrap #fly3d-btn { top: 144px; }
 /* When 3D is on, hide the 2D Leaflet map so its panes never paint through */
 #map-wrap.map3d-on #map { visibility: hidden; }
 #layer-btn-3d { background: rgba(0,10,30,0.82); border: 1px solid #333; color: #aaa; }
@@ -1771,7 +1783,12 @@ body.gate-open #gate-overlay { display: none; }
 
       <h3>2. 기본 비행 (시뮬레이션)</h3>
       <ul>
-        <li>MAP 하단 <b>▶ FLY</b>로 시작(다시 누르면 PAUSE), <b>RESET</b> 초기화, <b>CLR</b> 비행계획 삭제.</li>
+        <li><b>시작</b> — 처음 열면(비밀번호 다음) <b>출발 공항을 고르는 창</b>이 뜹니다. 지도의 ICAO 공항 목록이며,
+            ICAO·이름으로 걸러 찾을 수 있습니다(Enter = 맨 위). 고르면 그 공항 <b>지면에 멈춰</b> 서고, 건너뛰면 송도에서
+            시작합니다. 같은 탭에서 새로고침하면 다시 묻지 않습니다. <b>GPS 는 꺼진 채 시작</b>합니다(기기 위치를 묻지
+            않습니다) — 실비행에 쓰려면 지도의 GPS 버튼으로 켭니다.</li>
+        <li>MAP 하단 <b>▶ FLY</b>로 시작(다시 누르면 PAUSE), <b>RESET</b> 초기화, <b>CLR</b> 비행계획 삭제.
+            3D 창 오른쪽 위(EXT 아래)에도 같은 <b>▶ FLY / ⏸ PAUSE</b> 버튼이 있습니다.</li>
         <li><b>3D 창</b>: 각 창의 탭에 <b>3D</b> 가 있습니다. 한 창을 <b>MAP</b>, 다른 창을 <b>3D</b> 로 두면
             <b>2D 지도와 3D 지도를 나란히</b> 볼 수 있습니다(3분할이면 가운데 2D · 우측 3D 처럼).
             3D 지도는 한 벌을 옮겨 쓰므로 타일을 두 배로 받지 않습니다. 3D 창을 쓰는 동안에는
@@ -1794,8 +1811,8 @@ body.gate-open #gate-overlay { display: none; }
             7.5° 호버(0kt)</b>(4° 까지는 1° 당 10kt, 그 뒤 호버까지는 1° 당 약 23kt — 호버 언저리에서는
             자세를 조금만 바꿔도 속도가 크게 바뀝니다), <b>−10° 140kt</b>(숙일 때 <b>1° 당 2kt</b> — 빨라질수록
             항력이 급히 늘어 덜 늡니다). 7.5° 보다 더 들면 뒤로 갑니다.
-            오르내리는 동안에는 <b>조금만</b> 어긋납니다(1,000fpm 당 4kt — 올라가면 조금 느리고 내려가면 조금 빠르다,
-            제자리에서 곧장 오르내릴 때는 어긋나지 않습니다).<br>
+            <b>오르내려도 같은 자세면 같은 속도</b>로 수렴합니다(수평 120kt 는 1,000ft 로 오르는 중에도 수평 —
+            실제의 피토관 오차 같은 어긋남은 두지 않습니다).<br>
             <b>속도·고도는 점점 빠르게 바뀝니다</b> — 자세를 바꾸면 가감속이 <b>처음엔 작다가 갈수록 커져</b>
             속도가 <b>점점 가속되며</b> 바뀝니다(일정한 빠르기로 바뀌지 않습니다 — 가속은 1초에 0.8kt/s 씩 오래 커집니다).
             그 자세의 속도에 가까워져서야 짧게 풀려 넘쳐 지나치지 않습니다.
@@ -1806,7 +1823,13 @@ body.gate-open #gate-overlay { display: none; }
             컬렉티브를 올리면 토크가 0.5초쯤에 따라붙고, 상승률도 <b>점점 빨라지며</b> 붙습니다 —
             상승·강하율이 바뀌는 빠르기는 <b>1초에 최대 500fpm</b>(최소·최대 상승률은 그대로)입니다.<br>
             자세는 <b>위아래 60°</b> 까지 잡힙니다(속도는 뒤로 40kt · 앞으로 160kt 에서 멎습니다).
-            땅에 닿아 있으면 자세를 줘도 미끄러지지 않습니다.<br>
+            <b>땅 위(바퀴형)</b> — 토크를 <b>20% 넘게</b> 쓰면 천천히 앞으로 굴러가고(토크가 클수록), <b>사이클릭을 민 만큼</b>
+            더 빨리 붙습니다(당기면 늦추고, 뒤로는 구르지 않습니다). 땅 위의 자세는 <b>위아래 10°</b> 까지이고,
+            토크를 20% 아래로 내리면 섭니다. 옆으로는 미끄러지지 않습니다.<br>
+            <b>지면효과 · 호버 높이</b> — HOV(호버 파워, PERF 의 IGE 호버 토크)를 기준으로 <b>HOV−10% 면 바퀴가 떨어져
+            3ft</b>, <b>HOV−5% 면 5ft</b>, <b>HOV 면 10ft</b> 에서 호버링합니다(그 위는 로터 지름쯤에서 OGE 로 늘어납니다).
+            <b>HOV−20 ~ HOV−10%</b> 는 바퀴가 떨어지기 직전이라 PFD 에 호박색 <b>LIGHT ON WHEELS</b> 가 뜹니다
+            (기본 PERF 에서 HOV 가 70% 라 50~60%). 땅 가까이에서는 상승률이 토크를 곧 따라가 그 높이를 지나쳐 출렁이지 않습니다.<br>
             <b>저속에서는 뱅크가 '옆걸음' 이 됩니다</b> — 제자리에서 오른쪽으로 기울이면 기수는 그대로 둔 채
             오른쪽으로 갑니다(최대 35kt). 속도가 붙을수록 그 몫이 줄어 <b>45kt 부터는 보통의 선회</b>만
             남습니다. 호버 페이지의 좌우 속도에도 그대로 나옵니다.<br>
@@ -1892,7 +1915,7 @@ body.gate-open #gate-overlay { display: none; }
             외부 시점에서는 CHIN 창을 닫고, SIM 을 나갔다 들어오면 1인칭부터 시작합니다.<br>
             <b>흰수리 3D 모형</b> — 입면도·평면도·측면도를 바탕으로 <b>실제 크기(전장 20m — 주로터 앞 끝에서
             꼬리로터 뒤 끝까지)</b>로 그립니다: 주로터 지름 14.1m · 꼬리로터 3m · 동체 약 18.8m, 흰 동체에 붉은 엔진 덮개,
-            뒤로 노랑 → 파랑 띠, 붉은 수평 꼬리날개. 자세(기수·피치·뱅크)를 그대로 따르고 로터가 돕니다
+            뒤로 노랑 → 파랑 띠, 붉은 수평 꼬리날개(왼쪽에만), 꼬리로터는 오른쪽. 자세(기수·피치·뱅크)를 그대로 따르고 로터가 돕니다
             (시뮬이 멈추면 멈춤). 바퀴 바닥이 지면 · 함정 갑판에 닿게 놓입니다.
             SIM 이 아닐 때 3D 지도에도 초록 삼각형 대신 이 모형이 보이며, 멀어서 작게 보일 때만 삼각형을 같이 띄웁니다.<br>
             <b>3D 화질(상·중·하)</b> — 3D 창 오른쪽 위 <b>화질</b> 버튼을 누를 때마다 상 → 중 → 하 로 바뀝니다
@@ -1913,7 +1936,7 @@ body.gate-open #gate-overlay { display: none; }
             <b>IAS</b> 는 기수 자세를 가져갑니다 — FCP 의 <b>IAS 라벨</b>을 누르면 <b>지금 속도를 기준</b>으로 켜지고
             (다시 누르면 꺼집니다), <b>IAS ▲▼</b> 는 기준을 1kt 씩 옮기며 켭니다. 켜져 있으면 ADI 가
             <b>그 속도를 내는 자세</b>(수평 120kt · 4° 80kt · 7.5° 호버)로 잡히고 속도가 그 값에 섭니다
-            (오르내리는 동안 어긋나는 몫까지 메웁니다). <b>조종간을 밀고 당기면 그만큼 자세가 벗어나고
+            (오르내려도 그 자세 그대로). <b>조종간을 밀고 당기면 그만큼 자세가 벗어나고
             속도도 따라 바뀌었다가, 놓으면 IAS 자세로 천천히(초당 5°) 돌아와</b> 속도도 기준으로 돌아갑니다.
             켜져 있는 동안 <b>전후 트림</b>은 기준 속도를 1kt 씩 옮기고, <b>FORCE TRIM</b> 은 지금 속도를 새 기준으로
             잡습니다. PFD 속도계에 기준 속도(<b>청록 벅과 숫자</b>)가 나오고 FMA 의 IAS 가 초록으로 켜집니다.
@@ -1932,6 +1955,8 @@ body.gate-open #gate-overlay { display: none; }
         <li><b>승강계</b>는 위로 <b>3,000fpm</b>, 아래로 <b>4,000fpm</b> 까지 읽습니다 — ±1,000fpm 까지는 반 칸에 넓게,
             그 위는 좁혀 담습니다. SIM 에서 상승률은 토크 100% 에서 Vy 2,300fpm, 그보다 더 당기면(MTA 까지)
             <b>3,000fpm</b> 까지 오르고, 강하는 4,000fpm 까지입니다.</li>
+        <li><b>ALT 버튼</b>은 <b>누른 순간의 고도</b>를 기준으로 그 고도를 지킵니다(FMA <b>ALT</b>). 다른 고도로 가려면
+            <b>ALT ▲▼</b> 로 기준을 옮깁니다 — 그 고도로 가는 동안 FMA 가 <b>ALT.A</b>(선택 상승률로)이고 닿으면 ALT 로 바뀝니다.</li>
         <li>PFD 하단 FCP에서 <b>IAS·HDG·CRS·VS·ALT·CRHT</b>를 ▲▼/◀▶로 조절.
             <b>CRHT ▲▼</b> 는 10ft 씩 옮기며, 지금 고도로 걸어 끝자리가 남아 있으면(예: 1,237ft)
             먼저 <b>10ft 단위</b>로 맞춥니다(▲ 1,240 · ▼ 1,230).
@@ -1956,6 +1981,8 @@ body.gate-open #gate-overlay { display: none; }
       <h3>3. MAP 창</h3>
       <ul>
         <li>상단: GPS·WX·＋(웨이포인트)·RAIN·WIND·NOTAM·FIX·AWY·<b>공역</b>·<b>📏 측정자</b>·FULL.</li>
+        <li><b>내 헬기 심볼</b>은 흰수리 평면도입니다(위에서 본 모습 · 실제 축척이 아니라 36px) — 흰 동체, 붉은 엔진 덮개,
+            노랑 → 파랑 꼬리, 왼쪽 수평안정판, 오른쪽 꼬리로터, 주로터 4엽. 기수 방향으로 돕니다.</li>
         <li><b>＋ 메뉴</b>: <b>PP 현재위치</b>(항공기 자리) · <b>＋ 십자위치</b>(지도 중앙) ·
             <b>🔎 주소 검색</b>. 주소 검색은 주소·지명을 찾아 그 자리를 <b>웨이포인트(AD1·AD2…)</b> 로 넣고
             지도를 그리로 옮깁니다. <b>좌표(37.5665, 126.9780)</b> 를 그대로 넣어도 됩니다.<br>
@@ -2189,7 +2216,7 @@ body.gate-open #gate-overlay { display: none; }
 
       <h3>7. GPS 모드 (실비행)</h3>
       <ul>
-        <li>GPS 버튼을 켜면 실제 위치·속도·고도로 계기가 움직입니다.</li>
+        <li>GPS 버튼을 켜면 실제 위치·속도·고도로 계기가 움직입니다. 앱을 열면 GPS 는 꺼져 있습니다.</li>
         <li>헤딩: <b>10kt 미만은 기기 나침반</b>, 10kt 이상은 항적 기준(첫 실행 시 나침반 권한 허용).</li>
         <li>신호가 잠시 끊겨도 GPS는 꺼지지 않고 자동으로 재개됩니다.</li>
       </ul>
@@ -2582,6 +2609,8 @@ body.gate-open #gate-overlay { display: none; }
         </div>
         <!-- SIM 에서만 보인다 — 1인칭 ↔ 외부 시점(뒤에서 내 헬기를 본다) -->
         <button class="sim-btn" id="ext-btn" data-act="toggleExtView" title="외부 시점 — 뒤에서 따라가며 내 헬기(흰수리)를 봅니다. 시야 둘러보기(B0 + 햇)로 둘레를 돌아봅니다">EXT</button>
+        <!-- FLY/PAUSE — 지도 창의 같은 버튼과 같다(3D 를 제 창으로 쓸 때도 바로 멈추고 이어 간다) -->
+        <button class="sim-btn" id="fly3d-btn" data-act="toggleSim" title="FLY / PAUSE — 지도 창의 같은 버튼과 같습니다">▶ FLY</button>
         <div id="tilt-ctrl">
           <button data-act="tiltAdj" data-arg='[-5]' title="Tilt up">▲</button>
           <button data-act="tiltAdj" data-arg='[5]'  title="Tilt down">▼</button>

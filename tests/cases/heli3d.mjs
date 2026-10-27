@@ -46,6 +46,18 @@ export async function run(page, t) {
   t.ok(Math.abs(dim.z0) < 0.02, `바퀴 바닥이 지면(0m)이다 (${dim.z0.toFixed(2)}m)`);
   t.ok(dim.rotorZ > dim.z1 - 0.5 && dim.rotorZ < 6, `주로터는 엔진 덮개 위에 있다 (로터 ${dim.rotorZ}m · 동체 꼭대기 ${dim.z1.toFixed(2)}m)`);
   t.ok(dim.width > 4 && dim.width < 5, `좌우 폭(연료탱크 포함)이 그림과 맞다 (${dim.width.toFixed(2)}m)`);
+  // 꼬리로터는 오른쪽, 수평안정판은 왼쪽에만
+  const tail = await page.evaluate(() => {
+    const b = _h3BuildBody();
+    let l = 0, r = 0;
+    for (let i = 0; i < b.length; i += 10) {
+      const x = b[i], y = b[i + 1], z = b[i + 2];
+      if (x < -7 && x > -8 && Math.abs(z - 3.05) < 0.1) { if (y < -1.5) l++; if (y > 1.5) r++; }
+    }
+    return { ty: HELI3D_TAIL.y, l, r };
+  });
+  t.ok(tail.ty > 0.3, `꼬리로터는 오른쪽에 있다 (y ${tail.ty}m)`);
+  t.ok(tail.l > 0 && tail.r === 0, `수평안정판은 왼쪽에만 있다 (왼쪽 꼭짓점 ${tail.l} · 오른쪽 ${tail.r})`);
 
   // ── 3D 지도에 얹힌다 ──
   const open = await page.evaluate(async () => {

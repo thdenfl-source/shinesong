@@ -271,7 +271,7 @@ updateHoverBtns();
 // ══════════════════════════════════════════════════════
 function updateFlyBtns(){
   const txt = S.running ? '⏸ PAUSE' : '▶ FLY';
-  ['fly-btn','map-fly-btn'].forEach(id=>{
+  ['fly-btn','map-fly-btn','fly3d-btn'].forEach(id=>{   // fly3d-btn: 3D 창의 같은 버튼
     const b=document.getElementById(id);
     if(!b) return;
     b.textContent=txt;

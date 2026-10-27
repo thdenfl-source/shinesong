@@ -167,9 +167,26 @@ const TLIFT_KT   = 55;         // 그 효과가 다 차는 속도(kt)
 
 // ── 제자리 호버에 필요한 토크 ──
 // CDU 의 PERF 화면이 고도·온도·중량으로 뽑아 주는 바로 그 값을 쓴다.
-// 지면 가까이에서는 지면효과(IGE)로 덜 들고, 떠오르면 OGE 로 수렴한다.
-// 전이 높이는 로터 지름 즈음(≈53ft)으로 둔다 — 그 위는 지면효과가 없다.
+// HOV(호버 파워) = PERF 의 IGE 호버 토크 — 바퀴 높이 10ft 에서 제자리에 서는 토크다.
+// 땅에 가까울수록 지면효과로 덜 든다(바퀴 높이 기준):
+//   3ft 이하 : HOV − 10%  — 이 토크면 바퀴가 떨어져 3ft 에 선다(그보다 적으면 바퀴가 땅에)
+//   5ft      : HOV − 5%
+//   10ft     : HOV
+//   10→53ft  : HOV → OGE — 로터 지름 즈음(≈53ft) 위는 지면효과가 없다
+// 그래서 레버를 HOV−10% 에 두면 3ft, HOV−5% 면 5ft, HOV 면 10ft 에서 호버링한다.
+// HOV−20% ~ HOV−10% 는 바퀴가 떨어지기 직전(LIGHT ON WHEELS)이다(simLightOnWheels).
 const IGE_FULL_FT = 10, IGE_NONE_FT = 53;
+// [바퀴 높이 ft, HOV 와의 차 %] — 땅(0ft)은 HOV−10 보다 조금 낮게 두어, HOV−10% 면 확실히
+// 바퀴가 떨어져 몇 초 안에 3ft 까지 오른다(같게 두면 땅에서 꼭 맞아 뜨지 않는다)
+const IGE_CURVE = [[0, -12], [3, -10], [5, -5], [10, 0]];
+const LOW_BAND  = [-20, -10];                      // LIGHT ON WHEELS 구간(HOV 와의 차 %)
+// HOV(호버 파워, %) — 바퀴 높이 10ft 의 IGE 호버 토크
+function hoverPowerTq() {
+  let p = null;
+  try { p = (typeof perfHoverTq === 'function') ? perfHoverTq() : null; } catch (e) { _swallow(e); }
+  if (!p || !Number.isFinite(p.oge)) return TQ_HOVER;
+  return Number.isFinite(p.ige) ? p.ige : p.oge;
+}
 function hoverTqRef() {
   let p = null;
   try { p = (typeof perfHoverTq === 'function') ? perfHoverTq() : null; } catch (e) { _swallow(e); }
@@ -183,6 +200,16 @@ function hoverTqRef() {
     agl = S.alt - (d == null ? g : Math.max(g, d));
   }
   catch (e) { agl = S.alt; }
+  if (agl < IGE_FULL_FT) {                                     // 지면효과 — 낮을수록 덜 든다
+    const c = IGE_CURVE;
+    if (agl <= c[0][0]) return ige + c[0][1];
+    for (let i = 1; i < c.length; i++) {
+      if (agl <= c[i][0]) {
+        const f = (agl - c[i - 1][0]) / (c[i][0] - c[i - 1][0]);
+        return ige + c[i - 1][1] + (c[i][1] - c[i - 1][1]) * f;
+      }
+    }
+  }
   const k = Math.max(0, Math.min(1, (agl - IGE_FULL_FT) / (IGE_NONE_FT - IGE_FULL_FT)));
   return ige + (p.oge - ige) * k;                              // IGE → OGE
 }
@@ -456,6 +483,9 @@ function toggleGspd() {
 function toggleAltHold() {
   altHoldOn = !altHoldOn;
   if (altHoldOn) {
+    // ALT 버튼은 '지금 고도를 지킨다' — 누른 순간의 고도가 기준이다.
+    // 다른 고도로 가려면(ALT.A) ALT ▲▼ 로 기준을 옮긴다(07-sim.js applyDelta 'alt').
+    selAlt = Math.round(S.alt);
     crhtOn = false;  // mutually exclusive
   } else if (!simModeOn) {
     S.vs = 0;  // prevent unintended climb/descent after disengagement

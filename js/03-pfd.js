@@ -107,7 +107,8 @@ function drawFMA(x, y, w) {
     midOn  = true;
     right  = 'GS'; rightOn = true;
   } else {
-    left   = crhtOn ? 'CRHT' : 'ALT';
+    // ALT 가 선택 고도로 가는 중이면(기준이 지금 고도와 20ft 넘게 떨어져 있으면) ALT.A
+    left   = crhtOn ? 'CRHT' : (altHoldOn && Math.abs(selAlt - S.alt) > 20 ? 'ALT.A' : 'ALT');
     leftOn = altHoldOn || crhtOn;     // dim ALT if both collective holds off
     right  = 'IAS';
     // SIM 모드에서는 IAS 를 건 동안만 켜진다(풀려 있으면 기수 자세는 조종간 몫)
@@ -426,6 +427,17 @@ function drawAI(x, y, w, h) {
       ctx.beginPath(); ctx.moveTo(fpvX, fpvY - fr); ctx.lineTo(fpvX, fpvY - fr * 1.7); ctx.stroke();
       ctx.restore();
     }
+  }
+  // LIGHT ON WHEELS — 땅에 붙은 채 바퀴가 떨어지기 직전(SIM · 14-simmode.js simLightOnWheels)
+  if (typeof simLightOnWheels === 'function' && simLightOnWheels()) {
+    const txt = 'LIGHT ON WHEELS';
+    ctx.font = `bold ${Math.max(10, w * 0.032)}px Helvetica Neue, Arial, sans-serif`;
+    const tw = ctx.measureText(txt).width + 14, th = Math.max(16, w * 0.045);
+    const ty = aiY + aiH - th - 14;
+    ctx.fillStyle = 'rgba(0,0,0,0.75)'; ctx.fillRect(cx - tw / 2, ty, tw, th);
+    ctx.strokeStyle = '#ffb000'; ctx.lineWidth = 1.5; ctx.strokeRect(cx - tw / 2, ty, tw, th);
+    ctx.fillStyle = '#ffb000'; ctx.textAlign = 'center';
+    ctx.fillText(txt, cx, ty + th * 0.72);
   }
   ctx.restore();  // end inner clip (AI content area)
 

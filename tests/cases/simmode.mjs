@@ -2095,6 +2095,116 @@ export async function run(page, t) {
     `볼 그림이 옆 힘을 따라 움직인다 (${ball.px.map(v => v.toFixed(1)).join(' / ')})`);
   t.ok(ball.px[2] <= 240 && ball.px[3] >= 160, '관 밖으로는 나가지 않는다');
 
+  // ── 바퀴형 — 땅 위에서 토크 20% 를 넘기면 굴러간다 ──
+  // 토크가 클수록 천천히, 사이클릭을 민 만큼 더 빨리 붙는다. 땅 위 자세는 위아래 10° 까지.
+  const taxi = await page.evaluate(`(() => {
+    (${SETUP.toString()})();
+    const fly = ${FLY};
+    joyAxes = { roll: { i: 0, inv: false }, pitch: { i: 1, inv: false }, yaw: { i: 2, inv: false },
+                coll: { i: 3, inv: false, abs: true } };
+    const lever = tq => _ax(3, Math.max(-1, Math.min(1, tq / SIM_LEVER_TOP * 2 - 1)));
+    const run = (tq, stick, sec) => {
+      S.alt = 0; _simGndFt = 0; S.spd = 0; simAcc = 0; S.vs = 0; simVsAcc = 0; S.pit = 0;
+      simTrimReset(); simStartGround(); lever(tq); _ax(1, stick); joyPoll(1000);
+      S.tq = tq; fly(sec);
+      return { spd: S.spd, alt: S.alt, pit: S.pit, gnd: _simOnGnd };
+    };
+    const out = { idle: run(15, 0, 6), creep: run(40, 0, 10), push: run(40, 0.1, 10), full: run(40, 1, 10),
+                  back: run(40, -1, 10) };
+    _ax(1, 0); _ax(3, -1); joyPoll(2000);
+    return out;
+  })()`);
+  t.ok(taxi.idle.spd < 0.01, `토크 20% 아래(15%)면 서 있다 (${taxi.idle.spd.toFixed(2)}kt)`);
+  t.ok(taxi.creep.spd > 1 && taxi.creep.spd < 8 && taxi.creep.gnd && taxi.creep.alt === 0,
+    `토크 40% · 사이클릭 가운데 — 땅 위에서 천천히 굴러간다 (10초 ${taxi.creep.spd.toFixed(1)}kt)`);
+  t.ok(taxi.push.spd > taxi.creep.spd + 2 && taxi.full.spd > taxi.push.spd + 10,
+    `사이클릭을 민 만큼 더 빨리 붙는다 (가운데 ${taxi.creep.spd.toFixed(1)} · 조금 ${taxi.push.spd.toFixed(1)} · 끝까지 ${taxi.full.spd.toFixed(1)}kt)`);
+  t.ok(Math.abs(taxi.full.pit + 10) < 0.01 && Math.abs(taxi.back.pit - 10) < 0.01,
+    `땅 위의 자세는 위아래 10° 까지다 (밀면 ${taxi.full.pit.toFixed(1)}° · 당기면 ${taxi.back.pit.toFixed(1)}°)`);
+  t.ok(taxi.back.spd < 0.01, '당기면(기수 듦) 굴러가지 않는다 — 뒤로는 구르지 않는다');
+
+  // ── 지면효과 — HOV−10% 3ft · HOV−5% 5ft · HOV 10ft 에서 호버링 ──
+  // HOV−20 … HOV−10% 는 바퀴가 떨어지기 직전(LIGHT ON WHEELS)이다.
+  const hov = await page.evaluate(`(() => {
+    (${SETUP.toString()})();
+    const fly = ${FLY};
+    joyAxes = { roll: { i: 0, inv: false }, pitch: { i: 1, inv: false }, yaw: { i: 2, inv: false },
+                coll: { i: 3, inv: false, abs: true } };
+    const lever = tq => _ax(3, Math.max(-1, Math.min(1, tq / SIM_LEVER_TOP * 2 - 1)));
+    const H = hoverPowerTq();
+    const run = (d, sec) => {
+      S.alt = 0; _simGndFt = 0; S.spd = 0; simAcc = 0; S.vs = 0; simVsAcc = 0; S.pit = 0;
+      simTrimReset(); simStartGround(); simTrimHoldSpeed();      // 호버 자세(기수 7.5° 듦)
+      lever(H + d); _ax(1, 0); joyPoll(1000);
+      let low = false, maxAlt = 0;
+      S.running = true; let ts = 1000; S.lastT = ts;
+      for (let i = 0; i < sec * 20; i++) {
+        ts += 50; joyPoll(ts); simStep(ts);
+        low = low || simLightOnWheels(); maxAlt = Math.max(maxAlt, S.alt);
+      }
+      S.running = false;
+      // PFD 에 LIGHT ON WHEELS 가 뜨는가
+      const texts = [], o = ctx.fillText;
+      ctx.fillText = function (s, ...a) { texts.push(String(s)); return o.call(this, s, ...a); };
+      try { drawPFD(); } finally { ctx.fillText = o; }
+      return { alt: S.alt, vs: S.vs, spd: S.spd, low, nowLow: simLightOnWheels(), maxAlt,
+               pfd: texts.includes('LIGHT ON WHEELS') };
+    };
+    const out = { H, d25: run(-25, 8), d15: run(-15, 8), d10: run(-10, 25), d5: run(-5, 20), d0: run(0, 20) };
+    _ax(3, -1); joyPoll(3000);
+    return out;
+  })()`);
+  t.ok(hov.d25.alt === 0 && !hov.d25.low, `HOV−25%(${(hov.H - 25).toFixed(0)}%)면 바퀴가 땅에 그대로 — LIGHT ON WHEELS 아님`);
+  t.ok(hov.d15.alt === 0 && hov.d15.nowLow && hov.d15.pfd,
+    `HOV−15%(${(hov.H - 15).toFixed(0)}%)면 LIGHT ON WHEELS — 바퀴가 떨어지기 직전, PFD 에 뜬다`);
+  t.ok(Math.abs(hov.d10.alt - 3) < 0.3 && Math.abs(hov.d10.vs) < 20 && !hov.d10.nowLow,
+    `HOV−10%(${(hov.H - 10).toFixed(0)}%)면 바퀴가 떨어져 3ft 에서 호버링 (${hov.d10.alt.toFixed(2)}ft)`);
+  t.ok(Math.abs(hov.d5.alt - 5) < 0.3 && Math.abs(hov.d5.vs) < 20,
+    `HOV−5%면 5ft (${hov.d5.alt.toFixed(2)}ft · 최고 ${hov.d5.maxAlt.toFixed(1)}ft)`);
+  t.ok(Math.abs(hov.d0.alt - 10) < 0.3 && Math.abs(hov.d0.vs) < 20 && hov.d0.maxAlt < 11,
+    `HOV(${hov.H.toFixed(0)}%)면 10ft — 지나쳐 출렁이지 않는다 (${hov.d0.alt.toFixed(2)}ft · 최고 ${hov.d0.maxAlt.toFixed(1)}ft)`);
+  t.ok([hov.d10, hov.d5, hov.d0].every(r => r.spd < 0.5), '호버 자세면 제자리에 선다');
+
+  // ── 오르내려도 자세 하나가 곧 속도다 — 수평 120kt 는 오르는 중에도 수평 ──
+  const climbSpd = await page.evaluate(`(() => {
+    (${SETUP.toString()})();
+    const fly = ${FLY};
+    joyAxes = { coll: { i: 3, inv: false, abs: true } };
+    const lever = tq => _ax(3, Math.max(-1, Math.min(1, tq / SIM_LEVER_TOP * 2 - 1)));
+    S.alt = 400; _simGndFt = 0; S.spd = 120; S.pit = 0; simAcc = 0; S.vs = 0; simVsAcc = 0; simTrimReset();
+    lever(mtaNow() - 1); fly(25);
+    const out = { vs: S.vs, spd: S.spd, pit: S.pit };
+    selSpd = 120; out.iasPit = simIasPitch();
+    _ax(3, -1); joyPoll(3000);
+    return out;
+  })()`);
+  t.ok(climbSpd.vs > 1000 && Math.abs(climbSpd.spd - 120) < 1.5 && Math.abs(climbSpd.pit) < 0.1,
+    `수평 자세로 ${climbSpd.vs.toFixed(0)}fpm 오르는 중에도 120kt (${climbSpd.spd.toFixed(1)}kt · 피치 ${climbSpd.pit.toFixed(1)}°)`);
+  t.ok(Math.abs(climbSpd.iasPit) < 0.01, `IAS 120kt 의 자세는 오르내려도 수평이다 (${climbSpd.iasPit.toFixed(2)}° — 종전 기수 숙임)`);
+
+  // ── ALT 버튼은 누른 순간의 고도를 지킨다 · 다른 고도로 가는 동안은 ALT.A ──
+  const altCap = await page.evaluate(() => {
+    if (simModeOn) toggleSimMode(false);
+    S.alt = 1234; altHoldOn = false; crhtOn = false; selAlt = 3000;
+    toggleAltHold();
+    const fma = () => {
+      const texts = [], o = ctx.fillText;
+      ctx.fillText = function (s, ...a) { texts.push(String(s)); return o.call(this, s, ...a); };
+      try { drawPFD(); } finally { ctx.fillText = o; }
+      return texts;
+    };
+    const out = { on: altHoldOn, sel: selAlt, f1: fma() };
+    applyDelta('alt', 100); out.sel2 = selAlt; out.f2 = fma();
+    toggleAltHold(); toggleAltHold(); out.recap = selAlt;      // 다시 누르면 다시 지금 고도
+    altHoldOn = false;
+    return { on: out.on, sel: out.sel, sel2: out.sel2, recap: out.recap,
+             hold: out.f1.includes('ALT') && !out.f1.includes('ALT.A'), acq: out.f2.includes('ALT.A') };
+  });
+  t.ok(altCap.on && altCap.sel === 1234, `ALT 를 누르면 그 순간의 고도(1,234ft)가 기준이다 (${altCap.sel}ft · 종전 3,000ft 로 갔다)`);
+  t.ok(altCap.hold, 'FMA 는 지금 고도를 지키는 동안 ALT');
+  t.ok(altCap.sel2 === 1334 && altCap.acq, `ALT ▲ 로 기준을 옮기면 그 고도로 가는 동안 ALT.A (${altCap.sel2}ft)`);
+  t.eq(altCap.recap, 1234, '풀었다 다시 누르면 다시 그 순간의 고도');
+
   // 뒷정리 — 다음 검사가 SIM 모드·가짜 패드를 물려받지 않도록
   await page.evaluate(() => {
     if (simModeOn) toggleSimMode(false);
