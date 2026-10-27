@@ -1645,6 +1645,33 @@ body.night-mode::after {
 }
 
 /* ── 시작 안내 오버레이 ── */
+/* ── 시작 잠금(비밀번호) — 무엇보다 위에서 앱 전체를 덮는다 ── */
+#gate-overlay {
+  position: fixed; inset: 0; z-index: 2147483000;
+  display: flex; align-items: center; justify-content: center;
+  background: radial-gradient(circle at 50% 40%, #102030 0%, #05080c 70%);
+}
+body.gate-open #gate-overlay { display: none; }
+#gate-box {
+  display: flex; flex-direction: column; align-items: stretch; gap: 10px;
+  width: min(300px, calc(100vw - 32px)); padding: 24px 20px;
+  background: #0d151d; border: 1px solid #2a3a4a; border-radius: 10px;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+}
+#gate-box .gate-title { color: #00e5ff; font: bold 17px Helvetica, Arial, sans-serif; text-align: center; letter-spacing: 1px; }
+#gate-box .gate-sub { color: #9fb0c0; font-size: 13px; text-align: center; }
+#gate-pw {
+  font-size: 16px; padding: 10px 12px; border-radius: 6px;
+  border: 1px solid #3a4a5a; background: #05080c; color: #fff; outline: none;
+}
+#gate-pw:focus { border-color: #00e5ff; }
+#gate-ok {
+  font-size: 15px; font-weight: bold; padding: 10px; border-radius: 6px; cursor: pointer;
+  border: 1px solid #00e5ff; background: rgba(0,229,255,0.15); color: #00e5ff;
+}
+#gate-msg { min-height: 16px; color: #ff6666; font-size: 12px; text-align: center; }
+#gate-box.shake { animation: gate-shake 0.35s; }
+@keyframes gate-shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-8px); } 75% { transform: translateX(8px); } }
 #help-overlay {
   position: fixed; inset: 0; z-index: 5000;
   background: rgba(0,0,0,0.72);
@@ -1693,6 +1720,18 @@ body.night-mode::after {
 </style>
 </head>
 <body>
+<!-- 시작 잠금 — 비밀번호를 넣어야 시뮬을 쓸 수 있다(js/00-gate.js). 다른 무엇보다 먼저 덮는다 -->
+<div id="gate-overlay">
+  <form id="gate-box" autocomplete="off">
+    <div class="gate-title">VFR FLIGHT SIM</div>
+    <div class="gate-sub">비밀번호를 입력하세요</div>
+    <input id="gate-pw" type="password" autocomplete="current-password" spellcheck="false"
+           aria-label="비밀번호" placeholder="비밀번호">
+    <button type="submit" id="gate-ok">확인</button>
+    <div id="gate-msg" role="alert"></div>
+  </form>
+</div>
+<script src="js/00-gate.js"></script>
 <!-- ── 단일화면 선택 바 (기본 숨김) ── -->
 <!-- ── 시작 안내(사용법/키보드) 오버레이 ── -->
 <div id="help-overlay" style="display:none;">
@@ -1733,43 +1772,46 @@ body.night-mode::after {
             화면 가득 띄웁니다. 계기비행 연습처럼 PFD 만 크게 보거나, 지도·CDU 를 넓게 볼 때 쓰십시오.
             버튼을 <b>한 번 더 누르면</b>(또는 떠 있는 <b>✥ HALF</b> · 상단 막대의 <b>✕</b>)
             <b>들어가기 전 배치 그대로</b> 돌아옵니다. 단독 중에는 <b>상단 막대</b>에서 다른 창으로 바로 넘어갈 수 있습니다.</li>
+        <li><b>시작 비밀번호</b>: 앱을 열면 먼저 비밀번호를 묻습니다. 맞게 넣으면 그 탭에서는 다시 묻지 않고
+            (새로고침해도 그대로), 앱을 새로 열면 다시 묻습니다. 화면 앞에서 막는 잠금이며 보안 장치는 아닙니다.</li>
         <li><b>SIM 모드</b>(스톱워치 오른쪽 <b>SIM</b> 버튼): 조이스틱으로 <b>직접 조종</b>합니다.
             PFD 의 자세·속도·고도와 지도의 위치·항적이 함께 움직입니다.<br>
             <b>사이클릭 좌우</b> → 뱅크(최대 45°)와 선회, <b>사이클릭 전후</b> → 기수 자세(최대 60°), <b>페달</b> → 기수만 회전(최대 25°/s),
             <b>컬렉티브</b> → <b>토크(TQ %)</b>.<br>
             <b>자세 하나가 곧 속도입니다</b> — 고도를 지키며 날 때 <b>수평 120kt · 기수 4° 80kt ·
-            7.5° 45kt</b>(들 때 <b>1° 당 10kt</b>), <b>−10° 140kt</b>(숙일 때 <b>1° 당 2kt</b> — 빨라질수록
-            항력이 급히 늘어 덜 늡니다).<br>
+            7.5° 호버(0kt)</b>(4° 까지는 1° 당 10kt, 그 뒤 호버까지는 1° 당 약 23kt — 호버 언저리에서는
+            자세를 조금만 바꿔도 속도가 크게 바뀝니다), <b>−10° 140kt</b>(숙일 때 <b>1° 당 2kt</b> — 빨라질수록
+            항력이 급히 늘어 덜 늡니다). 7.5° 보다 더 들면 뒤로 갑니다.
+            오르내리는 동안에는 <b>조금만</b> 어긋납니다(1,000fpm 당 4kt — 올라가면 조금 느리고 내려가면 조금 빠르다,
+            제자리에서 곧장 오르내릴 때는 어긋나지 않습니다).<br>
             <b>속도·고도는 점점 빠르게 바뀝니다</b> — 자세를 바꾸면 가감속이 <b>처음엔 작다가 갈수록 커지고</b>
-            (1초에 1.5kt/s 씩), 그 자세의 속도에 가까워지면 다시 풀려 넘쳐 지나치지 않습니다.
-            <b>감속은 최대 6kt/s</b>(기수를 들면 원판을 젖혀 항력까지 받습니다), <b>가속은 제자리 3kt/s 에서
-            속도가 붙을수록 커져 40kt 부터 5kt/s</b>(전이양력)입니다
-            (예: 120kt 에서 기수 6° 들면 12초에 66kt · 제자리에서 기수 5° 숙이면 10초에 34kt · 20초에 84kt).
-            컬렉티브를 올리면 토크가 0.5초쯤에 따라붙고, 상승률도 <b>점점 빨라지며</b> 붙습니다
-            (1초에 3할 남짓, 3초면 거의 다).<br>
+            (가속은 1초에 1.5kt/s 씩), 그 자세의 속도에 가까워지면 다시 풀려 넘쳐 지나치지 않습니다.
+            <b>감속은 훨씬 빨리 붙어</b> 1초에 6kt/s 씩 <b>최대 10kt/s</b>(기수를 들면 원판을 젖혀 항력까지 받습니다),
+            <b>가속은 제자리 3kt/s 에서 속도가 붙을수록 커져 40kt 부터 5kt/s</b>(전이양력)입니다
+            (예: 동고도 120kt 에서 60kt 자세로 들면 6초에 70kt · 8초면 60kt / 제자리에서 기수 5° 숙이면
+            10초에 34kt · 20초에 84kt).
+            컬렉티브를 올리면 토크가 0.5초쯤에 따라붙고, 상승률도 <b>점점 빨라지며</b> 붙습니다.<br>
             자세는 <b>위아래 60°</b> 까지 잡힙니다(속도는 뒤로 40kt · 앞으로 160kt 에서 멎습니다).
             땅에 닿아 있으면 자세를 줘도 미끄러지지 않습니다.<br>
             <b>저속에서는 뱅크가 '옆걸음' 이 됩니다</b> — 제자리에서 오른쪽으로 기울이면 기수는 그대로 둔 채
             오른쪽으로 갑니다(최대 35kt). 속도가 붙을수록 그 몫이 줄어 <b>45kt 부터는 보통의 선회</b>만
             남습니다. 호버 페이지의 좌우 속도에도 그대로 나옵니다.<br>
-            <b>위치에너지와 운동에너지는 서로 맞바뀝니다</b> — 같은 자세라도 <b>내려가는 동안에는 속도가
-            붙고</b>(기수를 숙인 채 컬렉티브를 내리면 고도가 빠지며 빨라집니다) <b>올라가는 동안에는
-            속도를 내줍니다</b>(1,000fpm 당 25kt). 거꾸로 <b>기수를 들어 감속하면 줄어든 속도가 고도로
-            돌아옵니다</b> — 그래서 <b>기수를 들며 컬렉티브를 내리면 고도는 지키면서 속도가 크게 줍니다</b>
+            <b>기수를 들어 감속하면 줄어든 속도가 고도로 조금 돌아옵니다</b>(운동에너지의 절반) — 그래서
+            <b>기수를 들며 컬렉티브를 조금 내리면 고도는 지키면서 속도가 크게 줍니다</b>
             (실제로 잃은 고도가 없으므로 레버를 내린 몫으로 속도를 돌려받지 않습니다).<br>
             <b>TQ 계기</b>는 <b>속도계 아래</b>에 막대로 섭니다. 헬기의 컬렉티브는 상승률 레버가 아니라
             <b>출력 레버</b>이므로, 지금 <b>필요한 토크</b>(노란 <b>HOV</b> 선)보다 <b>남으면 상승·모자라면 강하</b>합니다.<br>
-            그 <b>기준 토크와 상승률은 CDU 의 PERF 자료</b>를 그대로 씁니다(감도도 PERF 표 그대로 — 종전 2배의 반) —
+            그 <b>기준 토크는 CDU 의 PERF 자료</b>를 그대로 씁니다 —
             제자리 호버 토크는 PERF 의 <b>OGE/IGE</b>(고도·온도·<b>중량</b>으로 뽑은 값)이고,
             <b>지면 가까이</b>(10ft 이하)에서는 지면효과로 IGE 까지 내려갔다가 <b>53ft</b> 위에서 OGE 가 됩니다.
-            같은 토크라도 <b>PERF 의 최대상승속도(Vy)에서 가장 잘 오르고</b>, 그보다 빠르거나 느려질수록
-            덜 오릅니다(제자리·고속 순항에서는 30%까지 떨어집니다).
-            남는 토크가 몇 fpm 인지도 PERF 의 <b>상승·강하 토크표</b>를 되짚어 정합니다
-            (16,000lb 기준 +500fpm 에 +12.2%, +1,000fpm 에 +24.8%). PERF 에서 중량을 바꾸면
-            계기의 HOV 선과 실제 오르내림이 함께 바뀝니다.<br>
+            <b>상승률</b>은 수평 비행 토크에서 <b>100%</b> 까지 올린 만큼 그 속도의 최대 상승률에 다가갑니다 —
+            <b>제자리에서는 호버 토크(약 70~77%) → 100% 가 0 → 1,000fpm</b>, 속도가 붙을수록 같은 토크로 더 잘
+            올라 <b>PERF 의 Vy 에서는 최대 2,300fpm</b>(35kt 1,500 · 120kt 1,400fpm 언저리). 100% 를 넘겨도
+            그 속도의 최대보다 빨리 오르지는 않습니다. 강하는 PERF 의 <b>강하 토크표</b>를 씁니다
+            (16,000lb 기준 −500fpm 에 −11.0%). PERF 에서 중량을 바꾸면 계기의 HOV 선과 실제 오르내림이 함께 바뀝니다.<br>
             <b>레버를 그대로 둬도</b> 선회를 걸면 필요 토크가 올라 가라앉고(뱅크 30° ≈ +3%),
             <b>속도가 붙으면</b> 전진 양력으로 필요 토크가 줄어 떠오릅니다(최대 −9%).
-            오르내림은 속도와 맞바뀝니다 — 올라가면 느려지고 내려가면 빨라집니다.<br>
+            오르내리는 동안 속도는 조금만 어긋납니다 — 속도는 자세가 정합니다.<br>
             계기는 <b>0~100% 녹색</b>(연속 사용) · <b>100~113% 노랑</b>(주의) · <b>113~140% 빨강</b>(오버토크)
             구간으로 칠해져 있고, 막대는 지금 값이 든 구간의 색으로 찹니다.
             노란 구간에서는 숫자도 노랗게, <b>113%</b>(붉은 선)를 넘으면 막대와 숫자가 붉어지고 <b>OVER TQ</b> 가 뜹니다.<br>

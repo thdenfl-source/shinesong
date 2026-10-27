@@ -212,20 +212,20 @@ export async function run(page, t) {
     const max   = hold(-60);                    // 끝까지 숙여도 자세는 60° 까지
     return { level, four, seven, down, max,
              law: [spdFromPitch(0), spdFromPitch(4), spdFromPitch(7.5), spdFromPitch(-10)],
-             inv: [pitchFromSpd(120), pitchFromSpd(80), pitchFromSpd(45), pitchFromSpd(140)] };
+             inv: [pitchFromSpd(120), pitchFromSpd(80), pitchFromSpd(0), pitchFromSpd(140)] };
   })()`);
-  t.eq(trimSpd.law.join('/'), '120/80/45/140',
+  t.eq(trimSpd.law.join('/'), '120/80/0/140',
     `자세-속도 식이 기재와 같다 (0°→${trimSpd.law[0]} · 4°→${trimSpd.law[1]} · ` +
     `7.5°→${trimSpd.law[2]} · −10°→${trimSpd.law[3]}kt)`);
   t.ok(Math.abs(trimSpd.inv[0]) < 0.01 && Math.abs(trimSpd.inv[1] - 4) < 0.01
        && Math.abs(trimSpd.inv[2] - 7.5) < 0.01 && Math.abs(trimSpd.inv[3] + 10) < 0.01,
-    `거꾸로도 같다 (120kt→${trimSpd.inv[0].toFixed(1)}° · 80kt→${trimSpd.inv[1].toFixed(1)}° · 45kt→${trimSpd.inv[2].toFixed(1)}°)`);
+    `거꾸로도 같다 (120kt→${trimSpd.inv[0].toFixed(1)}° · 80kt→${trimSpd.inv[1].toFixed(1)}° · 호버→${trimSpd.inv[2].toFixed(1)}°)`);
   t.ok(Math.abs(trimSpd.level.pit) < 0.6 && Math.abs(trimSpd.level.spd - 120) < 8,
     `수평 자세로 날면 120kt 에서 멎는다 (${trimSpd.level.pit.toFixed(1)}° · ${trimSpd.level.spd.toFixed(0)}kt)`);
   t.ok(Math.abs(trimSpd.four.pit - 4) < 0.6 && Math.abs(trimSpd.four.spd - 80) < 8,
     `기수 4° 면 80kt 다 (${trimSpd.four.pit.toFixed(1)}° · ${trimSpd.four.spd.toFixed(0)}kt)`);
-  t.ok(Math.abs(trimSpd.seven.pit - 7.5) < 0.6 && Math.abs(trimSpd.seven.spd - 45) < 8,
-    `기수 7.5° 면 45kt 다 (${trimSpd.seven.pit.toFixed(1)}° · ${trimSpd.seven.spd.toFixed(0)}kt)`);
+  t.ok(Math.abs(trimSpd.seven.pit - 7.5) < 0.6 && Math.abs(trimSpd.seven.spd) < 3,
+    `기수 7.5° 면 호버(0kt)다 (${trimSpd.seven.pit.toFixed(1)}° · ${trimSpd.seven.spd.toFixed(1)}kt)`);
   t.ok(Math.abs(trimSpd.down.pit + 10) < 0.6 && Math.abs(trimSpd.down.spd - 140) < 8,
     `기수를 10° 숙이면 140kt 다 (${trimSpd.down.pit.toFixed(1)}° · ${trimSpd.down.spd.toFixed(0)}kt)`);
   t.ok(Math.abs(trimSpd.max.pit + 60) < 1.5,
@@ -264,10 +264,10 @@ export async function run(page, t) {
     `그 자세·고도유지에서 140kt 다 (${energy.trim.spd.toFixed(0)}kt · ${energy.trim.vs.toFixed(0)}fpm)`);
   t.ok(energy.sink.vs < -300 && energy.sink.alt < energy.trim.alt,
     `레버를 내리면 고도가 빠진다 (${energy.sink.vs.toFixed(0)}fpm)`);
-  t.ok(energy.sink.spd > energy.trim.spd + 5,
-    `그만큼 속도가 붙는다 — 위치에너지가 운동에너지로 (${energy.trim.spd.toFixed(0)} → ${energy.sink.spd.toFixed(0)}kt)`);
-  t.ok(energy.climb.vs > 120 && energy.climb.spd < energy.sink.spd - 10,
-    `반대로 올리면 고도를 얻고 속도를 내준다 (${energy.climb.vs.toFixed(0)}fpm · ${energy.climb.spd.toFixed(0)}kt)`);
+  t.ok(energy.sink.spd > energy.trim.spd + 1 && energy.sink.spd < energy.trim.spd + 15,
+    `속도는 조금만 붙는다 — 속도는 자세가 정한다 (${energy.trim.spd.toFixed(0)} → ${energy.sink.spd.toFixed(0)}kt)`);
+  t.ok(energy.climb.vs > 120 && energy.climb.spd < energy.sink.spd - 1 && energy.climb.spd > energy.trim.spd - 15,
+    `반대로 올리면 고도를 얻고 속도를 조금 내준다 (${energy.climb.vs.toFixed(0)}fpm · ${energy.climb.spd.toFixed(0)}kt)`);
 
   // ── 감속하면 고도를 얻는다(운동에너지 → 위치에너지) ──
   // 컬렉티브는 그대로 둔 채 기수를 들어 감속하면, 줄어든 운동에너지만큼 떠오른다.
@@ -291,7 +291,7 @@ export async function run(page, t) {
       S.running = false;
       return { spd: S.spd, vs: S.vs, alt: S.alt, maxVs, minVs };
     };
-    simTrim.pitch = -6;                            // 기수 6° 들기 → 60kt 로 감속(레버는 그대로)
+    simTrim.pitch = -pitchFromSpd(60);             // 기수를 들어 60kt 자세로 → 감속(레버는 그대로)
     const flare = run(40);
     simTrim.pitch = 0;                             // 다시 수평 → 120kt 로 가속
     const accel = run(60);
@@ -306,7 +306,7 @@ export async function run(page, t) {
   const keUp = keFt(ke.lvl.spd, ke.flare.spd);
   const gain = ke.flare.alt - ke.lvl.alt;
   t.ok(Math.abs(ke.lvl.vs) < 100, `레버를 고도 유지에 두고 수평 120kt 로 난다 (${ke.lvl.vs.toFixed(0)}fpm)`);
-  t.ok(Math.abs(ke.flare.spd - 60) < 5, `기수를 6° 들면 60kt 로 준다 (${ke.flare.spd.toFixed(0)}kt)`);
+  t.ok(Math.abs(ke.flare.spd - 60) < 5, `기수를 60kt 자세(약 4.9°)로 들면 60kt 로 준다 (${ke.flare.spd.toFixed(0)}kt)`);
   t.ok(ke.flare.maxVs > 500, `감속하는 동안 떠오른다 (최대 +${ke.flare.maxVs.toFixed(0)}fpm — 레버는 그대로)`);
   t.ok(gain > keUp * 0.75 && gain < keUp * 1.25,
     `줄어든 운동에너지만큼 고도를 얻는다 (+${gain.toFixed(0)}ft · 계산 ${keUp.toFixed(0)}ft)`);
@@ -331,7 +331,7 @@ export async function run(page, t) {
 
     // ① 제자리(0kt)에서 오른쪽으로 기울인다
     S.hdg = 90; S.spd = 0; simLat = 0; S.bnk = 0;
-    _ax(1, stick(-12 / 60));                  // 기수를 들어 속도를 0 근처로 눌러 둔다
+    _ax(1, stick(-pitchFromSpd(0) / 60));     // 호버 자세(7.5°)로 들어 속도를 0 에 둔다
     _ax(0, 1);
     fly(8);                                   // 자세·속도가 자리잡을 때까지
     const p0 = [S.lat, S.lon], h0 = S.hdg;
@@ -451,6 +451,7 @@ export async function run(page, t) {
   const coll = await page.evaluate(`(() => {
     (${SETUP.toString()})();
     const fly = ${FLY};
+    simTrimHoldSpeed();                   // 100kt 자세로 잡아 둔다(속도는 자세가 정한다)
     const a0 = S.alt, tq0 = S.tq;
     _ax(3, 0.5); fly(6);                  // 반쯤 올린다(MTA 아래 — 끝까지 올리면 RPM LOW 로 가라앉는다)
     const up = { alt: S.alt, vs: S.vs, tq: S.tq };
@@ -545,7 +546,7 @@ export async function run(page, t) {
   t.ok(Math.abs(law.inv[0] - 500) < 15 && Math.abs(law.inv[1] + 500) < 15,
     `토크 → 상승률 되짚기도 맞는다 (${law.inv[0].toFixed(0)} · ${law.inv[1].toFixed(0)}fpm)`);
 
-  // ── 컬렉티브 감도(PERF 표 그대로) · 강하는 4,000fpm 까지 ──
+  // ── 컬렉티브 감도 · 강하는 4,000fpm 까지 ──
   const coll2 = await page.evaluate(`(() => {
     (${SETUP.toString()})();
     const fly = ${FLY};
@@ -555,10 +556,10 @@ export async function run(page, t) {
     const lever = tq => _ax(3, Math.max(-1, Math.min(1, tq / SIM_LEVER_TOP * 2 - 1)));
     lever(tqRequired()); fly(10);
     const pow = () => S.vs - simKeVs(false);
-    // 남는 토크 +5% — PERF 표 값대로 오른다
+    // 남는 토크 +5% — 그 속도의 상승 폭대로 오른다
     S.spd = 70; simAcc = 0; S.vs = 0; simVsAcc = 0; S.alt = 5000;
     lever(tqRequired() + 5); fly(10);
-    const up = { pow: pow(), want: SIM_COLL_GAIN * perfVsForTq(5) * simClimbEff() };
+    const up = { pow: pow(), want: simVsForTq(5), max: simClimbMax(), span: simClimbSpan() };
     // 기수를 숙이고 레버를 끝까지 내린다
     simTrim.pitch = 10; S.spd = 120; simAcc = 0; S.vs = 0; simVsAcc = 0; S.alt = 8000;
     _ax(3, -1);
@@ -567,11 +568,12 @@ export async function run(page, t) {
     for (let i = 0; i < 15 * 20; i++) { ts += 50; joyPoll(ts); simStep(ts); minPow = Math.min(minPow, pow()); minAll = Math.min(minAll, S.vs); }
     S.running = false;
     simTrimReset();
-    return { up, minPow, minAll, gain: SIM_COLL_GAIN };
+    return { up, minPow, minAll };
   })()`);
-  t.eq(coll2.gain, 1, '컬렉티브 감도는 PERF 표 그대로다(종전 2배의 반)');
+  t.ok(Math.abs(coll2.up.want - coll2.up.max * 5 / coll2.up.span) < 1,
+    `남는 토크가 수평 비행 → 100% 폭의 몇 할인지에 그 속도의 최대 상승률을 곱한다 (+5% → ${coll2.up.want.toFixed(0)}fpm)`);
   t.ok(Math.abs(coll2.up.pow - coll2.up.want) < coll2.up.want * 0.05,
-    `레버 +5% 면 PERF 표 상승률로 오른다 (${coll2.up.pow.toFixed(0)} · 기대 ${coll2.up.want.toFixed(0)}fpm)`);
+    `레버 +5% 면 그만큼 오른다 (${coll2.up.pow.toFixed(0)} · 기대 ${coll2.up.want.toFixed(0)}fpm)`);
   t.ok(coll2.minAll < -3900 && coll2.minAll >= -4000.01,
     `기수를 숙이고 레버를 끝까지 내리면 4,000fpm 까지 강하한다 (계기 ${coll2.minAll.toFixed(0)}fpm — 가속하며 붙는 몫까지 합쳐도 넘지 않는다)`);
 
@@ -622,6 +624,7 @@ export async function run(page, t) {
   const bankSink = await page.evaluate(`(() => {
     (${SETUP.toString()})();
     const fly = ${FLY};
+    simTrimHoldSpeed();                   // 100kt 자세
     _ax(3, 0.25); fly(5);                 // 적당히 올려 상승 중
     const level = { vs: S.vs, need: tqRequired(), tq: S.tq };
     _ax(0, 1); fly(5);                    // 레버는 그대로 두고 선회만 건다
@@ -652,11 +655,12 @@ export async function run(page, t) {
     (${SETUP.toString()})();
     const fly = ${FLY};
     S.spd = 100;
+    simTrimHoldSpeed();                   // 100kt 자세
     _ax(3, 0.5); fly(8);                  // 세게 올라간다(MTA 아래)
     return { spd: S.spd, vs: S.vs };
   })()`);
-  t.ok(trade.vs > 500 && trade.spd < 100,
-    `올라가면 속도를 내준다 (${trade.vs.toFixed(0)}fpm · 100 → ${trade.spd.toFixed(0)}kt)`);
+  t.ok(trade.vs > 500 && trade.spd < 99 && trade.spd > 88,
+    `올라가면 속도를 조금 내준다 — 속도는 자세가 정한다 (${trade.vs.toFixed(0)}fpm · 100 → ${trade.spd.toFixed(1)}kt)`);
 
   // ── TQ 계기가 속도계 아래에 막대로 그려진다 ──
   const gauge = await page.evaluate(`(() => {
@@ -1526,7 +1530,7 @@ export async function run(page, t) {
     const run = (dTq) => {
       S.alt = 3000; _simGndFt = 0; S.bnk = 0; S.spd = 120; S.pit = 0;
       S.tq = tqRequired(); simAcc = 0; S.vs = 0; simVsAcc = 0; simTrimReset();
-      simTrim.pitch = -6;                    // 기수 6° 들기(그 자세의 속도 60kt)
+      simTrim.pitch = -pitchFromSpd(60);     // 기수를 60kt 자세로 들기
       lever(tqRequired() + dTq);
       const dec = [], spd = [], alt0 = S.alt; let altMax = 0, altMin = 0;
       S.running = true; let ts = 1000; S.lastT = ts;
@@ -1543,8 +1547,8 @@ export async function run(page, t) {
     return { down, same, decMax: SPD_DEC_MAX };
   })()`);
   const fd = flare.down;
-  t.ok(fd.dec[0] < fd.dec[1] && fd.dec[1] < fd.dec[2] && fd.dec[2] < fd.dec[3],
-    `감속이 점점 세진다 (1·2·3·4초 ${fd.dec.slice(0, 4).map(v => v.toFixed(1)).join(' · ')}kt/s)`);
+  t.ok(fd.dec[0] > 4 && fd.dec[0] < fd.dec[1],
+    `감속이 빨리 붙어 점점 세진다 (1·2초 ${fd.dec.slice(0, 2).map(v => v.toFixed(1)).join(' · ')}kt/s)`);
   t.ok(Math.max(...fd.dec) > flare.decMax - 0.5 && Math.max(...fd.dec) <= flare.decMax + 0.01,
     `감속은 ${flare.decMax}kt/s 까지 세진다 (최대 ${Math.max(...fd.dec).toFixed(2)})`);
   t.ok(fd.spd[7] < 88 && fd.spd[11] < 72,
@@ -1553,8 +1557,8 @@ export async function run(page, t) {
     `레버를 내렸으므로 고도는 크게 변하지 않는다 (+${fd.altMax.toFixed(0)} / ${fd.altMin.toFixed(0)}ft)`);
   t.ok(flare.same.altMax > fd.altMax + 100,
     `레버를 그대로 두면 줄어든 속도만큼 떠오른다 (+${flare.same.altMax.toFixed(0)}ft)`);
-  t.ok(Math.abs(fd.spd[11] - flare.same.spd[11]) < 4,
-    `레버를 내려도 속도가 덜 줄지 않는다 (${fd.spd[11].toFixed(1)} · 레버 그대로 ${flare.same.spd[11].toFixed(1)}kt)`);
+  t.ok(Math.abs(fd.spd[4] - flare.same.spd[4]) < 3,
+    `레버를 내려도 감속 중의 속도가 덜 줄지 않는다 (5초 ${fd.spd[4].toFixed(1)} · 레버 그대로 ${flare.same.spd[4].toFixed(1)}kt)`);
 
   // ── 기수를 숙이며 레버를 호버 이상으로 — 속도가 점점 빠르게 붙는다 ──
   // 가속도 정해진 빠르기로 커지고, 속도가 붙을수록(전이양력) 더 세진다(최대 5kt/s).

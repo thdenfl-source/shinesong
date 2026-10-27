@@ -60,22 +60,29 @@ const SIM_SPD_BACK  = -40;     // 후방 비행 한계(kt) — 헬기는 뒤로�
 // 힘이 생기고, 그 힘이 기체 무게를 밀어 움직이기까지 시간이 걸린다.
 //   속도: 가감속(simAcc)이 정해진 빠르기(SPD_JERK)로 점점 커진다 — 기수를 숙이거나
 //         들면 처음엔 느리게, 갈수록 빠르게 속도가 바뀐다. 목표 속도가 가까워지면
-//         같은 식으로 풀어 넘치지 않는다. 감속(최대 6kt/s)이 가속보다 세고,
+//         같은 식으로 풀어 넘치지 않는다. 감속은 가속보다 훨씬 빨리 붙고 세다
+//         (1초에 6kt/s 씩 · 최대 10kt/s — 동고도 감속이 종전의 두 배쯤 빠르다).
 //         가속은 속도가 붙을수록(전이양력으로 출력이 남을수록) 세진다.
 //   고도: 상승률도 같은 식이다 — 레버를 움직이면 오르내림이 점점 빨라지며 붙는다.
 const SPD_JERK     = 1.5;     // 가감속이 커지는 빠르기(kt/s²)
 const SPD_ACC_UP0  = 3.0;     // 제자리 언저리에서 낼 수 있는 가속(kt/s)
 const SPD_ACC_UP   = 5.0;     // 전이양력을 다 받은 뒤의 최대 가속(kt/s)
 const SPD_ETL_KT   = 40;      // 가속이 다 세지는 속도(kt)
-const SPD_DEC_MAX  = 6.0;     // 최대 감속(kt/s) — 원판을 젖히면 항력까지 같이 받는다
+const SPD_DEC_JERK = 6.0;     // 감속이 커지는 빠르기(kt/s²)
+const SPD_DEC_MAX  = 10.0;    // 최대 감속(kt/s) — 원판을 젖히면 항력까지 같이 받는다
 const VS_JERK      = 500;     // 상승률의 변화가 커지는 빠르기(fpm/s²)
 const VS_ACC_MAX   = 1000;    // 상승률이 바뀌는 최대 빠르기(fpm/s)
 const TQ_TAU       = 0.5;     // 토크가 레버를 따라가는 시간(s) — 엔진·로터 관성
-// 컬렉티브 감도 — 남는 토크가 만드는 상승·강하율을 PERF 표의 이 배로 쓴다.
-// (한때 2배로 두었다가 너무 민감해 PERF 표 그대로로 돌렸다)
-const SIM_COLL_GAIN = 1;
+// ── 남는 토크 → 상승률 ──
+// 제자리에서는 호버 토크에서 100% 까지 올리면 0 → 1,000fpm 이고, 속도가 붙을수록 같은
+// 토크로 더 잘 올라 Vy 에서는 100% 에 2,300fpm 이다. 그 위로는 더 오르지 않는다(그 속도의
+// 최대). Vy 보다 빨라지면 다시 덜 오른다 — 사이는 상승 효율(simClimbEff)로 잇는다.
+// 강하는 PERF 의 강하 토크표를 그대로 쓴다.
+const CLIMB_REF_TQ    = 100;   // 이 토크에서 그 속도의 최대 상승률이 난다(%)
+const CLIMB_VY_MAX    = 2300;  // Vy 에서의 최대 상승률(fpm)
+const CLIMB_HOVER_MAX = 1000;  // 제자리에서의 최대 상승률(fpm)
 // 상승·강하율의 한계(fpm). 기수를 숙인 채 레버를 끝까지 내리면 4,000fpm 까지 떨어진다.
-const SIM_VS_UP_MAX = 2000, SIM_VS_DN_MAX = 4000;
+const SIM_VS_UP_MAX = CLIMB_VY_MAX, SIM_VS_DN_MAX = 4000;
 // ── 컬렉티브 레버와 그날의 MTA ──
 // 레버 맨 위는 토크 140% 다. 하지만 엔진이 낼 수 있는 토크는 그날의 MTA(CDU PERF 의
 // MTA(30) — 고도·온도로 정해진다 · mtaNow)까지다. 그보다 더 당기면 토크는 MTA 에
@@ -106,23 +113,26 @@ function simJerkStep(d, acc, dt, aMax, jerk, d0) {
   const r = (rel ? jerk * JERK_RELEASE : jerk) * dt;
   return acc + Math.max(-r, Math.min(r, want - acc));
 }
-// 지금 속도에서 낼 수 있는 가감속(kt/s) — 줄이는 쪽(감속)인가, 늘리는 쪽(가속)인가
+// 지금 속도에서 낼 수 있는 가감속(max, kt/s)과 그것이 붙는 빠르기(jerk, kt/s²) —
+// 줄이는 쪽(감속)인가, 늘리는 쪽(가속)인가
 function simAccLimit(ds) {
   const v = S.spd;
-  if (v && Math.sign(ds) !== Math.sign(v)) return SPD_DEC_MAX;
-  return SPD_ACC_UP0 + (SPD_ACC_UP - SPD_ACC_UP0) * Math.min(1, Math.abs(v) / SPD_ETL_KT);
+  if (v && Math.sign(ds) !== Math.sign(v)) return { max: SPD_DEC_MAX, jerk: SPD_DEC_JERK };
+  return { max: SPD_ACC_UP0 + (SPD_ACC_UP - SPD_ACC_UP0) * Math.min(1, Math.abs(v) / SPD_ETL_KT),
+           jerk: SPD_JERK };
 }
 let simAcc = 0;               // 지금의 가감속(kt/s)
 let simVsAcc = 0;             // 지금 상승률이 바뀌는 빠르기(fpm/s)
 // ── 위치에너지 ↔ 운동에너지 ──
-// 올라가는 동안에는 그만큼 속도를 내주고, 내려가는 동안에는 속도를 얻는다.
-// 그래서 기수를 숙인 채 컬렉티브를 내리면 고도가 빠지면서 속도가 붙는다.
-const SIM_CLIMB_KT  = 25;      // 1,000fpm 당 주고받는 속도(kt)
+// 속도는 자세가 정한다 — 오르내리는 동안에는 조금만 어긋난다(올라가는 동안 조금 느리고,
+// 내려가는 동안 조금 빠르다).
+const SIM_CLIMB_KT  = 4;       // 1,000fpm 당 어긋나는 속도(kt)
 // 거꾸로 속도를 줄이면(기수를 들어 감속) 줄어든 운동에너지가 고도로 돌아온다 —
 // 같은 컬렉티브로도 떠오른다(줌·플레어). 속도를 늘리면 그만큼 고도로 치른다.
 // ½v² 가 줄어든 만큼이 g·h 이므로 상승률 = −v·a/g. 주고받는 몫이 같아야
 // 감속·가속을 되풀이해도 고도가 저절로 쌓이지 않는다.
-const SIM_KE_EFF = 0.8;        // 운동에너지 중 고도로 옮겨 가는 몫(나머지는 항력으로 잃는다)
+// (감속이 빨라진 만큼 줄여, 동고도 감속에서 떠오르는 높이가 지나치지 않게 한다)
+const SIM_KE_EFF = 0.5;        // 운동에너지 중 고도로 옮겨 가는 몫(나머지는 항력으로 잃는다)
 const SIM_KE_FPM = 0.514444 * 0.514444 / 9.80665 * 196.8504;   // kt × kt/s → fpm (≈5.31)
 // 지금의 속도·가감속이 만드는 상승률(fpm). 땅 위에서는 미끄럼이 멈춰 세울 뿐이다.
 function simKeVs(onGnd, spd = S.spd, acc = simAcc) {
@@ -405,8 +415,7 @@ function toggleSimMode(on, opt) {
     simAcc = 0; simVsAcc = 0; simNr = 100; // 지금 날던 대로 이어 간다
     simLookReset();
     // 지금 날고 있는 상태를 유지할 만큼의 토크로 레버를 맞춰 둔다(진입 충격 방지)
-    let add = (S.vs || 0) / TQ_PER_FPM;
-    try { if (typeof perfTqForVs === 'function') add = perfTqForVs((S.vs || 0) / SIM_COLL_GAIN); } catch (e) { _swallow(e); }
+    const add = simTqForVs(S.vs || 0);
     S.tq = Math.max(0, Math.min(mtaNow(), tqRequired() + add)); simTqCmd = S.tq;
     if (!S.running) toggleSim();        // 멈춰 있으면 바로 날기 시작한다
     if (opt && opt.ground) simStartGround();
@@ -463,7 +472,7 @@ function simExitView() {
 // 느려질수록 같은 토크로도 덜 오른다. 제자리 호버나 고속 순항에서 같은
 // 토크로 똑같이 오르던 것을 바로잡는다.
 const VY_SPREAD = 70;     // 이만큼 벗어나면 바닥(VY_MIN)에 가까워진다
-const VY_MIN    = 0.30;   // 아무리 벗어나도 이만큼은 오른다
+const VY_MIN    = CLIMB_HOVER_MAX / CLIMB_VY_MAX;   // 제자리(바닥) — Vy 의 1,000/2,300
 function simVyKt() {
   let vy = 70;
   try {
@@ -475,6 +484,25 @@ function simVyKt() {
 function simClimbEff() {
   const d = (Math.abs(S.spd) - simVyKt()) / VY_SPREAD;
   return Math.max(VY_MIN, Math.min(1, 1 - d * d));
+}
+// 지금 속도에서의 최대 상승률(fpm)과 그것이 나는 토크 폭(수평 비행 토크 → 100%)
+function simClimbMax() { return CLIMB_VY_MAX * simClimbEff(); }
+function simClimbSpan() { return Math.max(5, CLIMB_REF_TQ - tqRequired()); }
+// 남는 토크(%) → 상승·강하율(fpm)
+function simVsForTq(dTq) {
+  if (dTq > 0) { const m = simClimbMax(); return Math.min(m, m * dTq / simClimbSpan()); }
+  let v;
+  try { v = (typeof perfVsForTq === 'function') ? perfVsForTq(dTq) : dTq * TQ_PER_FPM; }
+  catch (e) { v = dTq * TQ_PER_FPM; }
+  return Number.isFinite(v) ? v : dTq * TQ_PER_FPM;
+}
+// 위의 역 — 그 상승·강하율에 드는 남는 토크(%). 그 속도의 최대보다 빨리는 오르지 못한다
+function simTqForVs(vs) {
+  if (vs > 0) return Math.min(1, vs / simClimbMax()) * simClimbSpan();
+  let t;
+  try { t = (typeof perfTqForVs === 'function') ? perfTqForVs(vs) : vs / TQ_PER_FPM; }
+  catch (e) { t = vs / TQ_PER_FPM; }
+  return Number.isFinite(t) ? t : vs / TQ_PER_FPM;
 }
 
 // 한 적분 구간(dt초)의 조종 입력 적용. simStep 안에서 불린다.
@@ -529,8 +557,10 @@ function simFly(dt) {
     // 내려가며 얻는 속도는 '실제로 잃는 고도' 만큼만이다 — 기수를 들어 감속하며
     // 레버를 내리면 줄어든 속도가 고도로 돌아와 고도가 그대로이므로, 레버를 내린
     // 몫으로 속도를 돌려받지 않는다(그래서 고도를 지키며 속도가 크게 준다).
+    // 제자리(호버 자세)에서 곧장 오르내릴 때는 내줄 속도가 없다 — 40kt 아래에서는 그만큼 덜 어긋난다
     const vsTrade = vsPow > 0 ? vsPow : Math.min(0, Math.max(vsPow, S.vs));
-    let sTgt = spdFromPitch(S.pit) - (vsTrade / 1000) * SIM_CLIMB_KT;
+    const sAtt = spdFromPitch(S.pit);
+    let sTgt = sAtt - (vsTrade / 1000) * SIM_CLIMB_KT * Math.max(0, Math.min(1, sAtt / 40));
     sTgt = Math.max(SIM_SPD_BACK, Math.min(SIM_SPD_MAX, sTgt));
     if (onGnd) {
       // 땅 위에서는 서 있는다 — 바퀴(스키드)가 잡으므로 금방 선다
@@ -538,7 +568,8 @@ function simFly(dt) {
     } else {
       // 가감속은 점점 커진다 — 기수를 들면 감속이, 숙이면 가속이 갈수록 세진다
       const ds = sTgt - S.spd;
-      simAcc = simJerkStep(ds, simAcc, dt, simAccLimit(ds), SPD_JERK, 1);
+      const lim = simAccLimit(ds);
+      simAcc = simJerkStep(ds, simAcc, dt, lim.max, lim.jerk, 1);
     }
     S.spd = Math.max(SIM_SPD_BACK, Math.min(SIM_SPD_MAX, S.spd + simAcc * dt));
 
@@ -568,9 +599,7 @@ function simFly(dt) {
   const cfg = (typeof joyAxes === 'object' && joyAxes) ? joyAxes.coll : null;
   let tTgt;
   if (vert) {
-    let add = (vsPow / SIM_COLL_GAIN) / TQ_PER_FPM;
-    try { if (typeof perfTqForVs === 'function') add = perfTqForVs(vsPow / SIM_COLL_GAIN); } catch (e) { _swallow(e); }
-    tTgt = onGnd ? S.tq : tqRequired() + add;
+    tTgt = onGnd ? S.tq : tqRequired() + simTqForVs(vsPow);
   }
   // 레버가 없으면: 땅에서는 그대로 서 있고(출력 0), 공중에서는 수평 비행에 드는
   // 만큼 건다(속도를 바꾸면 그 운동에너지만큼은 오르내린다)
@@ -605,17 +634,10 @@ function simFly(dt) {
   // ── 남는 토크 → 상승·강하 ──
   // 필요한 토크보다 남으면 오르고, 모자라면 내려간다. 그래서 같은 레버라도
   // 선회를 걸면 가라앉고(필요 토크 증가), 속도가 붙으면 저절로 떠오른다.
-  // 남는 토크가 몇 fpm 인지는 PERF 의 상승·강하 토크표로 되짚는다(중량 반영).
-  // 표를 못 읽으면 종전의 '1% = 55fpm' 으로 떨어진다.
+  // 오르는 쪽: 제자리 호버 → 100% 가 0 → 1,000fpm, Vy 에서는 100% 에 2,300fpm(simVsForTq).
+  // 내리는 쪽: PERF 의 강하 토크표.
   const dTq = S.tq - tqRequired();
-  let vRaw;
-  try { vRaw = (typeof perfVsForTq === 'function') ? perfVsForTq(dTq) : dTq * TQ_PER_FPM; }
-  catch (e) { vRaw = dTq * TQ_PER_FPM; }
-  if (!Number.isFinite(vRaw)) vRaw = dTq * TQ_PER_FPM;
-  vRaw *= SIM_COLL_GAIN;
-  // 같은 토크라도 속도에 따라 오르는 정도가 다르다. 최대상승속도(Vy)에서
-  // 가장 잘 오르고, 그보다 빠르거나 느릴수록 덜 오른다(PERF 의 Vy 를 쓴다).
-  if (vRaw > 0) vRaw *= simClimbEff();
+  let vRaw = simVsForTq(dTq);
   // RPM LOW — 양력이 NR² 로 줄어 오르던 힘이 빠지고 그만큼 가라앉는다
   const nrDef = 1 - (simNr / 100) * (simNr / 100);
   if (nrDef > 1e-4) vRaw = vRaw * Math.max(0, 1 - 5 * nrDef) - SIM_NR_SINK * nrDef;
