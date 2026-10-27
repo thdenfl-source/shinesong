@@ -556,6 +556,10 @@ function _init3dMap() {
 
   _ml3dReady = true;   // 카메라는 지금부터 움직일 수 있다(타일을 기다리지 않는다)
   _q3dBtnSync();       // 이 기기에 적어 둔 화질을 버튼에 적는다
+  // 흰수리 3D 모형(15-heli3d.js) — 지도 꾸밈이 서는 대로 얹는다(타일을 기다리지 않는다)
+  const _heliAdd = () => { try { if (typeof heli3dAddTo === 'function') heli3dAddTo(_ml3d); } catch (e) { _swallow(e); } };
+  _ml3d.on('style.load', _heliAdd);
+  try { if (_ml3d.isStyleLoaded()) _heliAdd(); } catch (e) { _swallow(e); }
 
   _ml3d.on('error', (e) => console.warn('[3D] map error:', e && e.error ? e.error.message : e));
   // 사용자가 3D 지도를 수동 회전할 때도 마커가 실제 기수를 가리키도록 갱신
@@ -603,6 +607,8 @@ function _init3dMap() {
     _update3dTrail();
     // 함정(09-cdu.js) — 실제 크기 모형과 항적
     try { if (typeof _ship3dEnsure === 'function') _ship3dEnsure(); } catch (e) { _swallow(e); }
+    // 흰수리 3D 모형(15-heli3d.js) — 실제 크기(전장 20m)
+    try { if (typeof heli3dAddTo === 'function') heli3dAddTo(_ml3d); } catch (e) { _swallow(e); }
     if (_fdrTrack.length) _fdrDraw3dTrackRoute();
     // 레이더가 이미 켜져 있으면 3D에도 적용
     if (rainActive && _rainFrames.length) {
@@ -635,7 +641,9 @@ function _init3dMap() {
 let chinViewOn = true;            // CHIN 창을 쓸 것인가(CHIN 버튼으로 끄고 켠다)
 let _chinMaps = [];               // [{ map, side: -1 왼쪽 · +1 오른쪽, ship: 함정 레이어를 얹었나 }]
 function _chinWanted() {
-  return chinViewOn && (typeof simModeOn !== 'undefined') && simModeOn && !!_ml3d && _map3dShown();
+  // 외부 시점(15-heli3d.js)에서는 조종석 창이 뜻이 없다 — 닫는다
+  const ext = (typeof simExtView !== 'undefined') && simExtView;
+  return chinViewOn && !ext && (typeof simModeOn !== 'undefined') && simModeOn && !!_ml3d && _map3dShown();
 }
 // 지금 상태에 맞춰 CHIN 창을 열고 닫는다 — SIM 진입·해제, 3D 창 옮기기, 버튼에서 부른다
 // (1인칭 카메라가 매 프레임 부르지만 바뀐 것이 없으면 아무것도 하지 않는다)
@@ -648,6 +656,13 @@ function syncChinView() {
   if (btn) {
     if (btn.classList.contains('show') !== sim) btn.classList.toggle('show', sim);
     if (btn.classList.contains('on') !== chinViewOn) btn.classList.toggle('on', chinViewOn);
+  }
+  // 외부 시점 버튼(EXT) — SIM 에서만 보인다
+  const ext = document.getElementById('ext-btn');
+  const extOn = (typeof simExtView !== 'undefined') && simExtView;
+  if (ext) {
+    if (ext.classList.contains('show') !== sim) ext.classList.toggle('show', sim);
+    if (ext.classList.contains('on') !== extOn) ext.classList.toggle('on', extOn);
   }
   // 3D 지도 바로 뒤에 붙어 다닌다(2D 위에 겹쳐 쓰든, 제 창으로 옮겨 가든)
   if (row.previousElementSibling !== d3) d3.after(row);
@@ -758,6 +773,8 @@ class DualScale3D {
 }
 
 function _update3dMarker() {
+  // 흰수리 모형(15-heli3d.js)이 화면에 있으면 매 프레임 다시 그린다(SIM 외부 시점 포함)
+  try { if (typeof heli3dTick === 'function') heli3dTick(); } catch (e) { _swallow(e); }
   if (!_ml3d || !_ml3dMarker || !_map3dShown()) return;
   // 1인칭(SIM)에서는 눈이 곧 헬기 자리다 — 제 마커는 지도에서 아예 뗀다.
   // 숨기기만 하면 maplibre 가 지형에 가렸는지 보려고 GPU 에서 화면을 읽어 와
@@ -767,6 +784,14 @@ function _update3dMarker() {
   if (sim) { if (onMap) _ml3dMarker.remove(); return; }
   if (!onMap) _ml3dMarker.addTo(_ml3d);
   _ml3dMarker.setLngLat([S.lon, S.lat]);
+  // 모형이 충분히 크게 보이면 삼각형 표식은 숨긴다 — 멀어서 작으면 표식으로 자리를 보인다
+  {
+    let big = false;
+    try { if (typeof heli3dScreenLen === 'function') big = heli3dScreenLen(_ml3d) >= HELI3D_MARKER_PX; }
+    catch (e) { _swallow(e); }
+    const el = _ml3dMarker.getElement();
+    if ((el.style.visibility === 'hidden') !== big) el.style.visibility = big ? 'hidden' : '';
+  }
   // Rotate the inner wrapper (outer element's transform is owned by maplibre)
   // rotationAlignment:'viewport'(화면 기준)이므로 카메라 방위를 빼야
   // 삼각형이 실제 기수방향을 가리킨다 (예: 팔로우 중에는 항상 화면 위쪽).

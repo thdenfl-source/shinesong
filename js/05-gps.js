@@ -926,6 +926,8 @@ function _simEyeFloorM(physM) {
 //              (PFD 의 ADI 와 같은 쪽). maplibre 의 롤 + 가 바로 그 방향이다.
 function _ml3dSimCamera() {
   if (!_ml3d || typeof _ml3d.calculateCameraOptionsFromCameraLngLatAltRotation !== 'function') return;
+  // 외부 시점 — 뒤에서 따라가며 내 헬기(15-heli3d.js 의 모형)를 본다
+  if (typeof simExtView !== 'undefined' && simExtView) { heli3dExtCamera(); return; }
   // 카메라가 헬기 자리에 있어야 하므로 화면 중심을 지면에 묶지 않는다
   try { if (_ml3d.getCenterClampedToGround && _ml3d.getCenterClampedToGround()) _ml3d.setCenterClampedToGround(false); }
   catch (e) { _swallow(e); }

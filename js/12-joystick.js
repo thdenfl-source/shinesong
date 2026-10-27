@@ -34,6 +34,9 @@ const JOY_ACTIONS = [
   // SIM 1인칭에서 누르고 있는 동안 4방향 햇이 트림 대신 '시선' 이 된다
   { id: 'lookMod', grp: '운항', label: '시야 둘러보기 (누르는 동안 햇 = 시선)', kind: 'hold',
     on: () => simLookHold(true), off: () => simLookHold(false) },
+  // SIM 에서 1인칭 ↔ 외부 시점(뒤에서 내 헬기를 본다 · 15-heli3d.js)
+  { id: 'extView', grp: '운항', label: '외부 시점 (SIM 1인칭 ↔ 3인칭)', kind: 'press',
+    run: () => toggleExtView() },
 
   { id: 'trimF',  grp: '트림',   label: '트림 ▲ (전/증속)', kind: 'hold',
     on: () => startTrimHold('F'), off: () => stopTrimHold() },

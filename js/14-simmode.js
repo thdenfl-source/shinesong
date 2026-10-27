@@ -534,6 +534,7 @@ function simEnterView() {
 }
 function simExitView() {
   const v = _simView; _simView = null;
+  try { if (typeof simExtView !== 'undefined') simExtView = false; } catch (e) { _swallow(e); }   // 다음에는 1인칭부터
   try { _apply3dRoll(); } catch (e) { _swallow(e); }
   try { syncChinView(); } catch (e) { _swallow(e); }       // CHIN 창을 닫는다
   try { _ml3dSimCameraOff(); } catch (e) { _swallow(e); }   // 1인칭 카메라(롤·90° 너머)를 되돌린다
