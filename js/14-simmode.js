@@ -339,15 +339,13 @@ function updateSimModeBtn() {
   b.classList.toggle('on', simModeOn);
 }
 
-// 지상에서 시작할지 공중에서 이어 갈지 — 버튼으로 켤 때 한 번 묻는다.
-// (프로그램에서 부르는 toggleSimMode 는 묻지 않는다 — 검사·복원용)
-const SIM_AIR_MIN_FT = 500;     // '공중' 을 골랐는데 거의 땅이면 이만큼 띄운다
+// SIM 버튼 — 묻지 않고 바로 켜고 끈다. 땅에서 시작할지 공중에서 이어 갈지는 지금 자리로
+// 정한다(simNearGround): 지면 가까이(AGL 50ft 아래)면 땅에서, 아니면 날던 그대로.
+// (비행계획의 출발지로 옮기면 지면에 세워 두므로 거기서 켜면 땅에서 시작한다)
+const SIM_GND_START_FT = 50;
+function simNearGround() { simTerrainFt(); return S.alt - simFloorFt() < SIM_GND_START_FT; }
 function simModeBtnPress() {
-  if (simModeOn) { toggleSimMode(false); return; }
-  uiConfirm('SIM 모드를 어디서 시작할까요?',
-            { okText: '지상 (0 ft)', cancelText: '공중 (현 고도)' })
-    .then(ground => toggleSimMode(true, { ground: !!ground }))
-    .catch(e => { _swallow(e); toggleSimMode(true); });
+  toggleSimMode(!simModeOn);
 }
 
 // ── 발밑의 땅 ──
@@ -436,20 +434,40 @@ function simStartGround() {
   S.vs = 0; S.spd = 0; simLat = 0; simAcc = 0; simVsAcc = 0; simNr = 100;
   S.pit = 0; S.bnk = 0; bankTarget = 0;
   S.tq = 0;                      // 레버를 내려 둔 상태에서 올리며 뜬다
-  S.alt = simTerrainFt();        // 지면 높이 = AGL 0
-  // DEM 타일은 받아 오는 데 한 박자 걸린다. 도착하면 다시 지면에 맞춘다.
+  simSetOnGround();              // 지면 높이 = AGL 0
+}
+
+// ── 그 자리 지면에 세운다(AGL 0) ──
+// SIM 을 땅에서 켤 때와 비행계획의 출발지(ORIGIN)로 옮길 때. 지형 타일이 아직 안 왔으면
+// 우선 아는 값(모르면 해수면)에 세우고, 타일이 오면 그 표고로 다시 맞춘다 — 그사이 떠올랐거나
+// 다른 자리로 옮겨 갔으면 손대지 않는다.
+let _simGndTimer = null;
+function simSetOnGround() {
+  const lat = S.lat, lon = S.lon;
+  simTerrainFt(lat, lon);
+  S.alt = simFloorFt();          // 함정 갑판 위면 갑판에
+  if (_simGndTimer) { clearInterval(_simGndTimer); _simGndTimer = null; }
+  try { updateAcOnMap(); } catch (e) { _swallow(e); }
+  if (_simGndFresh) return;
+  const placed = S.alt;
   let n = 0;
-  const t = setInterval(() => {
-    if (!simModeOn || ++n > 20) { clearInterval(t); return; }
-    const g = simTerrainFt();
-    // 아직 손대지 않은 상태(거의 지면)에서만 맞춘다 — 이미 떠올랐으면 두고 본다
-    if (Math.abs(S.alt - g) > 1 && Math.abs(S.alt - _simGndFt) < 300 && S.vs <= 0) {
-      S.alt = g;
+  _simGndTimer = setInterval(() => {
+    if (++n > 40) { clearInterval(_simGndTimer); _simGndTimer = null; return; }   // 12초 기다리고 그만
+    simTerrainFt(lat, lon);
+    if (!_simGndFresh) return;
+    clearInterval(_simGndTimer); _simGndTimer = null;
+    if (Math.abs(S.alt - placed) < 2 && !(S.vs > 0) && distance(S.lat, S.lon, lat, lon) < 0.05) {
+      S.alt = simFloorFt();
       try { updateAcOnMap(); } catch (e) { _swallow(e); }
     }
-    if (_simGndAt) { clearInterval(t); }
   }, 300);
-  try { updateAcOnMap(); } catch (e) { _swallow(e); }
+}
+// 항공기를 그 자리 지면에 멈춰 세운다 — 비행계획의 출발지로 옮길 때(06-nav.js)
+function acPlaceOnGround() {
+  if (simModeOn) { simStartGround(); return; }
+  S.spd = 0; S.vs = 0; S.bnk = 0; bankTarget = 0;
+  S.pit = pitchFromSpd(0);
+  simSetOnGround();
 }
 
 function toggleSimMode(on, opt) {
@@ -475,8 +493,9 @@ function toggleSimMode(on, opt) {
     const add = simTqForVs(S.vs || 0);
     S.tq = Math.max(0, Math.min(mtaNow(), tqRequired() + add)); simTqCmd = S.tq;
     if (!S.running) toggleSim();        // 멈춰 있으면 바로 날기 시작한다
-    if (opt && opt.ground) simStartGround();
-    else if (S.alt < 50) S.alt = SIM_AIR_MIN_FT;   // 공중에서 시작하는데 땅에 붙어 있으면 띄운다
+    // 땅에서 시작할지는 따로 주지 않으면 지금 자리로 정한다(지면 가까이면 땅에서)
+    const ground = (opt && typeof opt.ground === 'boolean') ? opt.ground : simNearGround();
+    if (ground) simStartGround();
     simEnterView();
   } else {
     simExitView();

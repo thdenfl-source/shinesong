@@ -148,7 +148,7 @@ export async function run(page, t) {
     _pad.axes = [0, 0, 0, 0, 0, 0, 0, 0, 0, 3.2857142857142856];   // 축9 = 햇
     joySetBind('h9N', 'trimF'); joySetBind('h9S', 'trimA');
     joySetBind('h9W', 'trimL'); joySetBind('h9E', 'trimR');
-    gspdOn = false; rollApOn = true;
+    gspdOn = false; rollApOn = true; hdgSelOn = false; navApOn = false;   // HDG 가 걸려 있으면 좌우는 헤딩을 옮긴다
     let now = 1000;
     S.spd = 100; bankTarget = 0;
     joyPoll(now);                       // 쉬는 자리 — 아무 방향도 아니다
@@ -196,7 +196,7 @@ export async function run(page, t) {
     _pad.axes = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0];      // 축9 햇이 0 에서 쉰다
     joySetBind('h9N', 'trimF'); joySetBind('h9S', 'trimA');
     joySetBind('h9W', 'trimL'); joySetBind('h9E', 'trimR');
-    gspdOn = false; S.spd = 100; bankTarget = 0;
+    gspdOn = false; hdgSelOn = false; navApOn = false; S.spd = 100; bankTarget = 0;
     let now = 1000;
     joyPoll(now);
     const idle = { spd: S.spd, bank: bankTarget, hat: !!(_joyHat[0] || {})[9] };

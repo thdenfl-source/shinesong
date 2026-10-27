@@ -272,6 +272,42 @@ function drawCrhtDisplay(x, y, w, h) {
 // ────────────────────────────────────────
 // ATTITUDE INDICATOR
 // ────────────────────────────────────────
+// ── 내활·외활 볼(slip/skid) ── 롤 눈금 맨 위 지표 바로 위에 둔다.
+// 볼이 가운데 두 선 사이에 있으면 협조 비행이다. 낮은 날개 쪽으로 가면 내활(slip),
+// 선회 바깥쪽으로 가면 외활(skid) — 볼 쪽 페달을 밟으면 가운데로 돌아온다.
+// 볼은 기체가 느끼는 옆 힘의 각(atan, slipBall 07-sim.js)만큼 구르고, 관 끝이 SLIP_BALL_FS°.
+const SLIP_ROOM     = 15;   // 볼 관이 차지하는 높이(롤 눈금을 이만큼 내려 그린다)
+const SLIP_BALL_FS  = 12;   // 볼이 관 끝에 닿는 옆 힘의 각(°)
+function drawSlipBall(cx, top, half) {
+  const th = SLIP_ROOM - 4, r = th / 2, cy = top + r;
+  const sb = (gpsMode || _fdrPlaying) ? 0 : slipBall;
+  const k = Math.max(-1, Math.min(1, Math.atan(sb) / D2R / SLIP_BALL_FS));
+  const bx = cx + k * (half - r);
+  ctx.save();
+  // 관(가로로 누운 캡슐)
+  ctx.beginPath();
+  ctx.arc(cx - half + r, cy, r, Math.PI / 2, Math.PI * 1.5);
+  ctx.arc(cx + half - r, cy, r, Math.PI * 1.5, Math.PI / 2);
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fill();
+  ctx.strokeStyle = '#bbb'; ctx.lineWidth = 1; ctx.stroke();
+  // 볼
+  ctx.beginPath(); ctx.arc(bx, cy, r - 1.5, 0, Math.PI * 2);
+  ctx.fillStyle = '#fff'; ctx.fill();
+  // 가운데 기준선 두 줄 — 볼 지름만큼 벌려 둔다(볼이 그 사이에 들면 협조)
+  ctx.strokeStyle = '#000'; ctx.lineWidth = 2;
+  for (const s of [-1, 1]) {
+    const lx = cx + s * (r - 0.5);
+    ctx.beginPath(); ctx.moveTo(lx, top - 1); ctx.lineTo(lx, top + th + 1); ctx.stroke();
+  }
+  ctx.strokeStyle = '#fff'; ctx.lineWidth = 1;
+  for (const s of [-1, 1]) {
+    const lx = cx + s * (r - 0.5);
+    ctx.beginPath(); ctx.moveTo(lx, top - 1); ctx.lineTo(lx, top + th + 1); ctx.stroke();
+  }
+  ctx.restore();
+  return bx;
+}
 function drawAI(x, y, w, h) {
   const FMA_H = FMA_MARGIN + FMA_BOX_H;  // AFCS strip height
   const aiY   = y + FMA_H;               // AI content starts below AFCS strip
@@ -330,9 +366,10 @@ function drawAI(x, y, w, h) {
   // Bank/roll scale — arc centre sits BELOW the panel top edge so the arc
   // appears within the clip region (old y+br*0.13+4 placed centre above clip,
   // making all tick marks and the pointer invisible).
+  // 맨 위에는 내활·외활 볼 자리(SLIP_ROOM)를 비워 두고 그 아래에 그린다.
   const br=Math.min(w,aiH)*0.44;
   const arcR=br*0.88;
-  ctx.save(); ctx.translate(cx, aiY + arcR + 4);
+  ctx.save(); ctx.translate(cx, aiY + SLIP_ROOM + arcR + 4);
   ctx.strokeStyle='#bbb'; ctx.lineWidth=1;
   for (const a of [-60,-45,-30,-20,-10,0,10,20,30,45,60]) {
     const r=(a-90)*D2R;
@@ -351,6 +388,8 @@ function drawAI(x, y, w, h) {
   ctx.moveTo(0,-arcR); ctx.lineTo(-6,-arcR+11); ctx.lineTo(6,-arcR+11);
   ctx.closePath(); ctx.fill();
   ctx.restore(); ctx.restore();
+
+  drawSlipBall(cx, aiY + 3, Math.max(26, arcR * 0.3));
 
   ctx.save(); ctx.translate(cx,cy);
   const ws=w*0.14;
