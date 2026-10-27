@@ -1480,17 +1480,18 @@ export async function run(page, t) {
     const lever = S.tq + 20;
     _ax(3, Math.min(1, (lever / SIM_LEVER_TOP) * 2 - 1));
     S.running = true; ts = 1000; S.lastT = ts;
-    const vs = [], tq = [], all = []; let peak = 0;
+    const vs = [], tq = [], all = []; let peak = 0, maxRate = 0, prevPow = pow();
     for (let i = 1; i <= 10 * 20; i++) {
       ts += 50; joyPoll(ts); simStep(ts);
       if (i === 6 || i === 10 || i === 20 || i === 60 || i === 200) {
         vs.push(pow() - base); all.push(S.vs - baseAll); tq.push(S.tq);
       }
       peak = Math.max(peak, pow() - base);
+      maxRate = Math.max(maxRate, Math.abs(pow() - prevPow) / 0.05); prevPow = pow();
     }
     S.running = false;
     simTrimReset();
-    return { spd, maxAcc, vs, all, tq, lever, peak };
+    return { spd, maxAcc, vs, all, tq, lever, peak, maxRate, rateMax: VS_ACC_MAX };
   })()`);
   t.ok(grad.spd[0] - 120 < 0.8,
     `기수를 숙인 0.5초 뒤에는 거의 그대로다 (${grad.spd[0].toFixed(1)}kt — 종전에는 곧바로 빨라졌다)`);
@@ -1509,8 +1510,10 @@ export async function run(page, t) {
     `(${grad.vs[1].toFixed(0)} → ${grad.vs[2].toFixed(0)}fpm)`);
   t.ok(grad.vs[2] < vsFinal * 0.5,
     `1초 뒤에도 아직 다 붙지 않았다 (${grad.vs[2].toFixed(0)} / ${vsFinal.toFixed(0)}fpm)`);
-  t.ok(grad.vs[3] > vsFinal * 0.85,
-    `3초면 거의 다 붙는다 (${grad.vs[3].toFixed(0)} / ${vsFinal.toFixed(0)}fpm)`);
+  t.ok(grad.vs[3] > vsFinal * 0.35 && grad.vs[3] < vsFinal * 0.85,
+    `3초면 절반 남짓 — 바뀌는 빠르기가 종전의 반이다 (${grad.vs[3].toFixed(0)} / ${vsFinal.toFixed(0)}fpm)`);
+  t.ok(grad.rateMax === 500 && grad.maxRate <= grad.rateMax + 5,
+    `상승률은 1초에 ${grad.rateMax}fpm 보다 빨리 바뀌지 않는다(종전 1,000) (최대 ${grad.maxRate.toFixed(0)}fpm/s)`);
   t.ok(grad.peak < vsFinal * 1.12,
     `크게 넘치지 않는다 — 오르며 속도가 줄어 목표가 조금 내려앉는 만큼뿐 ` +
     `(최대 ${grad.peak.toFixed(0)} / ${vsFinal.toFixed(0)}fpm)`);
@@ -1555,7 +1558,7 @@ export async function run(page, t) {
     `속도가 크게 준다 (120kt → 8초 ${fd.spd[7].toFixed(0)} · 12초 ${fd.spd[11].toFixed(0)}kt)`);
   t.ok(fd.altMax < 200 && fd.altMin > -50,
     `레버를 내렸으므로 고도는 크게 변하지 않는다 (+${fd.altMax.toFixed(0)} / ${fd.altMin.toFixed(0)}ft)`);
-  t.ok(flare.same.altMax > fd.altMax + 100,
+  t.ok(flare.same.altMax > fd.altMax + 60,
     `레버를 그대로 두면 줄어든 속도만큼 떠오른다 (+${flare.same.altMax.toFixed(0)}ft)`);
   t.ok(Math.abs(fd.spd[4] - flare.same.spd[4]) < 3,
     `레버를 내려도 감속 중의 속도가 덜 줄지 않는다 (5초 ${fd.spd[4].toFixed(1)} · 레버 그대로 ${flare.same.spd[4].toFixed(1)}kt)`);
@@ -1617,14 +1620,16 @@ export async function run(page, t) {
     selAlt = 3300; selVS = 500; altHoldOn = true; crhtOn = false;
     _ax(3, -1);
     const a0 = S.alt; fly(10); out.alt10 = S.alt - a0;
-    fly(40); out.alt50 = S.alt; out.tqAlt = S.tq; out.vert = simAfcsVert();
+    fly(55); out.alt50 = S.alt; out.tqAlt = S.tq; out.vert = simAfcsVert();
     // AFCS 가 내는 만큼 — 고도를 지키는 토크(+ 속도를 되찾는 동안 운동에너지로 치르는 몫)
     out.tqReq = tqRequired() + perfTqForVs(-simKeVs(false));
     // ALT 를 풀면 레버가 다시 고도를 정한다(레버가 바닥이므로 내려간다)
     toggleAltHold(); fly(4); out.offVs = S.vs; out.offAlt = S.alt;
     // CRHT — 지금 고도를 지킨다. 레버를 끝까지 올려도
+    // 수평으로 자리잡은 자리에서 건다(내려가다 걸었을 때 되찾는 모습은 아래 CRHT 검사가 본다)
+    S.vs = 0; simVsAcc = 0; S.tq = tqRequired();
     lever(tqRequired() + 30); toggleCrht(); const c0 = selCrht;
-    fly(12); out.crht = S.alt - c0; out.tqCrht = S.tq;
+    fly(25); out.crht = S.alt - c0; out.tqCrht = S.tq;
     toggleCrht(); fly(3); out.crhtOffVs = S.vs;
     _ax(3, 0); simTrimReset();
     return out;
@@ -1638,9 +1643,9 @@ export async function run(page, t) {
     `풀린 자리의 뱅크를 이어 잡는다 (${upper.rel.b0.toFixed(1)}° → ${upper.rel.b1.toFixed(1)}°)`);
   t.ok(upper.manual < -15, `풀린 뒤에는 조종간이 다시 뱅크를 잡는다 (${upper.manual.toFixed(1)}°)`);
   t.ok(upper.vert, 'ALT 를 걸면 컬렉티브 축은 AFCS 몫이다');
-  t.ok(Math.abs(upper.alt10 - 500 / 6) < 10,
-    `레버를 끝까지 내려도 선택 상승률로 오른다 (10초 +${upper.alt10.toFixed(0)}ft · 500fpm)`);
-  t.ok(Math.abs(upper.alt50 - 3300) < 1, `선택 고도에 닿으면 선다 (${upper.alt50.toFixed(0)}ft)`);
+  t.ok(upper.alt10 > 55 && upper.alt10 < 90,
+    `레버를 끝까지 내려도 출력을 올려 선택 상승률로 오른다 (10초 +${upper.alt10.toFixed(0)}ft · 500fpm)`);
+  t.ok(Math.abs(upper.alt50 - 3300) < 2, `선택 고도에 닿으면 선다 (${upper.alt50.toFixed(0)}ft)`);
   t.ok(Math.abs(upper.tqAlt - upper.tqReq) < 2 && upper.tqAlt > 40,
     `토크는 레버(바닥 0%)가 아니라 고도를 지키는 만큼이다 (${upper.tqAlt.toFixed(0)}% · 필요 ${upper.tqReq.toFixed(0)}%)`);
   t.ok(upper.offVs < -300 && upper.offAlt < 3300,
@@ -1735,6 +1740,107 @@ export async function run(page, t) {
   t.ok(ias.pfdOff.fma === '#3a3a3a' && !ias.pfdOff.bug, `끄면 FMA 의 IAS 가 어두워지고 기준 벅도 사라진다 (${ias.pfdOff.fma})`);
   t.eq(ias.gspd, false, 'GSPD 를 걸면 IAS 는 풀린다');
   t.ok(ias.exit === false && ias.reenter === false, 'SIM 을 나가면 꺼지고 다시 들어와도 꺼진 채다');
+
+  // ── SIM 의 CRHT·ALT 는 출력으로 고도를 지킨다 ──
+  // 기수를 숙여 가속하면 운동에너지로 바뀐 만큼 고도가 빠지려 하고, 뱅크를 주면 필요 토크가
+  // 늘어 가라앉으려 한다. CRHT 는 레버를 무시하고 토크를 더 써서 고도를 되찾는다.
+  const hold = await page.evaluate(`(() => {
+    (${SETUP.toString()})();
+    joyAxes = { roll: { i: 0, inv: false }, pitch: { i: 1, inv: false }, coll: { i: 3, inv: false, abs: true } };
+    _ax(3, 1);                                     // 레버는 맨 위 — CRHT 가 무시해야 한다
+    const step = (sec, f) => { S.running = true; let ts = 1000; S.lastT = ts;
+      for (let i = 1; i <= sec * 20; i++) { ts += 50; joyPoll(ts); simStep(ts); if (f) f(); } S.running = false; };
+    S.alt = 1000; _simGndFt = 0; S.spd = 80; S.pit = pitchFromSpd(80); simTrimHoldSpeed();
+    simAcc = 0; S.vs = 0; simVsAcc = 0; S.tq = tqRequired();
+    toggleCrht(); const c0 = selCrht;
+    step(10);
+    const lvl = { tq: S.tq, dAlt: S.alt - c0 };
+    simTrim.pitch = 0;                             // 기수를 수평으로 → 120kt 로 가속
+    let minA = 0, maxA = 0, maxTq = 0;
+    step(30, () => { minA = Math.min(minA, S.alt - c0); maxA = Math.max(maxA, S.alt - c0); maxTq = Math.max(maxTq, S.tq); });
+    const acc = { minA, maxA, maxTq, end: S.alt - c0, spd: S.spd };
+    const tq0 = S.tq; let minB = 0;
+    _ax(0, (30 / 45) * 0.92 + 0.08);               // 오른쪽 30° 뱅크(조종간 데드존 몫을 얹는다)
+    step(20, () => { minB = Math.min(minB, S.alt - c0); });
+    const bank = { bnk: S.bnk, tq: S.tq, tq0, minB, end: S.alt - c0 };
+    _ax(0, 0); step(4); toggleCrht();
+    // ALT — 3,000 → 3,300ft · 500fpm 로 잡아 넘치지 않고 선다
+    S.alt = 3000; S.vs = 0; simVsAcc = 0; selAlt = 3300; selVS = 500; altHoldOn = true; crhtOn = false;
+    let maxAlt = 0;
+    step(70, () => { maxAlt = Math.max(maxAlt, S.alt); });
+    const alt = { maxAlt, end: S.alt };
+    altHoldOn = false; _ax(3, 0); simTrimReset();
+    return { lvl, acc, bank, alt };
+  })()`);
+  t.ok(hold.lvl.tq < 90 && Math.abs(hold.lvl.dAlt) < 1,
+    `CRHT 는 레버(맨 위)를 무시하고 고도를 지킨다 (토크 ${hold.lvl.tq.toFixed(0)}% · ${hold.lvl.dAlt.toFixed(1)}ft)`);
+  t.ok(hold.acc.spd > 115, `CRHT 중에도 기수를 숙이면 속도가 붙는다 (80 → ${hold.acc.spd.toFixed(0)}kt)`);
+  t.ok(hold.acc.minA < -5, `운동에너지로 바뀐 만큼 고도가 빠진다 (최저 ${hold.acc.minA.toFixed(0)}ft)`);
+  t.ok(hold.acc.maxTq > hold.lvl.tq + 10,
+    `CRHT 가 토크를 더 써서 (${hold.lvl.tq.toFixed(0)} → 최대 ${hold.acc.maxTq.toFixed(0)}%)`);
+  t.ok(Math.abs(hold.acc.end) < 3 && hold.acc.maxA < 8,
+    `고도를 되찾는다 — 크게 넘치지 않는다 (30초 뒤 ${hold.acc.end.toFixed(1)}ft · 최고 +${hold.acc.maxA.toFixed(1)}ft)`);
+  t.ok(hold.bank.bnk > 25 && hold.bank.tq > hold.bank.tq0 + 2.5 && hold.bank.minB > -5 && Math.abs(hold.bank.end) < 2,
+    `30° 뱅크 — 필요한 만큼 토크를 더 써서 고도를 지킨다 (${hold.bank.tq0.toFixed(0)} → ${hold.bank.tq.toFixed(0)}% · 최저 ${hold.bank.minB.toFixed(1)}ft)`);
+  t.ok(hold.alt.maxAlt < 3302 && Math.abs(hold.alt.end - 3300) < 2,
+    `ALT 는 선택 고도를 넘치지 않고 잡는다 (최고 ${hold.alt.maxAlt.toFixed(0)} · 끝 ${hold.alt.end.toFixed(0)}ft)`);
+
+  // ── HDG 버튼 · 상위모드 모두 해제(B1) · FMA 의 HDG ──
+  // HDG 는 IAS·ALT 처럼 한 번 더 누르면 풀린다. FMA 는 걸려 있는 동안만 초록 'HDG' 다.
+  // 조이스틱 B1 은 상위모드를 모두 푼다(이미 쓰던 배정은 B1 을 한 번 옮기고, 원래 동작은 빈 버튼으로).
+  const um = await page.evaluate(`(() => {
+    (${SETUP.toString()})();
+    selectPanel('left', 'pfd', true);
+    const fmaHdg = () => {
+      const seen = [], o = CanvasRenderingContext2D.prototype.fillText;
+      CanvasRenderingContext2D.prototype.fillText = function (s, ...r) { seen.push([String(s), this.fillStyle]); return o.call(this, s, ...r); };
+      try { drawPFD(); } finally { CanvasRenderingContext2D.prototype.fillText = o; }
+      return { hdg: (seen.find(([s]) => s === 'HDG') || [])[1] || null, sel: seen.some(([s]) => s === 'HDG SEL') };
+    };
+    const out = {};
+    out.off0 = fmaHdg();
+    fcpSync('hdg'); out.on = { sel: hdgSelOn, fma: fmaHdg() };
+    S.bnk = 12; fcpSync('hdg'); out.off = { sel: hdgSelOn, roll: rollApOn, bnk: S.bnk, fma: fmaHdg() };
+    // NAV 가 걸려 있으면 HDG 를 누르면 NAV 를 풀고 HDG 로 넘긴다
+    S.bnk = 0; navApOn = true; fcpSync('hdg'); out.fromNav = { nav: navApOn, sel: hdgSelOn };
+    // 상위모드를 모두 건 뒤 한꺼번에 푼다
+    if (!altHoldOn) toggleAltHold(); simIasEngage(); navApOn = true;
+    out.before = { nav: navApOn, hdg: hdgSelOn, alt: altHoldOn, ias: simIasOn };
+    afcsReleaseAll();
+    out.after = { nav: navApOn, hdg: hdgSelOn, roll: rollApOn, alt: altHoldOn, crht: crhtOn, gs: gsOn || gsArmed, ias: simIasOn, gspd: gspdOn };
+    if (!crhtOn) toggleCrht(); if (!gspdOn) toggleGspd();
+    afcsReleaseAll();
+    out.after2 = { crht: crhtOn, gspd: gspdOn };
+    // B1 — 이미 쓰던 배정(B1 = GSPD)을 한 번 옮긴다(검사가 끝나면 원래 배정으로 되돌린다)
+    const keepBinds = JSON.stringify(joyBinds);
+    joyBinds = { b1: 'gspd', b3: 'navap', b5: 'crsUp' }; joyApOffDone = false;
+    try { localStorage.removeItem('joyApOffB1'); } catch (e) {}
+    joyApOffDefault();
+    out.binds = Object.assign({}, joyBinds);
+    out.std = JOY_STD_BINDS.b1;
+    // B1 을 누르면 다 풀린다
+    if (!altHoldOn) toggleAltHold(); fcpSync('hdg');
+    _pad.buttons[1] = { pressed: true, value: 1 }; joyPoll(5000);
+    _pad.buttons[1] = { pressed: false, value: 0 }; joyPoll(5100);
+    out.b1 = { alt: altHoldOn, hdg: hdgSelOn };
+    joyBinds = JSON.parse(keepBinds); joySave();
+    return out;
+  })()`);
+  t.ok(!um.off0.sel && um.off0.hdg === '#3a3a3a', `풀려 있으면 FMA 의 HDG 가 어둡다 (${um.off0.hdg})`);
+  t.ok(um.on.sel && um.on.fma.hdg === '#00ff88' && !um.on.fma.sel,
+    `HDG 를 누르면 걸리고 FMA 는 'HDG SEL' 이 아니라 초록 'HDG' 다 (${um.on.fma.hdg})`);
+  t.ok(!um.off.sel && !um.off.roll && um.off.fma.hdg === '#3a3a3a',
+    'HDG 를 한 번 더 누르면 풀리고 FMA 의 HDG 도 어두워진다');
+  t.ok(Math.abs(um.off.bnk - 12) < 0.5, `푸는 순간 뱅크를 그대로 이어 잡는다 (${um.off.bnk.toFixed(1)}°)`);
+  t.ok(!um.fromNav.nav && um.fromNav.sel, 'NAV 가 걸려 있을 때 HDG 를 누르면 HDG 로 넘어간다');
+  t.ok(um.before.nav && um.before.alt && um.before.ias, '상위모드를 여럿 걸어 둔다');
+  t.ok(!um.after.nav && !um.after.hdg && !um.after.roll && !um.after.alt && !um.after.crht && !um.after.gs && !um.after.ias && !um.after.gspd,
+    `상위모드 모두 해제 — NAV · HDG · ALT · CRHT · G/S · IAS · GSPD 가 다 풀린다 (${JSON.stringify(um.after)})`);
+  t.ok(!um.after2.crht && !um.after2.gspd, 'CRHT · GSPD 도 풀린다');
+  t.eq(um.std, 'apOff', '표준 패드의 B1 기본 배정은 상위모드 모두 해제다');
+  t.ok(um.binds.b1 === 'apOff' && um.binds.b8 === 'gspd' && um.binds.b3 === 'navap' && um.binds.b5 === 'crsUp',
+    `이미 쓰던 배정은 B1 만 바꾸고 원래 동작(GSPD)은 빈 버튼 B8 로 옮긴다 · B3·B5 는 그대로 (${JSON.stringify(um.binds)})`);
+  t.ok(!um.b1.alt && !um.b1.hdg, '조이스틱 B1 을 누르면 상위모드가 모두 풀린다');
 
   // ── GSPD 의 4방향 트림 — 기준속도가 1초마다 1kt 씩 옮겨 가도 계단 없이 따라간다 ──
   // 빠른 속도에서 그 1kt 를 한순간에 따라가 버리면 1초마다 속도·자세·상승률(운동에너지

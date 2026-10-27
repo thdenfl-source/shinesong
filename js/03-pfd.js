@@ -92,8 +92,9 @@ function drawFMA(x, y, w) {
         ? (holdOn && _holdPhase !== 'TOFIX'
              ? 'HOLD ' + (_holdEntry ? _holdEntry[0] : '')     // D=직진 P=평행 T=눈물방울
              : (holdOn ? 'HOLD ARM' : (_navDirectTo ? 'NAV DIR' : 'NAV')))
-        : (hdgSelOn ? 'HDG SEL' : 'HDG'),
-      midOn = rollApOn || navApOn, right, rightOn;
+        : 'HDG',
+      // HDG 는 걸려 있는 동안만 켜진다(풀려 있으면 어둡게 — IAS·ALT 와 같다)
+      midOn = hdgSelOn || navApOn, right, rightOn;
 
   if (gspdOn) {
     // GSPD engaged: both yaw/roll (mid) and pitch (right) are driven by

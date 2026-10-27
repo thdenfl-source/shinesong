@@ -61,6 +61,8 @@ const JOY_ACTIONS = [
   { id: 'crsDn',  grp: 'FCP',    label: 'CRS −',  kind: 'repeat', run: () => applyDelta('crs', -1) },
   { id: 'crsUp',  grp: 'FCP',    label: 'CRS +',  kind: 'repeat', run: () => applyDelta('crs', 1) },
 
+  // 상위모드(NAV·HDG·ALT·CRHT·G/S·IAS·GSPD)를 한꺼번에 푼다 — B1 이 기본이다
+  { id: 'apOff',   grp: 'AFCS',  label: '상위모드 모두 해제', kind: 'press', run: () => afcsReleaseAll() },
   { id: 'altHold', grp: 'AFCS',  label: 'ALT 유지',  kind: 'press', run: () => toggleAltHold() },
   { id: 'crht',    grp: 'AFCS',  label: 'CRHT 유지', kind: 'press', run: () => toggleCrht() },
   { id: 'navap',   grp: 'AFCS',  label: 'NAV (AP)',  kind: 'press', run: () => toggleNavAp() },
@@ -124,7 +126,7 @@ function joyZoom(d) {
 
 // 표준 배치 패드용 첫 배정(사용자가 바꾸면 저장값이 이긴다)
 const JOY_STD_BINDS = {
-  b0: 'ftr',  b1: 'gspd', b2: 'altHold', b3: 'navap',
+  b0: 'ftr',  b1: 'apOff', b2: 'altHold', b3: 'navap', b8: 'gspd',
   b4: 'crsDn', b5: 'crsUp', b6: 'spdDn', b7: 'spdUp',
   b9: 'sim',
   b12: 'trimF', b13: 'trimA', b14: 'trimL', b15: 'trimR',
@@ -149,6 +151,25 @@ function joyLookDefault(force) {
   if (!has && (force || !joyBinds.b0)) { joyBinds.b0 = 'lookMod'; joySave(); }
   joyLookDefaultDone = true;
   try { localStorage.setItem('joyLookB0', '1'); } catch (e) { _swallow(e); }
+}
+
+// '상위모드 모두 해제' 는 B1 이다. 한 번만 잡아 둔다(그 뒤로 사용자가 바꾸면 그 값이 이긴다).
+// 이미 쓰던 배정에서 B1 에 있던 동작이 다른 버튼에 없으면 빈 버튼(B8·B10·B11)으로 옮겨
+// 잃지 않게 한다(표준 패드의 B1 은 종전에 GSPD 였다).
+let joyApOffDone = false;
+try { joyApOffDone = localStorage.getItem('joyApOffB1') !== null; } catch (e) { _swallow(e); }
+function joyApOffDefault() {
+  if (joyApOffDone) return;
+  joyApOffDone = true;
+  try { localStorage.setItem('joyApOffB1', '1'); } catch (e) { _swallow(e); }
+  if (Object.keys(joyBinds).some(c => joyBinds[c] === 'apOff')) return;   // 이미 어딘가에 있다
+  const old = joyBinds.b1;
+  joyBinds.b1 = 'apOff';
+  if (old && !Object.keys(joyBinds).some(c => joyBinds[c] === old)) {
+    const free = ['b8', 'b10', 'b11'].find(c => !joyBinds[c]);
+    if (free) joyBinds[free] = old;
+  }
+  joySave();
 }
 
 let joyPadName = '';          // 연결된 장치 이름(설정 화면 표시용)
@@ -452,6 +473,7 @@ function joyPoll(now) {
   });
   joyAxApplyDefault(p, neu);
   if (!joyLookDefaultDone) joyLookDefault(_joyHadSaved);
+  if (!joyApOffDone) joyApOffDefault();
   const hat = _joyHat[p.index] || (_joyHat[p.index] = {});
   const no  = _joyNoHat[p.index] || (_joyNoHat[p.index] = {});
   const odd = _joyOdd[p.index] || (_joyOdd[p.index] = {});
