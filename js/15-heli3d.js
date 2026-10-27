@@ -440,21 +440,15 @@ function heli3dRot(hdg, pit, bnk) {
   return _m3Mul(_m3Mul(_m3Mul(Rz, Rx), Ry), P);
 }
 
-// 지금 그릴 자리 — 그려진 땅(지형 과장비 포함) + 지면 위 높이(AGL).
-// SIM 1인칭 카메라(05-gps.js _ml3dSimCamera)와 같은 셈이라 함정 갑판·지면에 그대로 앉는다.
+// 지금 그릴 자리 — 화면 속 기체 높이(05-gps.js simVisAlt: 그려진 땅 + AGL, 공중에서는
+// 지형의 기복·타일 바뀜을 걸러서). SIM 1인칭 카메라와 같은 셈이라 함정 갑판·지면에 그대로
+// 앉고, 산 위를 지나도 튀지 않는다.
+// 외부 시점은 카메라를 잡을 때 잰 값을 그 프레임의 그림에도 그대로 쓴다(_h3PoseNow) —
+// 둘을 따로 재면 그 사이 지형 타일이 바뀐 프레임에서 모형만 홀로 튄다.
+let _h3PoseNow = null;      // { t, pose } — 외부 시점 카메라가 이번 프레임에 쓴 자리
 function heli3dPose(map) {
-  map = map || _ml3d;
-  let rend = null;
-  try { rend = map.queryTerrainElevation([S.lon, S.lat]); } catch (e) { rend = null; }
-  const drawn = Number.isFinite(rend) ? rend : 0;
-  let phys = null;
-  try {
-    if (typeof simModeOn !== 'undefined' && simModeOn && typeof _simGndFresh !== 'undefined' && _simGndFresh)
-      phys = simGroundFt() * 0.3048;
-  } catch (e) { phys = null; }
-  if (phys === null) phys = Number.isFinite(rend) ? Math.max(0, rend / MAP3D_EXAG) : 0;
-  const agl = Math.max(0, S.alt * 0.3048 - phys);
-  return { lon: S.lon, lat: S.lat, alt: drawn + agl, agl, hdg: S.hdg, pit: S.pit || 0, bnk: S.bnk || 0 };
+  const v = simVisAlt(map);
+  return { lon: S.lon, lat: S.lat, alt: v.alt, agl: v.agl, hdg: S.hdg, pit: S.pit || 0, bnk: S.bnk || 0 };
 }
 
 // 지금 이 모형을 그리는가 — SIM 1인칭에서는 눈이 기체 안에 있으므로 그리지 않는다
@@ -486,7 +480,8 @@ const HELI3D_LAYER = {
     _h3Phase  = (_h3Phase  + dt * k * HELI3D_RPS * 2 * Math.PI) % (2 * Math.PI);
     _h3TPhase = (_h3TPhase + dt * k * HELI3D_TAIL_RPS * 2 * Math.PI) % (2 * Math.PI);
 
-    const pose = heli3dPose(this.map);
+    const pc = _h3PoseNow;
+    const pose = (pc && simExtView && now - pc.t < 60) ? pc.pose : heli3dPose(this.map);
     const mc = maplibregl.MercatorCoordinate.fromLngLat([pose.lon, pose.lat], pose.alt);
     const s = mc.meterInMercatorCoordinateUnits();
     const R = heli3dRot(pose.hdg, pose.pit, pose.bnk);
@@ -558,6 +553,7 @@ const EXT_DIST = 40;     // 헬기 가운데까지의 거리(m) — 전장의 �
 const EXT_SPAN = 44;     // 화면 가로에 들어올 폭(m) — 좁은(세로로 긴) 창이면 그만큼 물러선다
 const EXT_ELEV = 12;     // 내려다보는 각(°)
 const EXT_TGT_Z = 2.5;   // 바라보는 곳 — 바닥에서 2.5m(동체 가운데)
+let _extFloor = null, _extFloorT = 0;   // 외부 시점 카메라의 바닥(그려진 땅 + 3m, 걸러서)
 function toggleExtView(on) {
   simExtView = (typeof on === 'boolean') ? on : !simExtView;
   try { if (typeof simLookReset === 'function') simLookReset(); } catch (e) { _swallow(e); }
@@ -570,6 +566,7 @@ function heli3dExtCamera() {
   try { if (_ml3d.getCenterClampedToGround && _ml3d.getCenterClampedToGround()) _ml3d.setCenterClampedToGround(false); }
   catch (e) { _swallow(e); }
   const pose = heli3dPose();
+  _h3PoseNow = { t: performance.now(), pose };
   let look = { yaw: 0, pitch: 0 };
   try { if (typeof simLookStep === 'function') look = simLookStep(); } catch (e) { _swallow(e); }
   const az = normA(pose.hdg + look.yaw);
@@ -585,18 +582,47 @@ function heli3dExtCamera() {
   const cl = Math.cos(pose.lat * D2R);
   const camLon = pose.lon - horiz * Math.sin(az * D2R) / (111320 * cl);
   const camLat = pose.lat - horiz * Math.cos(az * D2R) / 111320;
-  // 카메라가 땅(그려진 지형) 아래로 들어가지 않게 — 그만큼 들어 올리고 다시 헬기를 겨눈다
+  // 카메라가 땅(그려진 지형) 아래로 들어가지 않게 — 그만큼 들어 올리고 다시 헬기를 겨눈다.
+  // 그 바닥은 부드럽게 따라간다(능선을 넘는 순간 카메라가 덜컥 뛰지 않게 — 오를 때는
+  // 빨리, 내릴 때는 천천히).
   let gnd = null;
   try { gnd = _ml3d.queryTerrainElevation([camLon, camLat]); } catch (e) { gnd = null; }
+  const now = performance.now();
+  const dt = _extFloorT ? Math.min(0.25, (now - _extFloorT) / 1000) : 0;
+  _extFloorT = now;
+  const fTgt = Number.isFinite(gnd) ? gnd + 3 : -Infinity;
+  if (_extFloor === null || !Number.isFinite(_extFloor) || !(dt > 0) || !Number.isFinite(fTgt)) _extFloor = fTgt;
+  else _extFloor += (fTgt - _extFloor) * Math.min(1, dt / (fTgt > _extFloor ? 0.25 : 1.0));
   let camAlt = tgtAlt + up;
-  if (Number.isFinite(gnd) && camAlt < gnd + 3) {
-    camAlt = gnd + 3;
+  if (Number.isFinite(_extFloor) && camAlt < _extFloor) {
+    camAlt = _extFloor;
     el = Math.atan2(camAlt - tgtAlt, horiz) / D2R;
   }
   const dist = Math.hypot(horiz, camAlt - tgtAlt);
   const pitch = Math.max(0, Math.min(180, 90 - el));
   try { _ml3d.jumpTo(_ml3dCamOptions(camLon, camLat, camAlt, az, pitch, 0, dist)); }
   catch (e) { _swallow(e); }
+}
+
+// ── 1인칭의 기수(nose) ──
+// 조종석에서 앞을 보면 앞유리 아래 가운데로 내 헬기의 기수가 보인다. 1인칭 화면 아래
+// 가운데에 높이 1/10 만큼 그린다(index.html #sim-nose). 기수는 기체에 붙어 있으므로
+// 자세·뱅크가 바뀌어도 화면에서 그 자리 그대로다(카메라가 기체와 함께 기운다).
+// 둘러보기(B0 + 햇)로 고개를 돌리면 그만큼 화면 밖으로 비켜 간다.
+function heli3dNoseSync(look) {
+  const el = document.getElementById('sim-nose');
+  if (!el) return;
+  const want = (typeof simModeOn !== 'undefined') && simModeOn && !simExtView &&
+               !!_ml3d && (typeof _map3dShown !== 'function' || _map3dShown());
+  if (el.classList.contains('show') !== want) el.classList.toggle('show', want);
+  if (!want) return;
+  const H = (_ml3d && _ml3d.getContainer().clientHeight) || 600;
+  let fov = 36.87;
+  try { if (Number.isFinite(_ml3d.transform.fov)) fov = _ml3d.transform.fov; } catch (e) { _swallow(e); }
+  const ppd = H / fov;                                    // 1° 가 화면에서 몇 px
+  const dx = -((look && look.yaw) || 0) * ppd, dy = ((look && look.pitch) || 0) * ppd;
+  const tf = `translate(calc(-50% + ${dx.toFixed(1)}px), ${dy.toFixed(1)}px)`;
+  if (el.style.transform !== tf) el.style.transform = tf;
 }
 
 // 화면 버튼(data-act) 연결 — 11-charts.js 보다 나중에 로드되므로 여기서 직접 등록한다

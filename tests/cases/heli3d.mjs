@@ -115,6 +115,69 @@ export async function run(page, t) {
   t.ok(pose.g === 0 && Math.abs(pose.a - 304.8) < 0.5 && Math.abs(pose.da - 304.8) < 0.5,
     `땅에 있으면 지면에, 1,000ft 면 304.8m 위에 그린다 (${pose.a.toFixed(1)}m)`);
 
+  // ── 지형의 기복이 기체 높이를 흔들지 않는다 ──
+  // 화면 속 높이 = 고도 + (그려진 땅 − 실제 땅). 괄호 안(지형 과장 몫·타일 바뀜)은
+  // 천천히 따라가므로 능선을 넘거나 타일이 바뀌는 순간 기체(카메라)가 튀지 않는다.
+  // 땅에 앉아 있을 때는 그려진 땅에 그대로 앉는다.
+  const vis = await page.evaluate(async () => {
+    const w = ms => new Promise(r => setTimeout(r, ms));
+    const q = _ml3d.queryTerrainElevation;
+    let terr = 300;
+    _ml3d.queryTerrainElevation = () => terr;
+    const out = {};
+    try {
+      S.lat = 37.0; S.lon = 126.0; S.alt = 3000;
+      _visOff = null;
+      out.a0 = simVisAlt().alt;              // 그려진 땅 300m (실제 200m)
+      terr = 600;                            // 능선 — 그려진 땅이 한순간에 600m
+      out.a1 = simVisAlt().alt;
+      await w(1000);
+      out.a15 = simVisAlt().alt;             // 1초 뒤 — 따라가는 중
+      await w(3500);
+      out.a2 = simVisAlt().alt;              // 천천히 따라가 다 맞춘다
+      terr = 900;                            // 같은 프레임에 두 번 재도(카메라 · 모형) 같은 값
+      out.b1 = simVisAlt().alt; out.b2 = simVisAlt().alt;
+      terr = 600; S.alt = 600 / MAP3D_EXAG / 0.3048;   // 땅 위(실제 땅 400m)
+      out.gnd = simVisAlt();
+    } finally { _ml3d.queryTerrainElevation = q; S.alt = 0; }
+    return out;
+  });
+  t.ok(Math.abs(vis.a0 - 1014.4) < 1, `높이 = 고도(914m) + 그려진 땅 − 실제 땅 (${vis.a0.toFixed(1)}m)`);
+  t.ok(Math.abs(vis.a1 - vis.a0) < 3, `능선을 넘는 순간 튀지 않는다 (${vis.a0.toFixed(1)} → ${vis.a1.toFixed(1)}m · 종전 +100m)`);
+  t.ok(vis.a15 > vis.a1 + 20 && vis.a15 < 1110 && Math.abs(vis.a2 - 1114.4) < 6,
+    `천천히 따라가 새 땅에 맞춘다 (1초 ${vis.a15.toFixed(1)} · 4.5초 ${vis.a2.toFixed(1)}m)`);
+  t.ok(Math.abs(vis.b2 - vis.b1) < 0.5, '같은 프레임의 카메라와 모형은 같은 높이를 쓴다');
+  t.ok(vis.gnd.agl < 0.01 && Math.abs(vis.gnd.alt - 600) < 0.01, `땅에 앉아 있으면 그려진 땅에 그대로 (${vis.gnd.alt.toFixed(1)}m)`);
+
+  // ── SIM 1인칭 — 화면 아래 가운데로 기수가 보인다 ──
+  const nose = await page.evaluate(async () => {
+    const w = ms => new Promise(r => setTimeout(r, ms));
+    const el = document.getElementById('sim-nose');
+    const out = { off: getComputedStyle(el).display };
+    S.alt = 1000; S.spd = 80; S.hdg = 40;
+    toggleSimMode(true); S.alt = 1000;
+    await w(300);
+    const box = () => {
+      const m = document.getElementById('map3d').getBoundingClientRect(), b = el.getBoundingClientRect();
+      return { shown: getComputedStyle(el).display !== 'none', h: b.height / m.height,
+               cx: (b.left + b.width / 2 - m.left) / m.width, bottom: m.bottom - b.bottom };
+    };
+    out.fp = box();
+    simLookHold(true); simLookDir = null; simLook.yaw = 40; simLook.pitch = 0;
+    _ml3dSimCamera(); out.look = box();
+    simLookHold(false); simLookReset(); _ml3dSimCamera();
+    toggleExtView(true); await w(100); out.ext = box();
+    toggleExtView(false); toggleSimMode(false); await w(100);
+    out.exit = getComputedStyle(el).display;
+    S.alt = 0; S.spd = 0; S.running = false;
+    return out;
+  });
+  t.eq(nose.off, 'none', 'SIM 이 아니면 기수를 그리지 않는다');
+  t.ok(nose.fp.shown && Math.abs(nose.fp.h - 0.1) < 0.01 && Math.abs(nose.fp.cx - 0.5) < 0.01 && Math.abs(nose.fp.bottom) < 1,
+    `1인칭에서는 화면 아래 가운데에 높이 1/10 로 보인다 (높이 ${(nose.fp.h * 100).toFixed(1)}% · 가운데 ${(nose.fp.cx * 100).toFixed(0)}%)`);
+  t.ok(nose.look.cx < 0.2, `오른쪽을 둘러보면 기수는 왼쪽으로 비켜 간다 (${(nose.look.cx * 100).toFixed(0)}%)`);
+  t.ok(!nose.ext.shown && nose.exit === 'none', '외부 시점과 SIM 해제에서는 숨긴다');
+
   // ── SIM — 1인칭에서는 그리지 않고, EXT 를 누르면 뒤에서 따라가며 본다 ──
   const ext = await page.evaluate(async () => {
     const w = ms => new Promise(r => setTimeout(r, ms));

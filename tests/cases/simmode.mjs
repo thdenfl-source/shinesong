@@ -29,6 +29,9 @@ const SETUP = () => {
   S.lat = 37.5; S.lon = 127.0; S.hdg = 90; S.spd = 100; S.alt = 2000;
   S.bnk = 0; S.pit = 0; S.vs = 0; S.tq = 60; S.wps = []; S.awp = -1; S.fwp = -1;
   _simGndFt = 0;                       // 지형 캐시도 비운다(검사끼리 물려받지 않게)
+  // 지형 자료(타일)를 받아 오면 자리마다 땅 높이가 달라진다 — 검사는 평평한 바다 위로 본다
+  // (CRHT 는 전파고도를 지키므로 땅을 따라 오르내린다). 지형이 필요한 검사는 따로 바꿔 끼운다.
+  window._tcElev = () => null;
   windSpd = 0; simSpeed = 1;
   if (!simModeOn) toggleSimMode();
   S.tq = 60; S.vs = 0; S.alt = 2000;   // 모드 진입이 손댄 값을 되돌린다
@@ -444,7 +447,7 @@ export async function run(page, t) {
     const a0 = S.alt, tq0 = S.tq;
     _ax(3, 0.5); fly(6);                  // 반쯤 올린다(MTA 아래 — 끝까지 올리면 RPM LOW 로 가라앉는다)
     const up = { alt: S.alt, vs: S.vs, tq: S.tq };
-    _ax(3, -1); fly(10);
+    _ax(3, -1); fly(16);                  // 오르던 만큼(최대 3,000fpm) 돌아서는 데 시간이 든다
     return { tq0, up, gain: up.alt - a0, dn: { alt: S.alt, vs: S.vs, tq: S.tq } };
   })()`);
   t.ok(coll.up.tq > coll.tq0 + 20,
@@ -925,6 +928,8 @@ export async function run(page, t) {
     const before = midSel;
     toggleSimMode(true);
     _simGndFt = 0; _simGndFresh = false;     // 지형을 모르는 바다 위로 둔다
+    const realQ = _ml3d.queryTerrainElevation;
+    _ml3d.queryTerrainElevation = () => null; _visOff = null;   // 지도도 아직 지형을 그리지 않았다
     const at = (alt, pit, hdg, bnk) => {
       S.alt = alt; S.pit = pit; S.hdg = hdg; S.bnk = bnk; _applyFollow(); return cam();
     };
@@ -932,6 +937,7 @@ export async function run(page, t) {
     const down = at(1000, -10, 90, 0), up = at(1000, 10, 90, 0);
     const turn = at(1000, 0, 250, 0), rolled = at(1000, 0, 250, -30);
     const level = at(1000, 0, 250, 0);
+    _ml3d.queryTerrainElevation = realQ;
     toggleSimMode(false);
     const after = { sel: midSel, roll: _ml3d.getRoll(), pitch: _ml3d.getPitch(),
                     clamp: _ml3d.getCenterClampedToGround(), tf: document.getElementById('map3d').style.transform };
@@ -1096,6 +1102,7 @@ export async function run(page, t) {
     simTerrainFt();
     const run = (q, alt) => {
       _ml3d.queryTerrainElevation = q;
+      _visOff = null;                           // 그 자리에 막 놓였다(지형 몫을 걸러 따라가기 전)
       S.alt = alt; S.pit = 0; S.bnk = 0; _applyFollow(); return cam().alt;
     };
     // ① 지도가 그 산을 이미 그렸다(그려진 땅 = 305 × 과장비)
@@ -1448,12 +1455,13 @@ export async function run(page, t) {
     _ax(3, (tqRequired() / SIM_LEVER_TOP) * 2 - 1); fly(3);  // 레버를 고도 유지 언저리에 둔다
     S.spd = 120; simAcc = 0; S.vs = 0; simVsAcc = 0;
     simTrim.pitch = 10;                            // 트림으로 기수 10° 내림(조종간은 가운데)
-    const spd = []; let maxAcc = 0, prev = S.spd;
+    const spd = [], sec = [120]; let maxAcc = 0, prev = S.spd;
     S.running = true; let ts = 1000; S.lastT = ts;
     for (let i = 1; i <= 25 * 20; i++) {
       ts += 50; joyPoll(ts); simStep(ts);
       maxAcc = Math.max(maxAcc, Math.abs(S.spd - prev) / 0.05); prev = S.spd;
       if (i === 10 || i === 40 || i === 200 || i === 500) spd.push(S.spd);
+      if (i % 20 === 0 && i <= 100) sec.push(S.spd);
     }
     S.running = false;
     simTrimReset();
@@ -1480,13 +1488,19 @@ export async function run(page, t) {
     }
     S.running = false;
     simTrimReset();
-    return { spd, maxAcc, vs, all, tq, lever, peak, maxRate, rateMax: VS_ACC_MAX };
+    return { spd, sec, maxAcc, accMax: SPD_ACC_UP, vs, all, tq, lever, peak, maxRate, rateMax: VS_ACC_MAX };
   })()`);
   t.ok(grad.spd[0] - 120 < 0.8,
     `기수를 숙인 0.5초 뒤에는 거의 그대로다 (${grad.spd[0].toFixed(1)}kt — 종전에는 곧바로 빨라졌다)`);
   t.ok(grad.spd[1] - 120 < 6 && grad.spd[1] > grad.spd[0],
     `2초 뒤에도 조금씩 붙는다 (${grad.spd[1].toFixed(1)}kt)`);
-  t.ok(grad.maxAcc <= 5.05, `가속은 5kt/s 를 넘지 않는다 (최대 ${grad.maxAcc.toFixed(2)}kt/s)`);
+  t.ok(grad.maxAcc <= grad.accMax + 0.05, `가속은 ${grad.accMax}kt/s 를 넘지 않는다 (최대 ${grad.maxAcc.toFixed(2)}kt/s)`);
+  {
+    // 1초마다 붙는 속도 — 처음 4초 동안 갈수록 커진다(일정한 빠르기가 아니라 점점 가속)
+    const d = grad.sec.slice(1).map((v, i) => v - grad.sec[i]);
+    t.ok(d[0] < d[1] && d[1] < d[2] && d[2] < d[3],
+      `속도가 점점 빨라지며 붙는다 (1초마다 +${d.slice(0, 4).map(v => v.toFixed(1)).join(' · +')}kt)`);
+  }
   t.ok(Math.abs(grad.spd[3] - 140) < 3 && grad.spd[3] <= 141,
     `25초면 그 자세의 속도(140kt)에 닿고 넘치지 않는다 (${grad.spd[3].toFixed(1)}kt)`);
   // 상승률 — vs: 0.3 · 0.5 · 1 · 3 · 10초
@@ -1513,7 +1527,7 @@ export async function run(page, t) {
     `토크도 레버를 천천히 따라간다 (0.3초 ${grad.tq[0].toFixed(0)}% → 3초 ${grad.tq[3].toFixed(0)}% · 레버 ${grad.lever.toFixed(0)}%)`);
 
   // ── 기수를 들며 레버를 내리면 — 고도는 크게 변하지 않고 속도가 점점 빠르게, 크게 준다 ──
-  // 감속이 정해진 빠르기로 커진다(최대 6kt/s). 레버를 내려 고도를 눌러도 속도를
+  // 감속이 정해진 빠르기로 커진다(1초에 3kt/s 씩 · 최대 12kt/s). 레버를 내려 고도를 눌러도 속도를
   // 돌려받지 않는다 — 줄어든 속도가 고도로 돌아와 고도를 실제로 잃지 않았으므로.
   const flare = await page.evaluate(`(() => {
     (${SETUP.toString()})();
@@ -1539,8 +1553,8 @@ export async function run(page, t) {
     return { down, same, decMax: SPD_DEC_MAX };
   })()`);
   const fd = flare.down;
-  t.ok(fd.dec[0] > 4 && fd.dec[0] < fd.dec[1],
-    `감속이 빨리 붙어 점점 세진다 (1·2초 ${fd.dec.slice(0, 2).map(v => v.toFixed(1)).join(' · ')}kt/s)`);
+  t.ok(fd.dec[0] > 2 && fd.dec[0] < fd.dec[1] && fd.dec[1] < fd.dec[2] && fd.dec[2] < fd.dec[3],
+    `감속이 점점 세진다 (1·2·3·4초 ${fd.dec.slice(0, 4).map(v => v.toFixed(1)).join(' · ')}kt/s)`);
   t.ok(Math.max(...fd.dec) > flare.decMax - 0.5 && Math.max(...fd.dec) <= flare.decMax + 0.01,
     `감속은 ${flare.decMax}kt/s 까지 세진다 (최대 ${Math.max(...fd.dec).toFixed(2)})`);
   t.ok(fd.spd[7] < 88 && fd.spd[11] < 72,
@@ -1553,7 +1567,7 @@ export async function run(page, t) {
     `레버를 내려도 감속 중의 속도가 덜 줄지 않는다 (5초 ${fd.spd[4].toFixed(1)} · 레버 그대로 ${flare.same.spd[4].toFixed(1)}kt)`);
 
   // ── 기수를 숙이며 레버를 호버 이상으로 — 속도가 점점 빠르게 붙는다 ──
-  // 가속도 정해진 빠르기로 커지고, 속도가 붙을수록(전이양력) 더 세진다(최대 5kt/s).
+  // 가속도 정해진 빠르기로 커지고, 속도가 붙을수록(전이양력) 더 세진다(최대 6.5kt/s).
   const accel = await page.evaluate(`(() => {
     (${SETUP.toString()})();
     joyAxes = { coll: { i: 3, inv: false, abs: true } };
@@ -1780,7 +1794,8 @@ export async function run(page, t) {
   t.ok(hold.acc.minA < -5, `운동에너지로 바뀐 만큼 고도가 빠진다 (최저 ${hold.acc.minA.toFixed(0)}ft)`);
   t.ok(hold.acc.maxTq > hold.lvl.tq + 10,
     `CRHT 가 토크를 더 써서 (${hold.lvl.tq.toFixed(0)} → 최대 ${hold.acc.maxTq.toFixed(0)}%)`);
-  t.ok(Math.abs(hold.acc.end) < 3 && hold.acc.maxA < 8,
+  // (가속이 점점 커졌다가 목표 가까이에서 짧게 풀리므로, 풀리는 순간 남는 출력만큼 조금 넘친다)
+  t.ok(Math.abs(hold.acc.end) < 3 && hold.acc.maxA < 15,
     `고도를 되찾는다 — 크게 넘치지 않는다 (30초 뒤 ${hold.acc.end.toFixed(1)}ft · 최고 +${hold.acc.maxA.toFixed(1)}ft)`);
   t.ok(hold.bank.bnk > 25 && hold.bank.tq > hold.bank.tq0 + 2.5 && hold.bank.minB > -5 && Math.abs(hold.bank.end) < 2,
     `30° 뱅크 — 필요한 만큼 토크를 더 써서 고도를 지킨다 (${hold.bank.tq0.toFixed(0)} → ${hold.bank.tq.toFixed(0)}% · 최저 ${hold.bank.minB.toFixed(1)}ft)`);
@@ -1989,14 +2004,29 @@ export async function run(page, t) {
   const htrim = await page.evaluate(async () => {
     const wait = ms => new Promise(r => setTimeout(r, ms));
     if (simModeOn) toggleSimMode(false);
+    // 앞 검사의 가짜 패드가 폴링되면 그 버튼 '놓음' 이 누르고 있는 트림을 끊는다 — 멈춰 둔다
+    joyStop(); navigator.getGamepads = () => [];
     S.running = false; gspdOn = false; navApOn = false;
     selHdg = 90; hdgSelOn = true; rollApOn = true; bankTarget = 0;
     const out = {};
     startTrimHold('R'); stopTrimHold(); out.r = selHdg;
     startTrimHold('L'); stopTrimHold(); startTrimHold('L'); stopTrimHold(); out.l = selHdg;
     out.keep = { hdg: hdgSelOn, roll: rollApOn, bank: bankTarget };
-    // 누르고 있으면 0.5초 뒤부터 0.1초마다 1° 씩 이어 간다
-    selHdg = 90; startTrimHold('R'); await wait(1050); stopTrimHold(); out.hold = selHdg - 90;
+    // 누르고 있으면 0.5초 뒤부터 0.1초마다 1° 씩 이어 간다. 검사 브라우저는 3D 를 소프트웨어로
+    // 그리느라 벽시계 타이머가 제때 돌지 못하므로(위 트림 검사와 같다), 시작·반복 타이머를
+    // 붙잡아 두었다가 손으로 '반복 시작 + 0.1초 × 6번' 을 흘려 본다(= 1초 누름).
+    {
+      const D0 = SIM_TRIM_HOLD_MS - SIM_TRIM_REP_MS, DR = SIM_TRIM_REP_MS;
+      const rST = window.setTimeout, rSI = window.setInterval;
+      let start = null, rep = null;
+      window.setTimeout = (fn, ms) => (ms === D0 ? (start = fn, 987661) : rST(fn, ms));
+      window.setInterval = (fn, ms) => (ms === DR ? (rep = fn, 987662) : rSI(fn, ms));
+      selHdg = 90;
+      try { startTrimHold('R'); if (start) start(); for (let i = 0; i < 6 && rep; i++) rep(); }
+      finally { window.setTimeout = rST; window.setInterval = rSI; }
+      stopTrimHold();
+      out.hold = selHdg - 90;
+    }
     // NAV 가 잡고 있으면 HDG 기준은 건드리지 않는다
     selHdg = 90; navApOn = true; startTrimHold('R'); stopTrimHold(); out.nav = selHdg;
     navApOn = false;
