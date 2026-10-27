@@ -53,13 +53,18 @@ function applyDelta(field, d){
       crhtOn    = false;
       updateHoverBtns();
       break;
-    case 'crht':
+    case 'crht': {
       // CRHT +/- adjusts selCrht in fine 10 ft steps. Auto-engages CRHT hold.
-      selCrht   = Math.max(0, Math.min(45000, selCrht + d));
+      // 기준이 10 단위가 아니면(지금 고도로 걸면 1,237 처럼) 먼저 10 단위로 맞춘다 —
+      // ▲ 는 위의 10 단위(1,240), ▼ 는 아래의 10 단위(1,230)로 간다.
+      const st = Math.abs(d) || 10;
+      const next = d > 0 ? Math.floor(selCrht / st) * st + st : Math.ceil(selCrht / st) * st - st;
+      selCrht   = Math.max(0, Math.min(45000, next));
       crhtOn    = true;
       altHoldOn = false;
       updateHoverBtns();
       break;
+    }
     case 'wdir': windDir = normA(windDir + d); break;
     case 'wspd': windSpd = Math.max(0, Math.min(150, windSpd + d));    break;
   }
@@ -305,6 +310,24 @@ function resetSim(){
   updateAcOnMap();
 }
 
+// ── 내활·외활 볼(slip/skid) ──
+// 볼은 기체가 느끼는 옆 방향 힘을 따라 구른다 — 기울어진 쪽으로 중력이 끄는 몫(tan 뱅크)과
+// 선회의 원심력(속도 × 요율 / g)의 차이다.
+//   뱅크만큼 돌면(협조 선회)              → 가운데
+//   뱅크보다 덜 돌면(저속 옆걸음 등)       → 낮은 날개 쪽(내활 slip)
+//   뱅크 없이 돌면(페달로 기수만 돌리면)   → 선회 바깥쪽(외활 skid)
+// 볼은 액체 속에서 구르므로 조금 늦게 따라온다(SLIP_TAU).
+const SLIP_TAU = 0.3;   // 볼이 따라오는 시간 상수(s)
+function slipUpdate(dt) {
+  let dh = _slipHdg === null ? 0 : normAS(S.hdg - _slipHdg) - _hdgJump;
+  _slipHdg = S.hdg; _hdgJump = 0;
+  if (Math.abs(dh) > 10) dh = 0;                  // 배치·리셋처럼 한 번에 옮긴 것 — 돈 것이 아니다
+  const r = dh * D2R / dt;                        // 요율(rad/s, 오른쪽 +)
+  const v = Math.abs(S.spd) * 1.6878;             // ft/s
+  const tgt = Math.max(-1, Math.min(1, Math.tan(S.bnk * D2R) - v * r / 32.174));
+  slipBall += (tgt - slipBall) * Math.min(1, dt / SLIP_TAU);
+}
+
 let _swPrevTs = null;   // 스톱워치에 시간을 흘려 넣기 위한 직전 프레임 시각
 let _simLastTick = 0;   // 렌더 루프 생존 감시용
 let _pfdDrawLast = 0;   // GPS 모드 PFD 10fps 제한용
@@ -546,7 +569,7 @@ function simStep(ts){
         const err  = normAS(selHdg - S.hdg);            // -180 ~ +180
         const bMax = stdRateBank(S.spd);
         const aErr = Math.abs(err);
-        if (aErr < 0.5) { bankTarget = 0; S.hdg = normA(selHdg); }
+        if (aErr < 0.5) { bankTarget = 0; _hdgJump += err; S.hdg = normA(selHdg); }
         else {
           // 롤아웃 구간에서도 최소 뱅크를 유지 — 비행모델이 |bank|<=0.5°를 무시하므로
           // 그 아래로 떨어지면 선회가 멈춘 채 오차가 남는다(저속에서 발생)
@@ -576,6 +599,7 @@ function simStep(ts){
         spdTrend += (acc * 6 - spdTrend) * Math.min(1, dt * 2);
         _spdPrev = S.spd;
       }
+      slipUpdate(dt);
     }
     }
   } else if(!S.running){

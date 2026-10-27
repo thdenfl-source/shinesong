@@ -93,6 +93,10 @@ let selVS   = 1000; // VS preselect (fpm, magnitude) — used by ALT hold mode
                     // CRHT hold mode ignores this and always converges at 500 fpm
 let spdTrend = 0;   // 6-second speed trend (knots, smoothed)
 let _spdPrev = 80;  // previous-frame IAS for trend computation
+// 내활·외활 볼(slip/skid) — 기체가 느끼는 옆 방향 힘(g, 오른쪽 +). 07-sim.js slipUpdate
+let slipBall = 0;
+let _slipHdg = null;   // 직전 단계의 기수(요율을 재는 데 쓴다)
+let _hdgJump = 0;      // 기체가 돈 것이 아닌 기수 맞춤(HDG 포착 순간 등) — 요율에서 뺀다
 
 // ── AFCS Altitude Hold Modes ──
 // altHoldOn : converges S.alt → selAlt  at selVS fpm (pilot-set rate)
@@ -517,6 +521,15 @@ let _trimDir = null;
 // 조금 길게 누른 딸깍이 두 칸으로 넘어가지 않게 한다.
 const SIM_TRIM_HOLD_MS = 500;
 const SIM_TRIM_REP_MS  = 100;
+// HDG 상위모드가 걸려 있으면 좌우 트림은 모드를 풀지 않고 HDG 기준(selHdg)을 1° 씩
+// 옮긴다 — FCP HDG 노브를 돌린 것과 같다. NAV·GSPD 가 잡고 있을 때는 해당 없음.
+function hdgTrimActive(dir) {
+  return (dir === 'L' || dir === 'R') && hdgSelOn && !navApOn && !gspdOn;
+}
+function hdgTrimNudge(dir) {
+  if (!hdgTrimActive(dir)) return;
+  applyDelta('hdg', dir === 'R' ? 1 : -1);
+}
 function startTrimHold(dir) {
   if (_trimDir === dir) return;         // 같은 누름이 겹쳐 들어왔다 — 한 번으로 친다
   stopTrimHold();                       // 중복 시작 방지(이전 홀드가 남아 있으면 정리)
@@ -527,13 +540,21 @@ function startTrimHold(dir) {
     simLookDir = dir;
     return;
   }
+  // HDG 상위모드 — 딸깍 한 번이 1°, 0.5초 넘게 누르면 0.1초마다 1° 씩(SIM·일반 모드 같음)
+  if (hdgTrimActive(dir)) {
+    hdgTrimNudge(dir);
+    trimHoldTimer = setTimeout(() => {
+      trimHoldInt = setInterval(() => hdgTrimNudge(dir), SIM_TRIM_REP_MS);
+    }, SIM_TRIM_HOLD_MS - SIM_TRIM_REP_MS);
+    return;
+  }
   // SIM 모드에서는 사이클릭의 '비퍼 트림' 그대로다 — 좌우는 롤 1°, 전후는 피치
   // 0.5° 씩 옮겨 둔다(조종간을 가운데 두어도 그 자세로 날게 된다).
   // GSPD 가 걸려 있으면 SIM 모드라도 아래의 GSPD 기준속도 트림으로 간다.
   if (simModeOn && !gspdOn) {
-    // HDG·NAV 가 뱅크를 잡고 있으면: HDG SEL 은 좌우 트림으로 풀고 손으로 넘겨 받는다
-    // (평소의 '수동 뱅크 → HDG SEL 해제' 와 같다 — 지금 뱅크를 이어 잡는다).
-    // NAV 는 버튼으로만 푼다 — 그동안 좌우 트림은 쌓아 두지 않는다.
+    // NAV 가 뱅크를 잡고 있으면 버튼으로만 푼다 — 그동안 좌우 트림은 쌓아 두지 않는다.
+    // (HDG 는 위에서 기준 헤딩을 옮기고 끝난다. 그 밖에 남은 횡축 모드가 있으면
+    //  손으로 넘겨 받는다 — 지금 뱅크를 이어 잡는다.)
     if ((dir === 'L' || dir === 'R') && simAfcsLat()) {
       if (navApOn) return;
       simAfcsLatRelease();
@@ -553,7 +574,7 @@ function startTrimHold(dir) {
     _trimNonGspdDir = dir;
     if (dir === 'L' || dir === 'R') {
       bankTarget = Math.max(-60, Math.min(60, bankTarget + (dir === 'R' ? 1 : -1)));
-      rollApOn = false; hdgSelOn = false;   // 수동 뱅크 → HDG SEL 해제
+      rollApOn = false; hdgSelOn = false;   // 수동 뱅크 → 횡축 모드 해제(HDG 는 위에서 기준만 옮긴다)
     } else {
       const d = dir === 'F' ? 1 : -1;
       applyDelta('spd', d);

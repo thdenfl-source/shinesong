@@ -52,24 +52,25 @@ const known2 = (v) => !!v;
 const normAS0 = (d) => ((d % 360) + 540) % 360 - 180;
 
 export async function run(page, t) {
-  // ── 버튼이 스톱워치 오른쪽에 있다 ──
+  // ── 버튼이 1행 ALT 유지 버튼 무리(ALT·CRHT·G/S) 오른쪽에 있다 ──
+  // 스톱워치는 2행으로 내려갔다(ALT 무리와 자리를 맞바꿨다).
   const btn = await page.evaluate(async () => {
     selectPanel('left', 'pfd', true);
     const b = document.getElementById('sim-mode-btn');
+    const grp = document.querySelector('.alt-hold-group');
     const sw = document.getElementById('sw-display');
     const lbl = b.closest('.ctrl-group').querySelector('.ctrl-lbl');
-    const bb = b.getBoundingClientRect(), sb = sw.getBoundingClientRect();
+    const bb = b.getBoundingClientRect(), gb = grp.getBoundingClientRect(), sb = sw.getBoundingClientRect();
     const was = simModeOn;
     if (simModeOn) toggleSimMode();
     const off = b.className;
+    S.alt = 2500;
     b.click();
-    await new Promise(r => setTimeout(r, 40));   // 다이얼로그는 한 박자 뒤에 뜬다
+    await new Promise(r => setTimeout(r, 40));   // 물음이 있었다면 한 박자 뒤에 뜬다
     const res = { txt: b.textContent.trim(), lbl: lbl.textContent.trim(),
-             right: bb.left >= sb.right - 1, sameRow: Math.abs(bb.top - sb.top) < 60,
-             off, was, dlg: !!document.querySelector('.ui-dlg'),
-             asks: (document.querySelector('.ui-dlg-msg') || {}).textContent,
-             btns: [...document.querySelectorAll('.ui-dlg-btns button')].map(x => x.textContent) };
-    // 물음을 닫아 둔다(다음 검사가 가려지지 않게)
+             right: bb.left >= gb.right - 1, sameRow: Math.abs(bb.top - gb.top) < 60,
+             swBelow: sb.top > gb.bottom - 4,
+             off, was, dlg: !!document.querySelector('.ui-dlg'), on: simModeOn };
     const cancel = document.querySelector('.ui-dlg-btns button');
     if (cancel) cancel.click();
     await new Promise(r => setTimeout(r, 40));
@@ -77,52 +78,40 @@ export async function run(page, t) {
     return res;
   });
   t.eq(btn.lbl, 'SIM', `버튼 위에 SIM 이름표가 있다 (${btn.lbl})`);
-  t.eq(btn.right, true, '스톱워치 오른쪽에 있다');
+  t.eq(btn.right, true, 'ALT·CRHT·G/S 버튼 오른쪽에 있다');
   t.eq(btn.sameRow, true, '같은 줄이다');
+  t.eq(btn.swBelow, true, '스톱워치는 아래 줄(2행)로 내려갔다');
   t.ok(!/\bon\b/.test(btn.off), `평소에는 꺼져 있다 (${btn.off})`);
-  // 누르면 바로 켜지는 게 아니라 '어디서 시작할지' 를 먼저 묻는다
-  t.eq(btn.dlg, true, '누르면 시작 지점을 묻는다');
-  t.ok((btn.asks || '').includes('어디서'), `무엇을 묻는지 분명하다 (${btn.asks})`);
-  t.ok(btn.btns.some(x => x.includes('지상')) && btn.btns.some(x => x.includes('공중')),
-    `지상·공중 중에 고른다 (${btn.btns.join(' / ')})`);
+  // 시작 고도는 묻지 않는다 — 누르면 바로 켜진다
+  t.eq(btn.dlg, false, '누르면 시작 지점을 묻지 않는다');
+  t.eq(btn.on, true, '누르면 바로 켜진다');
 
-  // 지상을 고르면 0ft·정지, 공중을 고르면 날던 고도 그대로
+  // 땅 가까이(50ft 미만)면 지상 시작(0ft·정지), 떠 있으면 날던 고도 그대로
   const start = await page.evaluate(async () => {
-    const pick = async (txt) => {
+    const press = async (agl) => {
       if (simModeOn) toggleSimMode(false);
-      S.alt = 2500; S.spd = 90; S.vs = 300; S.tq = 70;
+      const g = simTerrainFt();
+      S.alt = g + agl; S.spd = 90; S.vs = 300; S.tq = 70;
       document.getElementById('sim-mode-btn').click();
-      await new Promise(r => setTimeout(r, 30));
-      const b = [...document.querySelectorAll('.ui-dlg-btns button')]
-        .find(x => x.textContent.includes(txt));
-      b.click();
       await new Promise(r => setTimeout(r, 60));
-      return { alt: S.alt, spd: S.spd, vs: S.vs, tq: S.tq, on: simModeOn,
+      return { agl: S.alt - simTerrainFt(), alt: S.alt, spd: S.spd, vs: S.vs, tq: S.tq, on: simModeOn,
+               dlg: !!document.querySelector('.ui-dlg'),
                cls: document.getElementById('sim-mode-btn').className };
     };
-    const ground = await pick('지상');
-    const air = await pick('공중');
-    // 거의 땅에 있는데 '공중' 을 고르면 띄워 준다
+    const ground = await press(10);
+    const air = await press(2500);
     if (simModeOn) toggleSimMode(false);
-    S.alt = 0;
-    document.getElementById('sim-mode-btn').click();
-    await new Promise(r => setTimeout(r, 30));
-    [...document.querySelectorAll('.ui-dlg-btns button')]
-      .find(x => x.textContent.includes('공중')).click();
-    await new Promise(r => setTimeout(r, 60));
-    const lifted = S.alt;
-    if (simModeOn) toggleSimMode(false);
-    return { ground, air, lifted };
+    return { ground, air };
   });
-  t.eq(start.ground.on, true, '지상을 고르면 SIM 모드가 켜진다');
+  t.eq(start.ground.on, true, '땅 가까이에서 누르면 SIM 모드가 켜진다');
+  t.eq(start.ground.dlg || start.air.dlg, false, '어느 쪽이든 묻지 않는다');
   t.ok(/\bon\b/.test(start.ground.cls), '버튼도 켜진 모양이 된다');
-  t.ok(start.ground.alt < 20, `지상은 0ft 에서 시작한다 (${start.ground.alt.toFixed(0)}ft)`);
+  t.ok(Math.abs(start.ground.agl) < 2, `땅 가까이면 지면에 내려 세운다 (AGL ${start.ground.agl.toFixed(1)}ft)`);
   t.ok(start.ground.spd < 5, `속도도 0 이다 (${start.ground.spd.toFixed(0)}kt)`);
   t.ok(start.ground.tq < 15, `토크도 내려 둔다 — 레버를 올리며 뜬다 (${start.ground.tq.toFixed(0)}%)`);
-  t.ok(Math.abs(start.air.alt - 2500) < 20,
-    `공중은 날던 고도 그대로다 (${start.air.alt.toFixed(0)}ft)`);
-  t.ok(Math.abs(start.lifted - 500) < 30,
-    `땅에 붙어 있는데 공중을 고르면 띄워 준다 (${start.lifted.toFixed(0)}ft)`);
+  t.ok(Math.abs(start.air.agl - 2500) < 20,
+    `떠 있으면 날던 고도 그대로다 (AGL ${start.air.agl.toFixed(0)}ft)`);
+  t.ok(start.air.spd > 80, `속도도 그대로다 (${start.air.spd.toFixed(0)}kt)`);
 
   // ── 켜면 AFCS 를 놓는다 ── (두 곳에서 같은 축을 몰면 싸운다)
   const afcs = await page.evaluate(`(() => {
@@ -1607,9 +1596,17 @@ export async function run(page, t) {
     fly(1.5); out.bnk1 = S.bnk;
     fly(25); out.hdg = S.hdg; out.bnk2 = S.bnk;
     _ax(0, 0); _ax(2, 0);
-    // 좌우 트림을 누르면 HDG SEL 이 풀리고 그 자리 뱅크를 이어 잡는다
-    selHdg = 200; fly(4); const b0 = S.bnk;
+    // 좌우 트림은 HDG 를 풀지 않고 선택 헤딩을 1° 씩 옮긴다(딸깍 한 번 = 1°)
+    selHdg = 200; fly(4);
+    const h0 = selHdg;
     startTrimHold('R'); stopTrimHold();
+    const h1 = selHdg;
+    startTrimHold('L'); stopTrimHold(); startTrimHold('L'); stopTrimHold();
+    out.trim = { h0, h1, h2: selHdg, on: hdgSelOn && rollApOn, lat: simAfcsLat(), roll: simTrim.roll };
+    selHdg = 360; startTrimHold('R'); stopTrimHold(); out.trim.wrap = selHdg;   // 360 다음은 1
+    selHdg = 200; fly(1);
+    // HDG 를 풀면(버튼) 그 자리 뱅크를 이어 잡는다
+    const b0 = S.bnk; hdgRelease();
     out.rel = { on: hdgSelOn || rollApOn, b0, lat: simAfcsLat() };
     fly(1); out.rel.b1 = S.bnk;
     // 풀린 뒤에는 조종간이 다시 뱅크를 잡는다
@@ -1638,8 +1635,13 @@ export async function run(page, t) {
   t.ok(upper.bnk1 > 3, `조종간을 왼쪽 끝까지 밀어도 선택 헤딩 쪽(오른쪽)으로 기운다 (${upper.bnk1.toFixed(1)}°)`);
   t.ok(Math.abs(normAS0(upper.hdg - 120)) < 1.5 && Math.abs(upper.bnk2) < 2,
     `페달을 밟고 있어도 선택 헤딩 120° 에 선다 (${upper.hdg.toFixed(1)}° · 뱅크 ${upper.bnk2.toFixed(1)}°)`);
-  t.ok(!upper.rel.on && !upper.rel.lat, '좌우 트림을 누르면 HDG SEL 이 풀린다');
-  t.ok(upper.rel.b0 > 3 && Math.abs(upper.rel.b1 - (upper.rel.b0 + 1)) < 1.5,
+  t.ok(upper.trim.h1 === upper.trim.h0 + 1 && upper.trim.h2 === upper.trim.h0 - 1,
+    `HDG 가 걸려 있으면 좌우 트림은 선택 헤딩을 1° 씩 옮긴다 (${upper.trim.h0}° → ${upper.trim.h1}° → ${upper.trim.h2}°)`);
+  t.ok(upper.trim.on && upper.trim.lat, 'HDG 는 풀리지 않는다');
+  t.eq(upper.trim.roll, 0, '자세 트림(뱅크)은 쌓이지 않는다');
+  t.eq(upper.trim.wrap, 1, '360° 다음은 001° 다');
+  t.ok(!upper.rel.on && !upper.rel.lat, 'HDG 버튼으로 풀면 풀린다');
+  t.ok(upper.rel.b0 > 3 && Math.abs(upper.rel.b1 - upper.rel.b0) < 1.5,
     `풀린 자리의 뱅크를 이어 잡는다 (${upper.rel.b0.toFixed(1)}° → ${upper.rel.b1.toFixed(1)}°)`);
   t.ok(upper.manual < -15, `풀린 뒤에는 조종간이 다시 뱅크를 잡는다 (${upper.manual.toFixed(1)}°)`);
   t.ok(upper.vert, 'ALT 를 걸면 컬렉티브 축은 AFCS 몫이다');
@@ -1981,6 +1983,87 @@ export async function run(page, t) {
   t.eq(bind.i, 0, '움직인 축이 잡힌다');
   t.eq(bind.inv, true, '민 방향이 + 가 되도록 반전까지 맞춰 둔다');
   t.eq(bind.cap, null, '한 번 잡으면 대기가 풀린다');
+
+  // ── HDG 가 걸려 있으면 좌우 트림은 선택 헤딩을 1° 씩 옮긴다(일반 모드) ──
+  // 종전에는 좌우 트림을 누르면 '손으로 뱅크를 준다' 로 보고 HDG 를 풀었다.
+  const htrim = await page.evaluate(async () => {
+    const wait = ms => new Promise(r => setTimeout(r, ms));
+    if (simModeOn) toggleSimMode(false);
+    S.running = false; gspdOn = false; navApOn = false;
+    selHdg = 90; hdgSelOn = true; rollApOn = true; bankTarget = 0;
+    const out = {};
+    startTrimHold('R'); stopTrimHold(); out.r = selHdg;
+    startTrimHold('L'); stopTrimHold(); startTrimHold('L'); stopTrimHold(); out.l = selHdg;
+    out.keep = { hdg: hdgSelOn, roll: rollApOn, bank: bankTarget };
+    // 누르고 있으면 0.5초 뒤부터 0.1초마다 1° 씩 이어 간다
+    selHdg = 90; startTrimHold('R'); await wait(1050); stopTrimHold(); out.hold = selHdg - 90;
+    // NAV 가 잡고 있으면 HDG 기준은 건드리지 않는다
+    selHdg = 90; navApOn = true; startTrimHold('R'); stopTrimHold(); out.nav = selHdg;
+    navApOn = false;
+    // HDG 가 풀려 있으면 예전대로 뱅크 트림이다
+    hdgSelOn = false; bankTarget = 0; startTrimHold('R'); stopTrimHold();
+    out.free = { bank: bankTarget, sel: selHdg };
+    bankTarget = 0; rollApOn = true;
+    return out;
+  });
+  t.ok(htrim.r === 91 && htrim.l === 89, `HDG 중 좌우 트림 — 딸깍 한 번에 1° (90 → ${htrim.r} → ${htrim.l})`);
+  t.ok(htrim.keep.hdg && htrim.keep.roll && htrim.keep.bank === 0,
+    `HDG 는 풀리지 않고 뱅크 트림도 쌓지 않는다 (${JSON.stringify(htrim.keep)})`);
+  t.ok(htrim.hold >= 5 && htrim.hold <= 9, `누르고 있으면 이어서 옮긴다 (1초에 ${htrim.hold}°)`);
+  t.eq(htrim.nav, 90, 'NAV 가 잡고 있으면 HDG 기준은 그대로다');
+  t.ok(htrim.free.bank === 1 && htrim.free.sel === 90, 'HDG 가 풀려 있으면 좌우 트림은 뱅크 트림이다');
+
+  // ── CRHT 기준은 10ft 단위로 맞춘다 ──
+  // 지금 고도로 걸면 1,237 처럼 끝자리가 남는다. ▲ 는 위의 10 단위, ▼ 는 아래의 10 단위로.
+  const crs = await page.evaluate(() => {
+    const keep = { crht: crhtOn, alt: altHoldOn, sel: selCrht };
+    const go = (from, d) => { selCrht = from; applyDelta('crht', d); return selCrht; };
+    const out = { up: go(1237, 10), dn: go(1237, -10), up0: go(1240, 10), dn0: go(1240, -10), low: go(4, -10) };
+    crhtOn = keep.crht; altHoldOn = keep.alt; selCrht = keep.sel; updateHoverBtns();
+    return out;
+  });
+  t.ok(crs.up === 1240 && crs.dn === 1230, `끝자리가 있으면 10 단위로 맞춘다 (1,237 ▲ ${crs.up} · ▼ ${crs.dn})`);
+  t.ok(crs.up0 === 1250 && crs.dn0 === 1230, `10 단위면 10ft 씩 옮긴다 (1,240 ▲ ${crs.up0} · ▼ ${crs.dn0})`);
+  t.eq(crs.low, 0, '0ft 아래로는 내려가지 않는다');
+
+  // ── 내활·외활 볼 ──
+  // 협조 선회면 가운데, 뱅크만 주고 돌지 않으면 낮은 날개 쪽(내활), 페달로 기수만
+  // 돌리면 선회 바깥쪽(외활). 자세계 맨 위 지표 위에 그린다.
+  const ball = await page.evaluate(`(() => {
+    (${SETUP.toString()})();
+    const fly = ${FLY};
+    const out = {};
+    // 일반 모드 협조 선회(HDG) — 가운데
+    toggleSimMode(false);
+    S.alt = 3000; S.spd = 100; S.hdg = 90; S.bnk = 0; slipBall = 0; _slipHdg = null;
+    navApOn = false; gspdOn = false; selHdg = 150; hdgSelOn = true; rollApOn = true;
+    let mx = 0; S.running = true; let ts = 1000; S.lastT = ts;
+    for (let i = 0; i < 400; i++) { ts += 50; simStep(ts); mx = Math.max(mx, Math.abs(slipBall)); }
+    S.running = false;
+    out.coord = { mx, hdg: S.hdg };
+    // SIM 제자리 오른쪽 뱅크 — 오른쪽(낮은 날개)
+    (${SETUP.toString()})();
+    S.spd = 0; S.pit = pitchFromSpd(0); simAcc = 0; slipBall = 0; _slipHdg = null;
+    _ax(0, 0.4); fly(2); out.slip = { ball: slipBall, bnk: S.bnk }; _ax(0, 0); fly(3);
+    // SIM 60kt 오른 페달 — 왼쪽(바깥)
+    (${SETUP.toString()})();
+    S.spd = 60; S.pit = pitchFromSpd(60); slipBall = 0; _slipHdg = null;
+    _ax(2, 0.5); fly(2); out.skid = { ball: slipBall, bnk: S.bnk }; _ax(2, 0); fly(3);
+    out.back = slipBall;
+    // 그림 — 볼 자리(가운데·오른쪽 끝·왼쪽 끝)
+    out.px = [0, 0.05, 1, -1].map(v => { slipBall = v; return drawSlipBall(200, 10, 40); });
+    slipBall = 0;
+    return out;
+  })()`);
+  t.ok(ball.coord.mx < 0.02, `협조 선회(HDG 포착까지)에서는 가운데 (최대 ${ball.coord.mx.toFixed(3)}g · ${ball.coord.hdg.toFixed(0)}°)`);
+  t.ok(ball.slip.bnk > 5 && ball.slip.ball > 0.08,
+    `제자리에서 오른쪽으로 기울이면 낮은 날개(오른쪽)로 간다 — 내활 (${ball.slip.ball.toFixed(2)})`);
+  t.ok(Math.abs(ball.skid.bnk) < 1 && ball.skid.ball < -0.2,
+    `뱅크 없이 오른 페달로 돌면 바깥(왼쪽)으로 간다 — 외활 (${ball.skid.ball.toFixed(2)})`);
+  t.ok(Math.abs(ball.back) < 0.05, `조작을 놓으면 가운데로 돌아온다 (${ball.back.toFixed(3)})`);
+  t.ok(ball.px[0] === 200 && ball.px[1] > 200 && ball.px[1] < ball.px[2] && ball.px[3] < 200,
+    `볼 그림이 옆 힘을 따라 움직인다 (${ball.px.map(v => v.toFixed(1)).join(' / ')})`);
+  t.ok(ball.px[2] <= 240 && ball.px[3] >= 160, '관 밖으로는 나가지 않는다');
 
   // 뒷정리 — 다음 검사가 SIM 모드·가짜 패드를 물려받지 않도록
   await page.evaluate(() => {
