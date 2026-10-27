@@ -225,9 +225,9 @@ export async function run(page, t) {
   t.ok(Math.abs(trimSpd.level.vs) < 150 && Math.abs(trimSpd.four.vs) < 150,
     `그동안 고도는 지킨다 (${trimSpd.level.vs.toFixed(0)} · ${trimSpd.four.vs.toFixed(0)}fpm)`);
 
-  // ── 위치에너지 ↔ 운동에너지 ──
-  // 기수를 숙인 채 컬렉티브를 내리면 고도가 빠지면서 속도가 붙고,
-  // 반대로 올리면 고도를 얻는 대신 속도를 내준다. 같은 자세에서 재 본다.
+  // ── 오르내려도 자세 하나가 곧 속도다 ──
+  // 기수를 숙인 채 컬렉티브를 내리면 고도가 빠지고, 올리면 고도를 얻는다 — 속도는 그대로
+  // 그 자세의 속도다(종전에는 내리면 조금 붙고 올리면 조금 내주었다). 같은 자세에서 재 본다.
   const energy = await page.evaluate(`(() => {
     (${SETUP.toString()})();
     const fly = ${FLY};
@@ -256,10 +256,10 @@ export async function run(page, t) {
     `그 자세·고도유지에서 140kt 다 (${energy.trim.spd.toFixed(0)}kt · ${energy.trim.vs.toFixed(0)}fpm)`);
   t.ok(energy.sink.vs < -300 && energy.sink.alt < energy.trim.alt,
     `레버를 내리면 고도가 빠진다 (${energy.sink.vs.toFixed(0)}fpm)`);
-  t.ok(energy.sink.spd > energy.trim.spd + 1 && energy.sink.spd < energy.trim.spd + 15,
-    `속도는 조금만 붙는다 — 속도는 자세가 정한다 (${energy.trim.spd.toFixed(0)} → ${energy.sink.spd.toFixed(0)}kt)`);
-  t.ok(energy.climb.vs > 120 && energy.climb.spd < energy.sink.spd - 1 && energy.climb.spd > energy.trim.spd - 15,
-    `반대로 올리면 고도를 얻고 속도를 조금 내준다 (${energy.climb.vs.toFixed(0)}fpm · ${energy.climb.spd.toFixed(0)}kt)`);
+  t.ok(Math.abs(energy.sink.spd - energy.trim.spd) < 1.5,
+    `내려가도 속도는 그대로 — 속도는 자세가 정한다 (${energy.trim.spd.toFixed(1)} → ${energy.sink.spd.toFixed(1)}kt)`);
+  t.ok(energy.climb.vs > 120 && Math.abs(energy.climb.spd - energy.trim.spd) < 1.5,
+    `반대로 올리면 고도를 얻고 속도는 그대로다 (${energy.climb.vs.toFixed(0)}fpm · ${energy.climb.spd.toFixed(1)}kt)`);
 
   // ── 감속하면 고도를 얻는다(운동에너지 → 위치에너지) ──
   // 컬렉티브는 그대로 둔 채 기수를 들어 감속하면, 줄어든 운동에너지만큼 떠오른다.
@@ -566,7 +566,7 @@ export async function run(page, t) {
     `남는 토크가 수평 비행 → 100% 폭의 몇 할인지에 그 속도의 최대 상승률을 곱한다 (+5% → ${coll2.up.want.toFixed(0)}fpm)`);
   t.ok(Math.abs(coll2.up.pow - coll2.up.want) < coll2.up.want * 0.05,
     `레버 +5% 면 그만큼 오른다 (${coll2.up.pow.toFixed(0)} · 기대 ${coll2.up.want.toFixed(0)}fpm)`);
-  t.ok(coll2.minAll < -3900 && coll2.minAll >= -4000.01,
+  t.ok(coll2.minAll < -3800 && coll2.minAll >= -4000.01,
     `기수를 숙이고 레버를 끝까지 내리면 4,000fpm 까지 강하한다 (계기 ${coll2.minAll.toFixed(0)}fpm — 가속하며 붙는 몫까지 합쳐도 넘지 않는다)`);
 
   // ── Vy 에서 가장 잘 오른다 ──
@@ -641,8 +641,8 @@ export async function run(page, t) {
   t.ok(tlift.cruise < tlift.hover - 5,
     `제자리보다 전진 중에 덜 든다 (${tlift.hover.toFixed(0)}% → ${tlift.cruise.toFixed(0)}%)`);
 
-  // ── 오르내림과 속도를 맞바꾼다 ──
-  // 출력이 정해져 있으면 올라가는 만큼 속도를 내준다.
+  // ── 올라가도 속도는 자세가 정한다 ──
+  // 종전에는 올라가는 만큼 속도를 조금 내주었다(피토관 오차 같은 어긋남) — 이제는 그대로다.
   const trade = await page.evaluate(`(() => {
     (${SETUP.toString()})();
     const fly = ${FLY};
@@ -651,8 +651,8 @@ export async function run(page, t) {
     _ax(3, 0.5); fly(8);                  // 세게 올라간다(MTA 아래)
     return { spd: S.spd, vs: S.vs };
   })()`);
-  t.ok(trade.vs > 500 && trade.spd < 99 && trade.spd > 88,
-    `올라가면 속도를 조금 내준다 — 속도는 자세가 정한다 (${trade.vs.toFixed(0)}fpm · 100 → ${trade.spd.toFixed(1)}kt)`);
+  t.ok(trade.vs > 500 && Math.abs(trade.spd - 100) < 1,
+    `세게 올라가도 100kt 자세면 100kt 다 (${trade.vs.toFixed(0)}fpm · 100 → ${trade.spd.toFixed(1)}kt)`);
 
   // ── TQ 계기가 속도계 아래에 막대로 그려진다 ──
   const gauge = await page.evaluate(`(() => {
@@ -1518,10 +1518,10 @@ export async function run(page, t) {
   t.ok(grad.rateMax === 500 && grad.maxRate <= grad.rateMax + 5,
     `상승률은 1초에 ${grad.rateMax}fpm 보다 빨리 바뀌지 않는다(종전 1,000) (최대 ${grad.maxRate.toFixed(0)}fpm/s)`);
   t.ok(grad.peak < vsFinal * 1.12,
-    `크게 넘치지 않는다 — 오르며 속도가 줄어 목표가 조금 내려앉는 만큼뿐 ` +
+    `크게 넘치지 않는다 ` +
     `(최대 ${grad.peak.toFixed(0)} / ${vsFinal.toFixed(0)}fpm)`);
-  t.ok(grad.all[3] > grad.vs[3] && grad.all[0] < vsFinal * 0.2,
-    `오르며 줄어든 속도가 고도로 조금 더해진다 — 그래도 처음에는 튀지 않는다 ` +
+  t.ok(Math.abs(grad.all[3] - grad.vs[3]) < 30 && grad.all[0] < vsFinal * 0.2,
+    `오르는 동안 속도가 그대로이므로 상승률은 출력 몫 그대로다 — 처음에는 튀지 않는다 ` +
     `(3초 ${grad.all[3].toFixed(0)} · 출력 몫 ${grad.vs[3].toFixed(0)}fpm · 0.3초 ${grad.all[0].toFixed(0)}fpm)`);
   t.ok(grad.tq[0] < grad.lever - 3 && Math.abs(grad.tq[3] - grad.lever) < 1.5,
     `토크도 레버를 천천히 따라간다 (0.3초 ${grad.tq[0].toFixed(0)}% → 3초 ${grad.tq[3].toFixed(0)}% · 레버 ${grad.lever.toFixed(0)}%)`);
