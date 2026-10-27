@@ -12,9 +12,11 @@
 //   · 사이클릭 전후 → 피치, 피치가 가감속을 만든다(기수를 내리면 빨라진다)
 //   · 페달         → 기수만 돌린다(저속에서 쓰는 요 조작)
 //   · 컬렉티브     → 토크(TQ %). 남는 토크가 상승률이 된다
-// SIM 모드로 들어갈 때 AFCS(NAV·HDG·ALT·CRHT·GSPD)는 놓는다. 들어온 뒤 조종사가
+// SIM 모드로 들어갈 때 AFCS(NAV·HDG·ALT·CRHT·GSPD·IAS)는 놓는다. 들어온 뒤 조종사가
 // 상위모드를 걸면 그 축은 AFCS 가 몰고 조종간의 그 축 값은 무시한다 — 두 곳에서
 // 같은 축을 몰면 서로 싸운다(HDG·NAV → 좌우·페달, ALT·CRHT → 컬렉티브).
+// IAS 만은 조종간 전후를 무시하지 않는다 — 밀고 당기는 만큼 기수가 벗어났다가
+// 놓으면 IAS 자세로 돌아온다(fly-through · simAfcsPitch).
 // ─────────────────────────────────────────────────────────────
 
 const SIM_BANK_MAX  = 45;      // 사이클릭 최대 뱅크(°)
@@ -34,10 +36,13 @@ const SIDE_K       = 0.5;     // 옆방향 속도가 따라가는 빠르기(1/s)
 // SIM 모드에서도 상위모드를 걸면 그 축은 AFCS 가 몬다. 조종간의 그 축 값은 무시한다.
 //   좌우(뱅크)·페달: HDG SEL · NAV (GSPD 가 걸려 있으면 GSPD 가 우선이다)
 //   컬렉티브(고도): ALT(선택 고도로 가는 것 포함) · CRHT
+//   전후(기수 자세): IAS — 조종간 몫은 그 위에 얹는다(fly-through)
 function simAfcsLat() {
   return simModeOn && !gspdOn && !gspdCoasting && (navApOn || (hdgSelOn && rollApOn));
 }
 function simAfcsVert() { return simModeOn && (altHoldOn || crhtOn); }
+// GSPD 가 걸려 있으면 GSPD 가 자세와 속도를 맡는다
+function simAfcsPitch() { return simModeOn && simIasOn && !gspdOn; }
 // HDG SEL 을 손으로 넘겨 받는다(좌우 트림을 누를 때) — 지금 뱅크를 트림으로 잡아
 // 두어 놓는 순간 자세가 튀지 않게 한다(조종간이 가운데가 아니면 그 몫은 뺀다).
 function simAfcsLatRelease() {
@@ -159,6 +164,8 @@ const SIM_TRIM_MAX_ROLL  = 30;     // 트림만으로 갈 수 있는 뱅크(°)
 const SIM_TRIM_MAX_PITCH = 20;     // 트림만으로 갈 수 있는 기수 자세(°)
 let simTrim = { roll: 0, pitch: 0 };   // roll: 오른쪽 + · pitch: 기수 내림 +
 function simTrimNudge(dir) {
+  // IAS 가 걸려 있으면 전후 트림은 기준 속도를 1kt 씩 옮긴다(앞 = 빠르게)
+  if ((dir === 'F' || dir === 'A') && simAfcsPitch()) { simIasStep(dir === 'F' ? 1 : -1); return; }
   if (dir === 'R') simTrim.roll += SIM_TRIM_STEP_ROLL;
   else if (dir === 'L') simTrim.roll -= SIM_TRIM_STEP_ROLL;
   else if (dir === 'F') simTrim.pitch += SIM_TRIM_STEP_PITCH;      // 앞으로 = 기수 내림
@@ -167,6 +174,43 @@ function simTrimNudge(dir) {
   simTrim.pitch = Math.max(-SIM_TRIM_MAX_PITCH, Math.min(SIM_TRIM_MAX_PITCH, simTrim.pitch));
 }
 function simTrimReset() { simTrim = { roll: 0, pitch: 0 }; }
+
+// ── IAS 상위모드 ──
+// 걸면 기수 자세를 '선택 속도(selSpd)를 내는 자세' 로 잡는다 — 자세 하나가 곧 속도이므로
+// (PITCH_SPD) 그 자세로 두면 속도가 그 값에 선다. 오르내리는 동안 어긋나는 몫까지 메운다.
+// 조종간을 밀고 당기면 그만큼 기수가 벗어나고(조작대로 속도도 바뀐다), 놓으면 IAS 자세로
+// 천천히(SIM_IAS_RATE) 돌아와 속도도 선택 속도로 돌아간다.
+//   켜기·끄기: FCP 의 IAS 라벨(켜면 지금 속도가 기준) · IAS ▲▼ 는 기준을 1kt 씩 옮기며 켠다
+//   전후 트림: 기준 1kt 씩 · FORCE TRIM: 지금 속도를 새 기준으로
+// 끄면 그 자세를 트림으로 잡아 두어 자세가 튀지 않는다.
+const SIM_IAS_RATE = 5;        // 조종간을 놓았을 때 IAS 자세로 돌아오는 빠르기(°/s)
+function simIasClamp(v) { return Math.max(0, Math.min(SIM_SPD_MAX, Math.round(v))); }
+function simIasEngage() {
+  if (!simModeOn) return;
+  // GSPD 도 기수 자세를 쓰는 모드다 — IAS 를 걸면 내려놓는다(풀면서 지금 속도를 이어 받는다)
+  if (gspdOn) { try { toggleGspd(); } catch (e) { _swallow(e); } }
+  simIasOn = true;
+  selSpd = simIasClamp(S.spd);
+}
+function simIasRelease() {
+  simIasOn = false;
+  // 지금 자세를 트림으로 잡아 둔다(조종간이 가운데가 아니면 그 몫은 뺀다)
+  const p = -S.pit - simModeAxes().pitch * SIM_PITCH_MAX;
+  simTrim.pitch = Math.max(-SIM_TRIM_MAX_PITCH, Math.min(SIM_TRIM_MAX_PITCH, p));
+}
+function simIasToggle() { if (simIasOn) simIasRelease(); else simIasEngage(); }
+// 기준 속도를 d(kt)만큼 옮긴다 — 꺼져 있으면 지금 속도에서 켜고 옮긴다
+function simIasStep(d) {
+  if (!simModeOn) return;
+  if (!simAfcsPitch()) simIasEngage();
+  selSpd = simIasClamp(selSpd + d);
+}
+// 선택 속도에 서는 자세 — 아래 simFly 의 '피치 → 속도' 식을 거꾸로 푼다.
+// vsTrade 는 오르내림으로 어긋나는 속도의 바탕(그 식과 같은 값)이다.
+function simIasPitch(vsTrade) {
+  const v = Math.max(0, Math.min(SIM_SPD_MAX, selSpd));
+  return pitchFromSpd(v + (vsTrade / 1000) * SIM_CLIMB_KT * Math.max(0, Math.min(1, v / 40)));
+}
 // 지금 속도를 지키는 트림으로 맞춘다 — GSPD 를 풀었을 때 자세가 튀지 않게
 // (조종간을 가운데 두면 그 속도로 계속 난다).
 function simTrimHoldSpeed() {
@@ -406,7 +450,7 @@ function toggleSimMode(on, opt) {
     // (타력 비행과 SIM 조종이 같은 속도를 함께 쓰지 않게)
     if (gspdCoasting) { S.spd = gspdActFwd; simLat = gspdActLat; gspdCoasting = false; }
     try { if (gsOn) toggleGs(); } catch (e) { _swallow(e); }
-    hdgSelOn = false; rollApOn = false; altHoldOn = false; crhtOn = false;
+    hdgSelOn = false; rollApOn = false; altHoldOn = false; crhtOn = false; simIasOn = false;
     _simOnDeck = false;
     try { updateHoverBtns(); } catch (e) { _swallow(e); }
     // 손을 떼면 그 자리에서 날던 대로 — 지금 자세를 그대로 이어받는다
@@ -423,6 +467,7 @@ function toggleSimMode(on, opt) {
     simEnterView();
   } else {
     simExitView();
+    simIasOn = false;                    // 평소에는 속도가 늘 IAS 로 난다
     // 손을 뗀 자리에서 수평으로 돌려 놓는다(기울어진 채 남지 않게)
     bankTarget = 0; S.vs = 0; simLat = 0; simAcc = 0; simVsAcc = 0; simNr = 100;
     simLookReset();
@@ -453,12 +498,12 @@ function simEnterView() {
   if (v.side) { try { selectPanel(v.side, 'm3d', true); } catch (e) { _swallow(e); } }
   // 조종석 시야이므로 항공기를 따라가야 한다
   try { if (!followMode) toggleFollow(); } catch (e) { _swallow(e); }
-  try { syncChinView(); } catch (e) { _swallow(e); }   // 아래 1/3 CHIN 창
+  try { syncChinView(); } catch (e) { _swallow(e); }   // 아래 좌·우 CHIN 창
 }
 function simExitView() {
   const v = _simView; _simView = null;
   try { _apply3dRoll(); } catch (e) { _swallow(e); }
-  try { syncChinView(); } catch (e) { _swallow(e); }       // CHIN 창을 닫고 정면 시야를 다시 키운다
+  try { syncChinView(); } catch (e) { _swallow(e); }       // CHIN 창을 닫는다
   try { _ml3dSimCameraOff(); } catch (e) { _swallow(e); }   // 1인칭 카메라(롤·90° 너머)를 되돌린다
   try { _update3dMarker(); } catch (e) { _swallow(e); }     // 제 마커를 다시 보인다
   if (!v) return;
@@ -543,11 +588,20 @@ function simFly(dt) {
       bankTarget = S.bnk;           // 모드를 빠져나가도 자세가 튀지 않게
     }
 
+    // 오르내림으로 어긋나는 속도의 바탕 — 아래 '피치 → 속도' 와 IAS 자세가 같이 쓴다
+    const vsTrade = vsPow > 0 ? vsPow : Math.min(0, Math.max(vsPow, S.vs));
+
     // ── 사이클릭 전후 → 피치 ──
     // 조종간을 밀면(+) 기수가 내려간다. S.pit 은 기수 올림이 +.
-    const pTgt = -pitch * SIM_PITCH_MAX;
+    // IAS 가 걸려 있으면 기준은 IAS 자세다 — 조종간 몫만큼 벗어났다가(트림은 쓰지 않는다),
+    // 놓으면 그 자세로 천천히 돌아온다.
+    let pTgt = -pitch * SIM_PITCH_MAX, pRate = SIM_PITCH_RATE;
+    if (simAfcsPitch()) {
+      pTgt = Math.max(-SIM_PITCH_MAX, Math.min(SIM_PITCH_MAX, simIasPitch(vsTrade) - a.pitch * SIM_PITCH_MAX));
+      if (!a.pitch) pRate = SIM_IAS_RATE;
+    }
     const dP = pTgt - S.pit;
-    S.pit += Math.sign(dP) * Math.min(Math.abs(dP), SIM_PITCH_RATE * dt);
+    S.pit += Math.sign(dP) * Math.min(Math.abs(dP), pRate * dt);
 
     // ── 피치 → 속도 ──
     // 고도를 지키며 나는 헬기는 '자세 하나가 곧 속도' 다 — 수평 120kt,
@@ -558,7 +612,6 @@ function simFly(dt) {
     // 레버를 내리면 줄어든 속도가 고도로 돌아와 고도가 그대로이므로, 레버를 내린
     // 몫으로 속도를 돌려받지 않는다(그래서 고도를 지키며 속도가 크게 준다).
     // 제자리(호버 자세)에서 곧장 오르내릴 때는 내줄 속도가 없다 — 40kt 아래에서는 그만큼 덜 어긋난다
-    const vsTrade = vsPow > 0 ? vsPow : Math.min(0, Math.max(vsPow, S.vs));
     const sAtt = spdFromPitch(S.pit);
     let sTgt = sAtt - (vsTrade / 1000) * SIM_CLIMB_KT * Math.max(0, Math.min(1, sAtt / 40));
     sTgt = Math.max(SIM_SPD_BACK, Math.min(SIM_SPD_MAX, sTgt));

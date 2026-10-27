@@ -627,8 +627,9 @@ function _init3dMap() {
 }
 
 // ── CHIN BUBBLE(SIM 1인칭) ──
-// 헬기 조종석 발밑의 둥근 창처럼, 3D 창을 위 2/3(정면 시야)와 아래 1/3(좌·우
-// CHIN 창)으로 나눈다. CHIN 창은 같은 바탕(위성·지형·함정)을 그리는 작은 3D 지도
+// 헬기 조종석 발밑의 둥근 창처럼, 3D 창(정면 시야) 아래 왼쪽·오른쪽 모서리에 작은
+// CHIN 창을 겹쳐 띄운다 — 정면 시야는 창 가득 그대로 두어 전방을 넓게 본다
+// (창 하나가 너비 약 1/3 · 높이 2/9 · index.html). CHIN 창은 같은 바탕(위성·지형·함정)을 그리는 작은 3D 지도
 // 두 장이다 — 카메라는 같은 눈 자리에서 기체를 따라 앞아래를 본다(05-gps.js 의
 // _ml3dChinCamera). SIM 1인칭에서만 쓰고, 나오면 지도를 지워 그래픽 자원을 돌려준다.
 let chinViewOn = true;            // CHIN 창을 쓸 것인가(CHIN 버튼으로 끄고 켠다)
@@ -651,11 +652,8 @@ function syncChinView() {
   // 3D 지도 바로 뒤에 붙어 다닌다(2D 위에 겹쳐 쓰든, 제 창으로 옮겨 가든)
   if (row.previousElementSibling !== d3) d3.after(row);
   const want = _chinWanted();
-  if (d3.classList.contains('chin-on') !== want) {
-    d3.classList.toggle('chin-on', want);
-    // 정면 시야가 2/3 로 줄거나 다시 커진다 — 지도 엔진에 크기를 다시 재게 한다
-    try { _ml3d.resize(); } catch (e) { _swallow(e); }
-  }
+  // 정면 시야의 크기는 그대로다(CHIN 창은 그 위에 겹친다) — 다시 잴 것이 없다
+  if (d3.classList.contains('chin-on') !== want) d3.classList.toggle('chin-on', want);
   if (want && !_chinMaps.length) _chinCreate();
   else if (!want && _chinMaps.length) _chinDestroy();
 }

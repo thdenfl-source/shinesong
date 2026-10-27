@@ -138,6 +138,9 @@ function updateGsBtn() {
 // SIM 모드(조종간 직접 조종) — 법칙은 14-simmode.js. 선언만 여기 둔다:
 // 시뮬 루프(07-sim.js)가 그 파일보다 먼저 실행될 수 있어 TDZ 를 피한다.
 let simModeOn = false;
+// SIM 모드의 IAS 상위모드 — 걸면 기수 자세를 선택 속도(selSpd)를 내는 자세로 잡는다
+// (14-simmode.js). 평소(SIM 밖)에는 속도가 늘 IAS 로 나므로 쓰지 않는다.
+let simIasOn = false;
 // SIM 모드의 옆방향 속도(kt · 오른쪽이 +). 저속에서 뱅크를 주면 선회 대신
 // 옆으로 미끄러지는 헬기 특성을 담는다(14-simmode.js 가 채운다).
 let simLat = 0;
@@ -414,6 +417,7 @@ function toggleGspd() {
       gspdActLat = simModeOn ? simLat : 0;   // SIM 모드는 옆걸음도 이어 받는다
       gspdActFwd = S.spd;
     }
+    simIasOn = false;   // SIM 의 IAS 도 기수 자세를 쓰는 모드다 — GSPD 가 넘겨 받는다
     // References default to 0,0; the slew loop will decelerate.
     gspdRefLat = 0;
     gspdRefFwd = 0;
@@ -569,6 +573,8 @@ function stopTrimHold() {
 }
 
 function forceTrim() {
+  // SIM 모드 IAS — 조종간으로 옮겨 간 지금 속도를 새 기준으로 잡는다
+  if (simModeOn && simIasOn && !gspdOn) { selSpd = simIasClamp(S.spd); return; }
   if (!gspdOn) return;
   gspdRefLat = clampLat(Math.round(gspdActLat));
   gspdRefFwd = clampFwd(Math.round(gspdActFwd));

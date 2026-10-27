@@ -520,31 +520,31 @@ html, body {
 #map3d.panel-3d .maplibregl-ctrl-bottom-right { bottom: 10px; }
 #map3d.panel-3d .maplibregl-ctrl-bottom-left,
 #map3d.panel-3d .vfr-scale { bottom: 10px; }
-/* ── CHIN BUBBLE(SIM 1인칭) — 위 2/3 정면 시야, 아래 1/3 좌·우 발밑 창 ──
-   #chin-row 는 #map3d 바로 뒤에 붙어 다니며 3D 가 보일 때만 보인다 */
+/* ── CHIN BUBBLE(SIM 1인칭) — 정면 시야는 3D 창 가득, 발밑 창은 그 위 아래 좌·우 모서리 ──
+   #chin-row 는 #map3d 바로 뒤에 붙어 다니며 3D 가 보일 때만 보인다.
+   발밑 창 하나는 3D 창 너비의 약 1/3 · 높이의 2/9 다(종전 '아래 1/3 을 좌·우 반씩' 의 2/3).
+   좌·우 가장자리에 붙여 정면 시야 위에 겹친다 — 가운데(앞쪽 아래)는 가리지 않는다.
+   줄 자체는 비어 있고 손 입력을 그대로 통과시킨다. */
 #chin-row {
-  display: none; position: absolute; left: 0; right: 0; z-index: 800;
-  gap: 6px; padding: 4px 6px 6px; box-sizing: border-box;
-  background: #0b0d10;            /* 기체 바닥·계기판 아래 */
+  display: none; position: absolute; left: 0; right: 0; z-index: 801;
+  justify-content: space-between; pointer-events: none;
 }
 #map3d.chin-on.active + #chin-row { display: flex; }
 .chin-pane {
-  flex: 1; position: relative; overflow: hidden; min-width: 0;
+  flex: none; width: calc((100% - 18px) / 3); position: relative; overflow: hidden; min-width: 0;
   border-radius: 10px 10px 42px 42px / 10px 10px 34px 34px;   /* 아래가 둥근 창 */
-  border: 2px solid #1d232b; background: #0b2638;
+  border: 2px solid #1d232b; background: #0b2638; box-sizing: border-box;
+  box-shadow: 0 0 10px rgba(0,0,0,0.6);                       /* 정면 시야와 갈라 보이게 */
 }
 .chin-pane::after {               /* 창틀 안쪽 그늘 — 정면 시야와 구분된다 */
   content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 2;
   border-radius: inherit; box-shadow: inset 0 0 14px rgba(0,0,0,0.55);
 }
-/* 2D 위에 겹쳐 쓸 때: 지도 높이(80%, T-CUT 꺼짐이면 100%)를 2:1 로 나눈다 */
-#map3d.chin-on { height: calc(80% * 2 / 3); }
-#map3d.chin-on + #chin-row { top: calc(80% * 2 / 3); height: calc(80% / 3); }
-#map-wrap.tcut-off #map3d.chin-on { height: calc(100% * 2 / 3); }
-#map-wrap.tcut-off #map3d.chin-on + #chin-row { top: calc(100% * 2 / 3); height: calc(100% / 3); }
+/* 2D 위에 겹쳐 쓸 때: 3D 창(높이 80%, T-CUT 꺼짐이면 100%)의 아래 2/9 */
+#map3d.chin-on + #chin-row { top: calc(80% * 7 / 9); height: calc(80% * 2 / 9); }
+#map-wrap.tcut-off #map3d.chin-on + #chin-row { top: calc(100% * 7 / 9); height: calc(100% * 2 / 9); }
 /* 3D 가 제 창을 쓸 때 */
-#map3d.panel-3d.chin-on { bottom: auto; height: calc(100% * 2 / 3); }
-#map3d.panel-3d.chin-on + #chin-row { top: calc(100% * 2 / 3); height: calc(100% / 3); z-index: 1; }
+#map3d.panel-3d.chin-on + #chin-row { top: calc(100% * 7 / 9); height: calc(100% * 2 / 9); z-index: 2; }
 #q3d-btn { position: absolute; top: 8px; right: 8px; z-index: 900; padding: 5px 10px; }
 #chin-btn { display: none; position: absolute; top: 40px; right: 8px; z-index: 900; padding: 5px 10px; }
 #chin-btn.show { display: block; }
@@ -575,6 +575,9 @@ html, body {
 #map3d .maplibregl-ctrl-bottom-right { bottom: 44px; }
 /* 좌하단 축척은 좌표창(20%+44px) 위에 배치 */
 #map3d .maplibregl-ctrl-bottom-left { bottom: 62px; }
+/* CHIN 창이 아래 모서리를 덮으므로 3D 확대·기울기 버튼을 그 위로 올린다 */
+#map3d.chin-on .maplibregl-ctrl-bottom-right { bottom: calc(100% * 2 / 9 + 8px); }
+#map3d.chin-on #tilt-ctrl { bottom: calc(100% * 2 / 9 + 18px); }
 /* 3D 축척(.vfr-scale)은 #map3d에 직접 절대배치(left:10px, bottom:62px).
    maplibre 기본값이 섞이지 않도록 박스 스타일을 2D와 동일하게 명시 */
 #map3d .vfr-scale {
@@ -1859,8 +1862,9 @@ body.gate-open #gate-overlay { display: none; }
             나가 보이지 않습니다). 뱅크를 주면 카메라가 그대로 기울어 지평선이 <b>PFD 의 ADI 와 같은 쪽으로</b>
             기웁니다(오른쪽 뱅크면 지평선 오른쪽이 올라갑니다 · 확대되지 않습니다).
             1인칭에서는 3D 축척과 제 마커를 숨깁니다.<br>
-            <b>CHIN BUBBLE</b> — 1인칭에서는 3D 창을 <b>위 2/3 는 정면 시야</b>, <b>아래 1/3 은 좌·우 발밑 창</b>으로
-            나눕니다. 발밑 창은 헬기의 CHIN BUBBLE 처럼 <b>정면보다 50° 아래</b>를 좌·우로 15° 벌려 보며,
+            <b>CHIN BUBBLE</b> — 1인칭에서는 <b>정면 시야가 3D 창 가득</b> 차고, 좌·우 발밑 창은 그 위
+            <b>아래 왼쪽·오른쪽 모서리에 붙어 겹쳐</b> 뜹니다(창 하나가 너비 약 1/3 · 높이 2/9).
+            가운데 앞쪽 아래는 가리지 않아 전방을 넓게 봅니다. 발밑 창은 헬기의 CHIN BUBBLE 처럼 <b>정면보다 50° 아래</b>를 좌·우로 15° 벌려 보며,
             기체 자세를 따라 돕니다(고개 돌리기는 따르지 않습니다). 함정도 그려지므로 착함할 때 갑판을
             내려다볼 수 있습니다. 3D 창 오른쪽 위 <b>CHIN</b> 버튼으로 끄고 켭니다.<br>
             <b>3D 화질(상·중·하)</b> — 3D 창 오른쪽 위 <b>화질</b> 버튼을 누를 때마다 상 → 중 → 하 로 바뀝니다
@@ -1871,9 +1875,17 @@ body.gate-open #gate-overlay { display: none; }
             고친다), 20NM 안의 덜 자세한 단계와 발밑 4NM 의 지형은 미리 받아 둡니다. 20NM 밖으로 벗어난 것은 지웁니다.<br>
             땅 위에서는 그려진 지형 위로 눈높이(8m)만큼 떠 있습니다.
             끄면 <b>원래 보던 창으로 되돌아옵니다</b>.<br>
-            켤 때 <b>AFCS(NAV·HDG·ALT·CRHT·GSPD)는 풀립니다</b>. 켠 뒤 <b>상위모드를 다시 걸면 그 축은 AFCS 가
+            켤 때 <b>AFCS(NAV·HDG·ALT·CRHT·GSPD·IAS)는 풀립니다</b>. 켠 뒤 <b>상위모드를 다시 걸면 그 축은 AFCS 가
             몰고 조종간의 그 축 값은 무시합니다</b> — <b>HDG SEL·NAV</b> 는 좌우(뱅크)와 페달을,
-            <b>ALT</b>(선택 고도로 가는 것 포함)·<b>CRHT</b> 는 컬렉티브를 가져갑니다(토크는 AFCS 가 내는 만큼).
+            <b>ALT</b>(선택 고도로 가는 것 포함)·<b>CRHT</b> 는 컬렉티브를 가져갑니다(토크는 AFCS 가 내는 만큼).<br>
+            <b>IAS</b> 는 기수 자세를 가져갑니다 — FCP 의 <b>IAS 라벨</b>을 누르면 <b>지금 속도를 기준</b>으로 켜지고
+            (다시 누르면 꺼집니다), <b>IAS ▲▼</b> 는 기준을 1kt 씩 옮기며 켭니다. 켜져 있으면 ADI 가
+            <b>그 속도를 내는 자세</b>(수평 120kt · 4° 80kt · 7.5° 호버)로 잡히고 속도가 그 값에 섭니다
+            (오르내리는 동안 어긋나는 몫까지 메웁니다). <b>조종간을 밀고 당기면 그만큼 자세가 벗어나고
+            속도도 따라 바뀌었다가, 놓으면 IAS 자세로 천천히(초당 5°) 돌아와</b> 속도도 기준으로 돌아갑니다.
+            켜져 있는 동안 <b>전후 트림</b>은 기준 속도를 1kt 씩 옮기고, <b>FORCE TRIM</b> 은 지금 속도를 새 기준으로
+            잡습니다. PFD 속도계에 기준 속도(<b>청록 벅과 숫자</b>)가 나오고 FMA 의 IAS 가 초록으로 켜집니다.
+            끄면 그 자세를 트림으로 잡아 두어 튀지 않습니다. <b>GSPD</b> 를 걸면 IAS 는 풀립니다(GSPD 가 자세를 맡습니다).
             HDG SEL 은 <b>좌우 트림</b>을 누르면 풀리며 그 자리 뱅크를 이어 잡고, NAV·ALT·CRHT 는 버튼으로 풉니다
             (ALT·CRHT 를 풀면 그 상승률에서 레버가 이어 받습니다).
             끄면 수평으로 돌아오고 종전 방식으로 돌아갑니다.</li>
@@ -2485,14 +2497,14 @@ body.gate-open #gate-overlay { display: none; }
         <button class="sim-btn" id="ship3d-btn" data-act="toggleShip3d">⛵ SHIP</button>
         <!-- 3D 화질 — 상 → 중 → 하(낮출수록 부드럽다 · 04-map.js) -->
         <button class="sim-btn" id="q3d-btn" data-act="cycleMap3dQuality" title="3D 화질 — 누를 때마다 상 → 중 → 하. 낮출수록 저고도에서도 부드럽습니다">화질 중</button>
-        <!-- SIM 1인칭에서만 보인다 — 아래 1/3 CHIN 창을 끄고 켠다 -->
+        <!-- SIM 1인칭에서만 보인다 — 아래 좌·우 CHIN 창을 끄고 켠다 -->
         <button class="sim-btn" id="chin-btn" data-act="toggleChinView" title="CHIN BUBBLE — 발밑 창(좌·우)을 끄고 켭니다">CHIN</button>
         <div id="tilt-ctrl">
           <button data-act="tiltAdj" data-arg='[-5]' title="Tilt up">▲</button>
           <button data-act="tiltAdj" data-arg='[5]'  title="Tilt down">▼</button>
         </div>
       </div>
-      <!-- CHIN BUBBLE — SIM 1인칭에서 3D 창의 아래 1/3 을 좌·우 발밑 창으로 쓴다(04-map.js).
+      <!-- CHIN BUBBLE — SIM 1인칭에서 3D 창의 아래 좌·우 모서리에 발밑 창을 겹쳐 띄운다(04-map.js).
            3D 지도(#map3d) 바로 뒤에 붙어 다닌다(제 창으로 옮겨 갈 때도) -->
       <div id="chin-row"><div id="chin-l" class="chin-pane"></div><div id="chin-r" class="chin-pane"></div></div>
       <div id="map-top-bar">

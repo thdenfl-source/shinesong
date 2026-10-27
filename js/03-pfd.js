@@ -109,7 +109,8 @@ function drawFMA(x, y, w) {
     left   = crhtOn ? 'CRHT' : 'ALT';
     leftOn = altHoldOn || crhtOn;     // dim ALT if both collective holds off
     right  = 'IAS';
-    rightOn = true;
+    // SIM 모드에서는 IAS 를 건 동안만 켜진다(풀려 있으면 기수 자세는 조종간 몫)
+    rightOn = !simModeOn || simIasOn;
   }
 
   // ── G/S (ILS 강하선) ──
@@ -563,6 +564,18 @@ function drawSpeedTape(x, y, w, h) {
   ctx.textAlign='center'; ctx.fillText(Math.round(S.spd*scv),x+w/2,cy+6);
   ctx.fillStyle='#aaa'; ctx.font='bold 8px Helvetica Neue, Arial, sans-serif';
   ctx.fillText(S_LBL(),x+w/2,y+11);
+  // SIM 모드 IAS 상위모드 — 선택 속도 벅(청록, 오른쪽 가장자리)과 그 값(맨 위)
+  if (simModeOn && simIasOn && !gspdOn) {
+    const by = Math.max(y + 4, Math.min(y + h - 4, cy - (selSpd - S.spd) * ppk));
+    ctx.fillStyle = '#00e5ff';
+    ctx.beginPath();
+    ctx.moveTo(x + w, by - 6); ctx.lineTo(x + w - 7, by - 6); ctx.lineTo(x + w - 7, by - 2);
+    ctx.lineTo(x + w - 3, by); ctx.lineTo(x + w - 7, by + 2); ctx.lineTo(x + w - 7, by + 6);
+    ctx.lineTo(x + w, by + 6); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#000'; ctx.fillRect(x + 2, y + 14, w - 4, 14);
+    ctx.fillStyle = '#00e5ff'; ctx.font = 'bold 11px Helvetica Neue, Arial, sans-serif';
+    ctx.textAlign = 'center'; ctx.fillText(Math.round(selSpd * scv), x + w / 2, y + 25);
+  }
   // Speed trend vector (magenta, 6-second extrapolation)
   if (Math.abs(spdTrend) > 0.5) {
     const trendY = cy - spdTrend * ppk;
