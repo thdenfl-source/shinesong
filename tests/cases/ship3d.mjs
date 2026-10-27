@@ -390,9 +390,10 @@ export async function run(page, t) {
   t.ok(steady.shipY > 0 && steady.shipY < steady.H,
     `300m 앞 수면의 함정이 화면 안에 있다 (y ${steady.shipY.toFixed(0)} / ${steady.H})`);
 
-  // ── CHIN BUBBLE — SIM 1인칭에서 3D 창을 위 2/3 · 아래 1/3(좌·우) 으로 나눈다 ──
-  // 아래의 두 창은 헬기 발밑의 둥근 창처럼 정면보다 더 아래를 본다. 같은 바탕(위성·
-  // 지형)과 함정을 그리고, 기체 자세를 따라 돈다. SIM 을 끄면 닫혀 정면이 다시 커진다.
+  // ── CHIN BUBBLE — SIM 1인칭에서 3D 창 아래 좌·우 모서리에 발밑 창을 겹쳐 띄운다 ──
+  // 정면 시야는 창 가득 그대로 두고(전방을 넓게), 두 창은 좌·우 가장자리에 붙어 그 위에
+  // 겹친다 — 크기는 종전(아래 1/3 을 반씩)의 2/3. 헬기 발밑의 둥근 창처럼 정면보다 더
+  // 아래를 보고, 같은 바탕(위성·지형)과 함정을 그리며, 기체 자세를 따라 돈다.
   const chin = await page.evaluate(async () => {
     const wait = ms => new Promise(r => setTimeout(r, ms));
     const box = id => { const r = document.getElementById(id).getBoundingClientRect();
@@ -409,7 +410,11 @@ export async function run(page, t) {
     const out = { n: _chinMaps.length, ship: _chinMaps.map(c => !!c.map.getLayer('ship-3d')),
                   main: box('map3d'), row: box('chin-row'), l: box('chin-l'), r: box('chin-r'),
                   rowShown: getComputedStyle(document.getElementById('chin-row')).display,
+                  rowPe: getComputedStyle(document.getElementById('chin-row')).pointerEvents,
                   btn: getComputedStyle(document.getElementById('chin-btn')).display,
+                  ctrl: (() => { const e = document.querySelector('#map3d .maplibregl-ctrl-bottom-right'); if (!e) return null;
+                                 const r = e.getBoundingClientRect(); return { b: r.bottom, h: r.height }; })(),
+                  tilt: (() => { const r = document.getElementById('tilt-ctrl').getBoundingClientRect(); return { b: r.bottom, h: r.height }; })(),
                   mainPitch: _ml3d.getPitch(), mainH: _ml3d.transform.height,
                   cam: _chinMaps.map(c => ({ side: c.side, pitch: c.map.getPitch(), bearing: c.map.getBearing() })) };
     // 함정이 발밑 창에도 보인다(앞 60m 의 함정 — 갑판 높이)
@@ -450,12 +455,22 @@ export async function run(page, t) {
   });
   t.eq(chin.n, 2, 'SIM 1인칭에서 3D 창 아래에 CHIN 창 두 개가 열린다');
   t.ok(chin.rowShown === 'flex' && chin.btn !== 'none', `CHIN 창과 CHIN 버튼이 보인다 (${chin.rowShown} · ${chin.btn})`);
-  const tot = chin.main.h + chin.row.h;
-  t.ok(Math.abs(chin.main.h / tot - 2 / 3) < 0.02 && Math.abs(chin.row.y - (chin.main.y + chin.main.h)) < 1.5,
-    `위 2/3 는 정면 시야, 아래 1/3 은 CHIN 창 (${chin.main.h.toFixed(0)} : ${chin.row.h.toFixed(0)}px)`);
-  t.ok(Math.abs(chin.mainH - chin.main.h) < 2, `정면 지도도 2/3 크기로 다시 잰다 (${chin.mainH}px)`);
-  t.ok(chin.l.x + chin.l.w <= chin.r.x + 1 && Math.abs(chin.l.w - chin.r.w) < 2 && Math.abs(chin.l.y - chin.r.y) < 1,
-    `좌·우로 나란히 반씩 (${chin.l.w.toFixed(0)} · ${chin.r.w.toFixed(0)}px)`);
+  const M = chin.main, mBot = M.y + M.h;
+  t.ok(Math.abs(chin.mainH - M.h) < 2 && Math.abs(chin.off.main.h - M.h) < 1,
+    `정면 시야는 창 가득 그대로다 — CHIN 을 켜도 줄지 않는다 (${M.h.toFixed(0)}px · 끄면 ${chin.off.main.h.toFixed(0)}px)`);
+  t.ok(Math.abs(chin.l.x - M.x) < 1 && Math.abs(chin.r.x + chin.r.w - (M.x + M.w)) < 1,
+    `좌·우 가장자리에 붙는다 (왼쪽 ${(chin.l.x - M.x).toFixed(1)} · 오른쪽 ${(M.x + M.w - chin.r.x - chin.r.w).toFixed(1)}px)`);
+  t.ok(Math.abs(chin.l.y + chin.l.h - mBot) < 1 && Math.abs(chin.r.y + chin.r.h - mBot) < 1 && chin.l.y > M.y + M.h / 2,
+    '정면 시야의 아래 모서리 위에 겹친다');
+  // 종전 한 창 = 너비 (W − 18)/2 · 높이 H/3 − 10 → 그 2/3
+  const oldW = (M.w - 18) / 2, oldH = M.h / 3 - 10;
+  t.ok(Math.abs(chin.l.w / oldW - 2 / 3) < 0.02 && Math.abs(chin.r.w - chin.l.w) < 1 && Math.abs(chin.l.h / oldH - 2 / 3) < 0.05,
+    `크기는 종전의 2/3 (${chin.l.w.toFixed(0)}×${chin.l.h.toFixed(0)}px · 종전 ${oldW.toFixed(0)}×${oldH.toFixed(0)}px)`);
+  t.ok(chin.r.x - (chin.l.x + chin.l.w) > M.w * 0.25,
+    `가운데 앞쪽 아래는 가리지 않는다 (사이 ${(chin.r.x - chin.l.x - chin.l.w).toFixed(0)}px)`);
+  t.eq(chin.rowPe, 'none', '겹친 줄이 정면 지도의 손 입력을 막지 않는다');
+  t.ok(chin.ctrl && chin.ctrl.b <= chin.r.y + 1 && chin.tilt.b <= chin.r.y + 1,
+    `3D 확대·기울기 버튼은 CHIN 창 위로 올라간다 (버튼 아래 ${chin.ctrl && chin.ctrl.b.toFixed(0)} · ${chin.tilt.b.toFixed(0)} ≤ 창 위 ${chin.r.y.toFixed(0)})`);
   const cl = chin.cam.find(c => c.side < 0), cr = chin.cam.find(c => c.side > 0);
   const nA = d => ((d % 360) + 540) % 360 - 180;
   t.ok(chin.mainPitch - cl.pitch > 40 && chin.mainPitch - cr.pitch > 40,
@@ -473,8 +488,8 @@ export async function run(page, t) {
     `화질 '하' 는 CHIN 창을 덜 자주 그리고 '상' 은 매번 그린다 (곧바로 5번 → 하 ${chin.throttle.low} · 상 ${chin.throttle.high})`);
   t.ok(chin.chinRatio.length === 2 && chin.chinRatio.every(r => r <= 1),
     `화질 '중' 의 CHIN 창은 1배 해상도까지만 그린다 (${chin.chinRatio.join(' · ')})`);
-  t.ok(chin.off.n === 0 && chin.off.rowShown === 'none' && chin.off.main.h > chin.main.h * 1.4,
-    `CHIN 버튼으로 끄면 정면 시야가 다시 창 가득 (${chin.off.main.h.toFixed(0)}px)`);
+  t.ok(chin.off.n === 0 && chin.off.rowShown === 'none',
+    'CHIN 버튼으로 끄면 발밑 창이 사라진다');
   t.eq(chin.on, 2, '다시 누르면 CHIN 창이 열린다');
   t.ok(chin.exit.n === 0 && !chin.exit.cls && chin.exit.rowShown === 'none' && chin.exit.btn === 'none',
     'SIM 을 끄면 CHIN 창과 버튼이 사라진다');

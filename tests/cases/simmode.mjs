@@ -1649,6 +1649,93 @@ export async function run(page, t) {
     `CRHT 는 레버를 크게 올려도 고도를 지킨다 (${upper.crht.toFixed(1)}ft · 토크 ${upper.tqCrht.toFixed(0)}%)`);
   t.ok(upper.crhtOffVs > 300, `CRHT 를 풀면 올려 둔 레버만큼 오른다 (${upper.crhtOffVs.toFixed(0)}fpm)`);
 
+  // ── IAS 상위모드 — 기수 자세를 선택 속도를 내는 자세로 잡는다 ──
+  // 조종간을 밀면 그만큼 자세·속도가 벗어났다가, 놓으면 IAS 자세로 천천히 돌아와
+  // 속도도 선택 속도로 돌아간다(fly-through). 오르내리는 동안에도 그 속도에 선다.
+  const ias = await page.evaluate(`(() => {
+    (${SETUP.toString()})();
+    const fly = ${FLY};
+    const out = {};
+    S.alt = 3000; _simGndFt = 0; S.hdg = 90; S.bnk = 0; S.spd = 100; S.pit = pitchFromSpd(100);
+    simAcc = 0; S.vs = 0; simVsAcc = 0; simTrimReset();
+    toggleCrht();                                   // 고도는 AFCS 가 지킨다(속도만 본다)
+    out.entry = simIasOn;
+    // IAS 라벨 — 지금 속도(100kt)를 기준으로 켠다
+    fcpSync('ias');
+    out.on = { on: simIasOn, sel: selSpd, axis: simAfcsPitch() };
+    // IAS ▼ 스무 번 — 기준만 80kt 로 옮긴다(속도를 곧바로 바꾸지 않는다)
+    for (let i = 0; i < 20; i++) applyDelta('spd', -1);
+    out.sel80 = selSpd; out.spdNow = S.spd;
+    fly(30);
+    out.at80 = { spd: S.spd, pit: S.pit, ref: pitchFromSpd(80) };
+    // PFD — 속도계에 기준 속도(청록), FMA 의 IAS 는 초록
+    const draw = () => {
+      const seen = [], o = CanvasRenderingContext2D.prototype.fillText;
+      CanvasRenderingContext2D.prototype.fillText = function (s, ...r) { seen.push([String(s), this.fillStyle]); return o.call(this, s, ...r); };
+      try { drawPFD(); } finally { CanvasRenderingContext2D.prototype.fillText = o; }
+      const f = seen.find(([s]) => s === 'IAS');
+      return { bug: seen.some(([s, c]) => s === String(selSpd) && c === '#00e5ff'), fma: f ? f[1] : null };
+    };
+    out.pfdOn = draw();
+    // 조종간을 앞으로 — 그만큼 기수가 숙고 빨라진다
+    _ax(1, 0.25); fly(4);
+    out.push = { pit: S.pit, spd: S.spd };
+    // 놓으면 — 곧장 튀지 않고 초당 5° 로 돌아온다
+    _ax(1, 0); fly(1); out.rel1 = S.pit;
+    fly(40); out.back = { pit: S.pit, spd: S.spd };
+    // 당겨도 마찬가지
+    _ax(1, -0.25); fly(4); out.pull = { pit: S.pit, spd: S.spd };
+    _ax(1, 0); fly(40); out.back2 = S.spd;
+    // 오르는 동안에도 그 속도에 선다(오르내림으로 어긋나는 몫을 메운다)
+    toggleCrht(); selAlt = 6000; selVS = 1000; altHoldOn = true;
+    fly(20); out.climb = { spd: S.spd, vs: S.vs };
+    altHoldOn = false; toggleCrht(); S.vs = 0; simVsAcc = 0; fly(20);
+    // 전후 트림 = 기준 1kt
+    startTrimHold('F'); stopTrimHold(); out.trimF = selSpd;
+    startTrimHold('A'); stopTrimHold(); startTrimHold('A'); stopTrimHold(); out.trimA = selSpd;
+    // FORCE TRIM = 조종간으로 옮겨 간 지금 속도를 새 기준으로
+    _ax(1, 0.2); fly(5); const sNow = Math.round(S.spd); forceTrim();
+    out.ft = { sel: selSpd, s: sNow };
+    _ax(1, 0); fly(30); out.ftHold = S.spd;
+    // 끄면 그 자세를 트림으로 잡아 두어 튀지 않는다 · FMA 의 IAS 는 꺼진다
+    const p0 = S.pit; fcpSync('ias'); fly(2);
+    out.off = { on: simIasOn, d: Math.abs(S.pit - p0) };
+    out.pfdOff = draw();
+    // GSPD 를 걸면 IAS 는 풀린다(GSPD 가 자세를 맡는다)
+    fcpSync('ias'); toggleGspd(); out.gspd = simIasOn; toggleGspd();
+    // SIM 을 나가면 꺼지고, 다시 들어와도 꺼진 채다
+    fcpSync('ias'); toggleSimMode(false); out.exit = simIasOn;
+    toggleSimMode(true); out.reenter = simIasOn;
+    if (crhtOn) toggleCrht();
+    simTrimReset();
+    return out;
+  })()`);
+  t.eq(ias.entry, false, 'SIM 에 들어오면 IAS 는 꺼져 있다');
+  t.ok(ias.on.on && ias.on.sel === 100 && ias.on.axis, `IAS 라벨을 누르면 지금 속도(100kt)를 기준으로 켜진다 (${ias.on.sel}kt)`);
+  t.ok(ias.sel80 === 80 && Math.abs(ias.spdNow - 100) < 0.5,
+    `IAS ▼ 는 기준만 옮긴다 — 속도를 곧바로 바꾸지 않는다 (기준 ${ias.sel80} · 속도 ${ias.spdNow.toFixed(1)}kt)`);
+  t.ok(Math.abs(ias.at80.spd - 80) < 0.5 && Math.abs(ias.at80.pit - ias.at80.ref) < 0.2,
+    `ADI 가 80kt 자세(${ias.at80.ref.toFixed(1)}°)로 잡히고 속도가 80kt 에 선다 (${ias.at80.pit.toFixed(2)}° · ${ias.at80.spd.toFixed(1)}kt)`);
+  t.ok(ias.pfdOn.bug && ias.pfdOn.fma === '#00ff88',
+    `속도계에 기준 속도(청록)가 나오고 FMA 의 IAS 가 초록이다 (벅 ${ias.pfdOn.bug} · ${ias.pfdOn.fma})`);
+  t.ok(ias.push.pit < ias.at80.ref - 8 && ias.push.spd > 85,
+    `조종간을 밀면 그만큼 기수가 숙고 빨라진다 (${ias.push.pit.toFixed(1)}° · ${ias.push.spd.toFixed(1)}kt)`);
+  t.ok(ias.rel1 - ias.push.pit > 3 && ias.rel1 - ias.push.pit < 5.5,
+    `놓으면 곧장 튀지 않고 천천히(초당 5°) 돌아온다 (1초에 ${(ias.rel1 - ias.push.pit).toFixed(1)}°)`);
+  t.ok(Math.abs(ias.back.pit - ias.at80.ref) < 0.2 && Math.abs(ias.back.spd - 80) < 1,
+    `다시 IAS 자세로 돌아와 속도도 80kt 로 돌아간다 (${ias.back.pit.toFixed(2)}° · ${ias.back.spd.toFixed(1)}kt)`);
+  t.ok(ias.pull.pit > ias.at80.ref + 5 && ias.pull.spd < 75 && Math.abs(ias.back2 - 80) < 1,
+    `당기면 기수가 들려 느려졌다가 놓으면 돌아간다 (${ias.pull.pit.toFixed(1)}° · ${ias.pull.spd.toFixed(1)}kt → ${ias.back2.toFixed(1)}kt)`);
+  t.ok(ias.climb.vs > 800 && Math.abs(ias.climb.spd - 80) < 1.5,
+    `오르는 동안에도 그 속도에 선다 (${ias.climb.vs.toFixed(0)}fpm · ${ias.climb.spd.toFixed(1)}kt)`);
+  t.ok(ias.trimF === 81 && ias.trimA === 79, `전후 트림은 기준을 1kt 씩 옮긴다 (▲ ${ias.trimF} · ▼▼ ${ias.trimA})`);
+  t.ok(ias.ft.sel === ias.ft.s && ias.ft.s > 85 && Math.abs(ias.ftHold - ias.ft.s) < 1.5,
+    `FORCE TRIM 은 지금 속도를 새 기준으로 잡는다 (${ias.ft.sel}kt · 놓은 뒤 ${ias.ftHold.toFixed(1)}kt)`);
+  t.ok(!ias.off.on && ias.off.d < 0.5, `끄면 그 자세를 이어 잡아 튀지 않는다 (${ias.off.d.toFixed(2)}°)`);
+  t.ok(ias.pfdOff.fma === '#3a3a3a' && !ias.pfdOff.bug, `끄면 FMA 의 IAS 가 어두워지고 기준 벅도 사라진다 (${ias.pfdOff.fma})`);
+  t.eq(ias.gspd, false, 'GSPD 를 걸면 IAS 는 풀린다');
+  t.ok(ias.exit === false && ias.reenter === false, 'SIM 을 나가면 꺼지고 다시 들어와도 꺼진 채다');
+
   // ── GSPD 의 4방향 트림 — 기준속도가 1초마다 1kt 씩 옮겨 가도 계단 없이 따라간다 ──
   // 빠른 속도에서 그 1kt 를 한순간에 따라가 버리면 1초마다 속도·자세·상승률(운동에너지
   // 몫)이 튀어 PFD 와 3D 시점이 흔들렸다. 1kt 를 1초에 걸쳐 따라간다.

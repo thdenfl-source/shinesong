@@ -9,6 +9,9 @@
 function applyDelta(field, d){
   switch(field){
     case 'spd':
+      // SIM 모드에서는 속도를 곧바로 바꾸지 않는다 — IAS 기준 속도를 옮기고(꺼져 있으면
+      // 지금 속도에서 켠다) 기수 자세가 그 속도로 데려간다(14-simmode.js)
+      if (simModeOn) { simIasStep(d); break; }
       S.spd = Math.max(0, Math.min(320, S.spd + d));
       S.pit = pitchFromSpd(S.spd);   // auto pitch from speed
       break;
@@ -64,11 +67,13 @@ function applyDelta(field, d){
 
 // FCP 라벨(IAS/HDG/CRS) 누름: 해당 상위모드 인게이지 + 현재값 동기화
 // - IAS: 속도 프리셀렉트(selSpd)를 현재 속도로
+//        (SIM 모드에서는 IAS 상위모드를 켜고 끈다 — 켜면 지금 속도가 기준)
 // - HDG: 헤딩 프리셀렉트(selHdg)를 현재 기수방위로 + 현재 헤딩 유지(롤 AP)
 // - CRS: 현재 위치에서 NAV 소스(VOR/LOC 국·FMS 활성 웨이포인트)로의 코스 세팅(Direct-To)
 function fcpSync(which) {
   if (which === 'ias') {
-    selSpd = Math.max(0, Math.round(S.spd));
+    if (simModeOn) simIasToggle();
+    else selSpd = Math.max(0, Math.round(S.spd));
   } else if (which === 'hdg') {
     selHdg = ((Math.round(S.hdg) + 359) % 360) + 1;   // 1–360
     hdgSelOn = true; bankTarget = 0; rollApOn = true;  // 현재 헤딩 유지

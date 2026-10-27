@@ -883,7 +883,7 @@ function _follow3d() {
     //  정말로 하늘을 보고, 기울이면 지평선이 그대로 기운다. 화면을 돌리거나
     //  밀어 흉내 내던 종전 방식은 더 쓰지 않는다.)
     if (simModeOn) {
-      try { syncChinView(); } catch (e) { _swallow(e); }   // 아래 1/3 CHIN 창(04-map.js)
+      try { syncChinView(); } catch (e) { _swallow(e); }   // 아래 좌·우 CHIN 창(04-map.js)
       _ml3dSimCamera();
       _apply3dRoll();
       return;
