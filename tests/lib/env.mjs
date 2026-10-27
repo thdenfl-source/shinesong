@@ -30,6 +30,8 @@ export function buildEnv() {
 export async function openApp(browser, { cdu = false } = {}) {
   const { url } = buildEnv();
   const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
+  // 시작 잠금(js/00-gate.js)은 풀어 둔 채로 연다 — 잠금 자체는 cases/lock.mjs 가 본다
+  await page.addInitScript(() => { try { sessionStorage.setItem('vfrUnlocked', '1'); } catch (e) { /* 없으면 그만 */ } });
   const errors = [];
   page.on('pageerror', e => errors.push(e.message));
   page.errors = errors;

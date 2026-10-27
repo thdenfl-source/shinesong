@@ -1356,20 +1356,31 @@ function courseCrsHere(L) {
 let rnp     = 1.0;     // RNP value for FMS CDI scale
 
 // ── 자세 ↔ 속도 ──
-// 고도를 지키며 나는 헬기는 자세 하나가 곧 속도다(실제 기재 기준):
-//   기수 올림 쪽 — 수평(0°) 120kt · 4° 80kt · 7.5° 45kt → 1° 당 10kt
-//   기수 내림 쪽 — −10° 140kt → 1° 당 2kt (빨라질수록 항력이 급히 늘어 덜 는다)
+// 고도를 지키며 나는 헬기는 자세 하나가 곧 속도다(오르내릴 때 조금 어긋날 뿐이다):
+//   기수 내림 −10° 140kt · 수평 0° 120kt · 기수 4° 80kt · 기수 7.5° 호버(0kt)
+//   (숙일 때 1° 당 2kt — 빨라질수록 항력이 급히 늘어 덜 는다. 들 때 4° 까지 1° 당 10kt,
+//    그 뒤 호버까지는 1° 당 약 23kt — 호버 언저리에서는 자세를 조금만 바꿔도 속도가 크게 바뀐다)
+//   7.5° 보다 더 들면 뒤로 간다(같은 기울기로 이어 −40kt 에서 멎는다).
 // SIM 모드의 조종(14-simmode.js)과 AFCS 의 자동 자세가 같은 식을 쓴다.
-const PITCH_KT_UP    = 10;        // 기수를 들 때 1° 당 줄어드는 속도
-const PITCH_KT_DN    = 2;         // 기수를 숙일 때 1° 당 늘어나는 속도
-const PITCH_LEVEL_KT = 120;       // 수평 자세의 속도
-function pitchFromSpd(spd) {
-  const d = PITCH_LEVEL_KT - spd;
-  return Math.max(-60, Math.min(60, d >= 0 ? d / PITCH_KT_UP : d / PITCH_KT_DN));
+const PITCH_SPD = [[-10, 140], [0, 120], [4, 80], [7.5, 0]];   // [자세°(기수 올림 +), 속도 kt]
+function _pitchSeg(i) {
+  const a = PITCH_SPD[i], b = PITCH_SPD[i + 1];
+  return { p0: a[0], v0: a[1], k: (b[1] - a[1]) / (b[0] - a[0]) };   // kt / °
 }
-// 그 자세로 고도를 지키며 날면 얼마에서 멎는가(위 식의 역)
 function spdFromPitch(pit) {
-  return PITCH_LEVEL_KT - pit * (pit >= 0 ? PITCH_KT_UP : PITCH_KT_DN);
+  const n = PITCH_SPD.length;
+  let i = 0;
+  while (i < n - 2 && pit > PITCH_SPD[i + 1][0]) i++;      // 끝 구간 밖은 그 기울기로 잇는다
+  const g = _pitchSeg(i);
+  return g.v0 + (pit - g.p0) * g.k;
+}
+// 그 속도로 고도를 지키며 날 자세(위 식의 역)
+function pitchFromSpd(spd) {
+  const n = PITCH_SPD.length;
+  let i = 0;
+  while (i < n - 2 && spd < PITCH_SPD[i + 1][1]) i++;
+  const g = _pitchSeg(i);
+  return Math.max(-60, Math.min(60, g.p0 + (spd - g.v0) / g.k));
 }
 
 // ══════════════════════════════════════════════════════

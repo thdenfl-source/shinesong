@@ -419,6 +419,8 @@ function _joyAxCaptureStep(p, neu) {
 
 // 한 프레임분 폴링. 테스트에서 직접 부를 수 있게 시각을 인자로 받는다.
 function joyPoll(now) {
+  // 시작 잠금(00-lock.js)이 걸려 있는 동안에는 조이스틱이 앱을 움직이지 않는다
+  if (window.gateLocked) return;
   // 눌려 있는 키의 연속 동작(repeat)도 여기서 돈다 — 장치가 없어도 듣는다
   Object.keys(_joyKeys).forEach(code => _joyEdge(code, true, now));
   const pads = joyPads();
