@@ -20,7 +20,7 @@
 
 const HELI3D_LEN = 20;                       // 전장(m)
 const HELI3D_ROTOR = { x: 2.95, z: 5.45, r: 7.05, blades: 4 };          // 주로터
-const HELI3D_TAIL  = { x: -8.55, y: -0.42, z: 4.35, r: 1.45, blades: 4 }; // 꼬리로터(왼쪽)
+const HELI3D_TAIL  = { x: -8.55, y: 0.42, z: 4.35, r: 1.45, blades: 4 };  // 꼬리로터(오른쪽)
 const HELI3D_RPS   = 4.4;                    // 주로터 회전(초당, 265rpm)
 const HELI3D_TAIL_RPS = 3.1;                 // 꼬리로터 — 눈에 도는 것이 보이게 늦춰 그린다
 const HELI3D_MARKER_PX = 14;                 // 모형이 이보다 작게 보이면 삼각형 표식도 띄운다
@@ -239,7 +239,7 @@ function _h3BuildBody() {
   _h3Plate(m, [[4.4, 1.15], [5.0, 1.15], [5.0, 1.42], [4.4, 1.42]], [0, 0, 3.86], H3X, H3Y, H3Z, 0.10, H3C.dark);
   // 마스트 · 꼬리로터 기어 덮개
   _h3Lathe(m, [HELI3D_ROTOR.x, 0, 4.85], H3Z, [[0.24, 0], [0.18, 0.12], [0.18, HELI3D_ROTOR.z - 4.85 - 0.05]], H3C.dark, 14);
-  _h3Pod(m, HELI3D_TAIL.x - 0.35, HELI3D_TAIL.x + 0.35, -0.16, HELI3D_TAIL.z, 0.18, 0.24, H3C.blue, 3, 2);
+  _h3Pod(m, HELI3D_TAIL.x - 0.35, HELI3D_TAIL.x + 0.35, Math.sign(HELI3D_TAIL.y) * 0.16, HELI3D_TAIL.z, 0.18, 0.24, H3C.blue, 3, 2);
   // 수직 꼬리날개(파랑) — 뒷전에 붉은 띠, 그 아래 붉은 꼬리 범퍼
   const fin = [[-6.40, 3.30], [-8.45, 4.70], [-9.30, 4.62], [-7.70, 2.10], [-7.00, 2.45]];
   _h3Plate(m, fin, [0, 0, 0], H3X, H3Z, H3Y, 0.24, H3C.blue);
@@ -250,9 +250,8 @@ function _h3BuildBody() {
            [0, 0, 0], H3X, H3Z, H3Y, 0.27, H3C.red);
   _h3Rod(m, [-7.62, 0, 2.15], [-8.42, 0, 1.50], 0.06, H3C.red);
   _h3Rod(m, [-8.42, 0, 1.50], [-8.62, 0, 1.50], 0.05, H3C.red);
-  // 수평 꼬리날개(붉은색, 좌우)
+  // 수평 꼬리날개(붉은색) — 왼쪽에만 있다(꼬리로터는 오른쪽)
   _h3Plate(m, [[-7.00, -0.20], [-7.15, -2.25], [-7.90, -2.25], [-8.00, -0.20]], [0, 0, 3.05], H3X, H3Y, H3Z, 0.12, H3C.red);
-  _h3Plate(m, [[-7.00, 0.20], [-8.00, 0.20], [-7.90, 2.25], [-7.15, 2.25]], [0, 0, 3.05], H3X, H3Y, H3Z, 0.12, H3C.red);
   return m;
 }
 // 주로터(허브 가운데가 원점, Z 축으로 돈다)
@@ -268,14 +267,14 @@ function _h3BuildRotor() {
   }
   return m;
 }
-// 꼬리로터(허브 가운데가 원점, Y 축으로 돈다)
+// 꼬리로터(허브 가운데가 원점, Y 축으로 돈다). 꼬리날개 바깥쪽(s: 오른쪽 +1)에 붙는다.
 function _h3BuildTail() {
-  const m = _h3New(), R = HELI3D_TAIL.r;
-  _h3Lathe(m, [0, -0.12, 0], H3Y, [[0, 0], [0.20, 0], [0.20, 0.16], [0, 0.20]], H3C.dark, 14);
+  const m = _h3New(), R = HELI3D_TAIL.r, s = Math.sign(HELI3D_TAIL.y) || 1;
+  _h3Lathe(m, [0, -0.12 * s, 0], [0, s, 0], [[0, 0], [0.20, 0], [0.20, 0.16], [0, 0.20]], H3C.dark, 14);
   for (let k = 0; k < HELI3D_TAIL.blades; k++) {
     const a = k / HELI3D_TAIL.blades * 2 * Math.PI;
     const U = [Math.cos(a), 0, Math.sin(a)], V = [-Math.sin(a), 0, Math.cos(a)];
-    _h3Plate(m, [[0.15, -0.13], [R, -0.11], [R, 0.11], [0.15, 0.13]], [0, -0.06, 0], U, V, H3Y, 0.05, H3C.blade);
+    _h3Plate(m, [[0.15, -0.13], [R, -0.11], [R, 0.11], [0.15, 0.13]], [0, 0.06 * s, 0], U, V, H3Y, 0.05, H3C.blade);
   }
   return m;
 }
@@ -493,7 +492,8 @@ const HELI3D_LAYER = {
     const discM  = _m4Mul(base, _m4From([[1, 0, 0], [0, 1, 0], [0, 0, 1]], [HELI3D_ROTOR.x, 0, HELI3D_ROTOR.z + 0.01]));
     const cb = Math.cos(_h3TPhase), sb = Math.sin(_h3TPhase);
     const tailM  = _m4Mul(base, _m4From([[cb, 0, sb], [0, 1, 0], [-sb, 0, cb]], [HELI3D_TAIL.x, HELI3D_TAIL.y, HELI3D_TAIL.z]));
-    const tdiscM = _m4Mul(base, _m4From([[1, 0, 0], [0, 1, 0], [0, 0, 1]], [HELI3D_TAIL.x, HELI3D_TAIL.y - 0.06, HELI3D_TAIL.z]));
+    const tdiscM = _m4Mul(base, _m4From([[1, 0, 0], [0, 1, 0], [0, 0, 1]],
+                                        [HELI3D_TAIL.x, HELI3D_TAIL.y + 0.06 * Math.sign(HELI3D_TAIL.y), HELI3D_TAIL.z]));
     const rotR = (Rm) => {   // 부품의 회전까지 얹은 법선 회전
       const M = _m3Mul(R, Rm);
       return new Float32Array([M[0][0], M[1][0], M[2][0], M[0][1], M[1][1], M[2][1], M[0][2], M[1][2], M[2][2]]);

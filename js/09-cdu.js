@@ -159,6 +159,7 @@ function init(){
   showHelpOnLaunch();
   const _restored = restoreSession();   // 자동 리로드 복원(있으면 FPL 복원 생략)
   if (!_restored) _fplRestore();        // 저장된 비행계획 복원(새로고침 대비)
+  _startPosInit(_restored);             // 시작 위치(GPS 는 쓰지 않는다) · 처음이면 출발 공항을 묻는다
   fpRender();
   updateAcOnMap();
   S.pit = pitchFromSpd(S.spd);
@@ -4532,25 +4533,83 @@ switchMode('HOME');
     });
 })();
 
-// ── Startup: place aircraft at current GPS position, fallback to Songdo ──
-(function _initStartPos() {
+// ── 시작 위치 · 출발 공항 ──
+// 시작할 때 GPS(기기 위치)는 쓰지 않는다 — GPS 는 꺼진 채 시작하고, 필요하면 지도의 GPS
+// 버튼으로 켠다. 처음 열면(비밀번호 화면이 걷힌 뒤) 출발 공항을 고르는 창을 띄운다 —
+// 지도의 ICAO 공항 목록이다. 고르면 그 공항 지면에 멈춰 세운다(acPlaceOnGround). 고르지
+// 않으면 송도에서 시작한다. 같은 탭에서 새로고침하면 다시 묻지 않고(sessionStorage),
+// 자동 리로드로 상태를 되살린 경우에도 묻지 않는다(그 자리 그대로 이어 간다).
+function _startPosInit(restored) {
   const SONGDO = { lat: 37.3895, lon: 126.6550 };
-
-  function _applyStartPos(lat, lon) {
-    S.lat = lat; S.lon = lon;
-    leafMap.setView([lat, lon], 12, { animate: false });
-    updateAcOnMap();
+  if (!restored) {
+    S.lat = SONGDO.lat; S.lon = SONGDO.lon;
+    try { leafMap.setView([S.lat, S.lon], 12, { animate: false }); } catch (e) { _swallow(e); }
+    try { updateAcOnMap(); } catch (e) { _swallow(e); }
   }
-
-  if ('geolocation' in navigator) {
-    navigator.geolocation.getCurrentPosition(
-      pos => _applyStartPos(pos.coords.latitude, pos.coords.longitude),
-      ()  => _applyStartPos(SONGDO.lat, SONGDO.lon),
-      { timeout: 5000, maximumAge: 30000 }
-    );
-  } else {
-    _applyStartPos(SONGDO.lat, SONGDO.lon);
+  let asked = false;
+  try { asked = sessionStorage.getItem('vfrStartApt') === '1'; } catch (e) { asked = false; }
+  if (restored || asked) return;
+  // 비밀번호 화면(00-gate.js)이 걷힌 뒤에 묻는다
+  const t = setInterval(() => {
+    if (window.gateLocked) return;
+    clearInterval(t);
+    openStartAirportPicker();
+  }, 250);
+}
+// 그 공항 지면에 세운다 — 출발 공항을 고를 때(지도의 ICAO 공항 목록 · AIRPORTS)
+function startAirportSet(icao) {
+  const a = AIRPORTS.find(x => x.ident === icao);
+  if (!a) return false;
+  S.lat = a.lat; S.lon = a.lon; S.lastT = null;
+  S.trail = []; try { updateTrail(); } catch (e) { _swallow(e); }
+  try { if (typeof acPlaceOnGround === 'function') acPlaceOnGround(); } catch (e) { _swallow(e); }
+  try { leafMap.setView([a.lat, a.lon], 13, { animate: false }); } catch (e) { _swallow(e); }
+  try { updateAcOnMap(); updateNav(); updateCenterCoord(); } catch (e) { _swallow(e); }
+  try { uiToast(`${a.ident} ${a.name} 에서 시작합니다 — 지면에 세웠습니다`); } catch (e) { _swallow(e); }
+  return true;
+}
+// 출발 공항 고르기 창 — ICAO · 이름으로 걸러 찾을 수 있다. 닫으면(건너뛰기) 그 자리 그대로.
+function openStartAirportPicker() {
+  if (document.querySelector('.start-apt')) return;
+  const back = document.createElement('div');
+  back.className = 'ui-dlg-back';
+  const dlg = document.createElement('div');
+  dlg.className = 'ui-dlg start-apt';
+  dlg.setAttribute('role', 'dialog');
+  dlg.setAttribute('aria-modal', 'true');
+  dlg.innerHTML = `
+    <div class="ui-dlg-msg"><b>출발 공항을 고르세요</b><br><span class="start-apt-sub">고른 공항의 지면에 멈춰 섭니다 · GPS 는 꺼진 채 시작합니다</span></div>
+    <input class="ui-dlg-in start-apt-q" type="text" placeholder="ICAO 또는 이름 (예: RKSI · 김포)" autocomplete="off">
+    <div class="start-apt-list">${AIRPORTS.map(a =>
+      `<button type="button" class="start-apt-btn" data-icao="${a.ident}"><b>${a.ident}</b> ${a.name}</button>`).join('')}</div>
+    <div class="ui-dlg-btns"><button type="button" class="start-apt-skip">건너뛰기(송도)</button></div>`;
+  const close = () => {
+    try { sessionStorage.setItem('vfrStartApt', '1'); } catch (e) { _swallow(e); }
+    document.removeEventListener('keydown', onKey, true);
+    try { back.remove(); } catch (e) { _swallow(e); }
+  };
+  function onKey(ev) {
+    if (ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); close(); }
+    else if (ev.key === 'Enter') {
+      const first = [...dlg.querySelectorAll('.start-apt-btn')].find(b => b.style.display !== 'none');
+      if (first) { ev.preventDefault(); ev.stopPropagation(); first.click(); }
+    }
   }
-})();
+  dlg.addEventListener('click', ev => {
+    const b = ev.target.closest('.start-apt-btn');
+    if (b) { close(); startAirportSet(b.dataset.icao); return; }
+    if (ev.target.closest('.start-apt-skip')) close();
+  });
+  const q = dlg.querySelector('.start-apt-q');
+  q.addEventListener('input', () => {
+    const k = q.value.trim().toUpperCase();
+    dlg.querySelectorAll('.start-apt-btn').forEach(b => {
+      b.style.display = (!k || b.textContent.toUpperCase().includes(k)) ? '' : 'none';
+    });
+  });
+  document.addEventListener('keydown', onKey, true);
+  back.appendChild(dlg);
+  document.body.appendChild(back);
+}
 
 

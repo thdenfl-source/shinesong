@@ -24,6 +24,19 @@ const SIM_ROLL_RATE = 60;      // 뱅크가 따라가는 속도(°/s)
 // 기수 자세의 한계 — 위아래 60° 까지. 속도는 제 한계에서 멎는다
 // (들면 16° 에 뒤로 40kt, 숙이면 −20° 에 160kt).
 const SIM_PITCH_MAX = 60;      // 사이클릭 최대 피치(°)
+// ── 바퀴형 — 땅 위에서 ──
+// 흰수리는 바퀴가 달려 있다. 땅에서 토크를 20% 넘게 쓰면 원판이 앞으로 끌어 천천히
+// 굴러가기 시작하고(GND_CREEP — 토크가 클수록), 사이클릭을 민 만큼(기수를 숙인 각만큼)
+// 더 빨리 붙는다. 당기면(기수를 들면) 그만큼 늦춘다. 토크를 20% 아래로 내리면 바퀴
+// 브레이크·저항으로 선다. 땅 위의 자세는 위아래 10° 까지다. 뒤로는 구르지 않는다.
+const GND_PITCH_MAX = 10;      // 땅 위의 최대 피치(°)
+const GND_TQ_ROLL   = 20;      // 이 토크(%)를 넘기면 굴러가기 시작한다
+const GND_CREEP     = 0.02;    // 20% 를 넘긴 토크 1% 당 가속(kt/s) — 40% 면 0.4kt/s
+const GND_CYC_ACC   = 0.3;     // 기수를 1° 숙일 때마다 더하는 가속(kt/s) — 10° 면 3kt/s
+const GND_DRAG      = 0.04;    // 구름·공기 저항(1/s) — 사이클릭 가운데 · 토크 40% 면 10kt 쯤에서 선다
+const GND_BRAKE     = 2;       // 토크를 내렸을 때 서는 감속(kt/s)
+let simLow = false;            // LIGHT ON WHEELS — 바퀴가 떨어지기 직전(HOV−20%…HOV−10%)
+function simLightOnWheels() { return simModeOn && simLow; }
 const SIM_PITCH_RATE = 30;     // 피치가 따라가는 속도(°/s)
 const SIM_YAW_RATE  = 25;      // 페달 최대 요율(°/s)
 // ── 저속의 옆미끄럼(측방 비행) ──
@@ -92,6 +105,7 @@ const SPD_DEC_MAX  = 12.0;    // 최대 감속(kt/s) — 원판을 젖히면 항
 // 상승·강하율이 바뀌는 빠르기 — 최소·최대 상승률은 그대로 두고 바뀌는 빠르기만 종전의 반
 const VS_JERK      = 250;     // 상승률의 변화가 커지는 빠르기(fpm/s²)
 const VS_ACC_MAX   = 500;     // 상승률이 바뀌는 최대 빠르기(fpm/s)
+const VS_IGE_TAU   = 0.3;     // 지면효과 안(땅 가까이)에서 상승률이 토크를 따라가는 시간(s)
 const TQ_TAU       = 0.5;     // 토크가 레버를 따라가는 시간(s) — 엔진·로터 관성
 // ── 남는 토크 → 상승률 ──
 // 제자리에서는 호버 토크에서 100% 까지 올리면 0 → 1,000fpm 이고, 속도가 붙을수록 같은
@@ -146,9 +160,9 @@ function simAccLimit(ds) {
 let simAcc = 0;               // 지금의 가감속(kt/s)
 let simVsAcc = 0;             // 지금 상승률이 바뀌는 빠르기(fpm/s)
 // ── 위치에너지 ↔ 운동에너지 ──
-// 속도는 자세가 정한다 — 오르내리는 동안에는 조금만 어긋난다(올라가는 동안 조금 느리고,
-// 내려가는 동안 조금 빠르다).
-const SIM_CLIMB_KT  = 4;       // 1,000fpm 당 어긋나는 속도(kt)
+// 속도는 자세가 정한다 — 오르내리는 동안에도 같은 자세면 같은 속도다(수평 120kt 는
+// 1,000ft 로 오르는 중에도 수평 자세). 실제로는 피토관 오차 등으로 조금 어긋나지만
+// 시뮬에서는 그 어긋남을 두지 않는다.
 // 거꾸로 속도를 줄이면(기수를 들어 감속) 줄어든 운동에너지가 고도로 돌아온다 —
 // 같은 컬렉티브로도 떠오른다(줌·플레어). 속도를 늘리면 그만큼 고도로 치른다.
 // ½v² 가 줄어든 만큼이 g·h 이므로 상승률 = −v·a/g. 주고받는 몫이 같아야
@@ -222,11 +236,10 @@ function simIasStep(d) {
   if (!simAfcsPitch()) simIasEngage();
   selSpd = simIasClamp(selSpd + d);
 }
-// 선택 속도에 서는 자세 — 아래 simFly 의 '피치 → 속도' 식을 거꾸로 푼다.
-// vsTrade 는 오르내림으로 어긋나는 속도의 바탕(그 식과 같은 값)이다.
-function simIasPitch(vsTrade) {
-  const v = Math.max(0, Math.min(SIM_SPD_MAX, selSpd));
-  return pitchFromSpd(v + (vsTrade / 1000) * SIM_CLIMB_KT * Math.max(0, Math.min(1, v / 40)));
+// 선택 속도에 서는 자세 — 아래 simFly 의 '피치 → 속도' 식을 거꾸로 푼다
+// (오르내리는 동안에도 같은 자세 — 상승·강하로 어긋나지 않는다).
+function simIasPitch() {
+  return pitchFromSpd(Math.max(0, Math.min(SIM_SPD_MAX, selSpd)));
 }
 // 지금 속도를 지키는 트림으로 맞춘다 — GSPD 를 풀었을 때 자세가 튀지 않게
 // (조종간을 가운데 두면 그 속도로 계속 난다).
@@ -630,21 +643,17 @@ function simFly(dt) {
       bankTarget = S.bnk;           // 모드를 빠져나가도 자세가 튀지 않게
     }
 
-    // 오르내림으로 어긋나는 속도의 바탕 — 아래 '피치 → 속도' 와 IAS 자세가 같이 쓴다
-    // ALT·CRHT 가 고도를 지키는 동안에는 AFCS 가 원하는 상승률을 쓴다 — 실제 상승률을 쓰면
-    // 출력이 운동에너지를 메우며 생기는 작은 출렁임이 속도로, 속도가 다시 고도로 번진다
-    const vsTrade = simAfcsVert() ? simAfcsVsCmd()
-                  : (vsPow > 0 ? vsPow : Math.min(0, Math.max(vsPow, S.vs)));
-
     // ── 사이클릭 전후 → 피치 ──
     // 조종간을 밀면(+) 기수가 내려간다. S.pit 은 기수 올림이 +.
     // IAS 가 걸려 있으면 기준은 IAS 자세다 — 조종간 몫만큼 벗어났다가(트림은 쓰지 않는다),
     // 놓으면 그 자세로 천천히 돌아온다.
     let pTgt = -pitch * SIM_PITCH_MAX, pRate = SIM_PITCH_RATE;
     if (simAfcsPitch()) {
-      pTgt = Math.max(-SIM_PITCH_MAX, Math.min(SIM_PITCH_MAX, simIasPitch(vsTrade) - a.pitch * SIM_PITCH_MAX));
+      pTgt = Math.max(-SIM_PITCH_MAX, Math.min(SIM_PITCH_MAX, simIasPitch() - a.pitch * SIM_PITCH_MAX));
       if (!a.pitch) pRate = SIM_IAS_RATE;
     }
+    // 땅 위에서는 바퀴가 받치므로 위아래 10° 까지만 기운다
+    if (onGnd) pTgt = Math.max(-GND_PITCH_MAX, Math.min(GND_PITCH_MAX, pTgt));
     const dP = pTgt - S.pit;
     S.pit += Math.sign(dP) * Math.min(Math.abs(dP), pRate * dt);
 
@@ -652,17 +661,18 @@ function simFly(dt) {
     // 고도를 지키며 나는 헬기는 '자세 하나가 곧 속도' 다 — 수평 120kt,
     // 기수 4° 80kt, 7.5° 45kt (1° = 10kt). 그 속도로 천천히 수렴한다.
     // 기수를 더 들면 뒤로도 간다(16° ≈ −40kt).
-    // 올라가는 중에는 그만큼 출력을 쓰므로 같은 자세에서도 느려진다.
-    // 내려가며 얻는 속도는 '실제로 잃는 고도' 만큼만이다 — 기수를 들어 감속하며
-    // 레버를 내리면 줄어든 속도가 고도로 돌아와 고도가 그대로이므로, 레버를 내린
-    // 몫으로 속도를 돌려받지 않는다(그래서 고도를 지키며 속도가 크게 준다).
-    // 제자리(호버 자세)에서 곧장 오르내릴 때는 내줄 속도가 없다 — 40kt 아래에서는 그만큼 덜 어긋난다
-    const sAtt = spdFromPitch(S.pit);
-    let sTgt = sAtt - (vsTrade / 1000) * SIM_CLIMB_KT * Math.max(0, Math.min(1, sAtt / 40));
-    sTgt = Math.max(SIM_SPD_BACK, Math.min(SIM_SPD_MAX, sTgt));
+    // 오르내리는 동안에도 같은 자세면 같은 속도로 수렴한다(상승·강하로 어긋나지 않는다).
+    const sTgt = Math.max(SIM_SPD_BACK, Math.min(SIM_SPD_MAX, spdFromPitch(S.pit)));
     if (onGnd) {
-      // 땅 위에서는 서 있는다 — 바퀴(스키드)가 잡으므로 금방 선다
-      simAcc = Math.max(-15, Math.min(15, -S.spd * 1.2));
+      // 바퀴로 구른다 — 토크 20% 를 넘기면 천천히 앞으로, 사이클릭을 민 만큼 더 빨리
+      let acc;
+      if (S.tq >= GND_TQ_ROLL) {
+        acc = GND_CREEP * (S.tq - GND_TQ_ROLL) + GND_CYC_ACC * (-S.pit) - GND_DRAG * S.spd;
+      } else {
+        acc = -Math.sign(S.spd) * Math.min(GND_BRAKE, Math.abs(S.spd) / dt);
+      }
+      if (S.spd + acc * dt < 0) acc = -S.spd / dt;          // 뒤로는 구르지 않는다
+      simAcc = acc;
     } else {
       // 가감속은 점점 커진다 — 기수를 들면 감속이, 숙이면 가속이 갈수록 세진다
       const ds = sTgt - S.spd;
@@ -725,6 +735,8 @@ function simFly(dt) {
   // 레버를 따라 천천히 붙되(TQ_TAU), 한 번에 TQ_RATE 보다 빨리 변하지는 않는다
   const dT = (tTgt - S.tq) * Math.min(1, dt / TQ_TAU);
   S.tq += Math.sign(dT) * Math.min(Math.abs(dT), TQ_RATE * dt);
+  // LIGHT ON WHEELS — 땅에 붙은 채 토크가 HOV−20 … HOV−10% (조금 더 올리면 바퀴가 떨어진다)
+  { const hov = hoverPowerTq(); simLow = onGnd && S.tq >= hov + LOW_BAND[0] && S.tq < hov + LOW_BAND[1]; }
 
   // ── 남는 토크 → 상승·강하 ──
   // 필요한 토크보다 남으면 오르고, 모자라면 내려간다. 그래서 같은 레버라도
@@ -737,9 +749,16 @@ function simFly(dt) {
   const nrDef = 1 - (simNr / 100) * (simNr / 100);
   if (nrDef > 1e-4) vRaw = vRaw * Math.max(0, 1 - 5 * nrDef) - SIM_NR_SINK * nrDef;
   const vTgt = Math.max(-SIM_VS_DN_MAX, Math.min(SIM_VS_UP_MAX, vRaw));
-  // 출력 몫은 점점 빨라지며 붙고(simVsAcc), 운동에너지 몫은 가감속과 함께 바로 붙는다
-  simVsAcc = simJerkStep(vTgt - vsPow, simVsAcc, dt, VS_ACC_MAX, VS_JERK, 50);
-  const vsP = vsPow + simVsAcc * dt;
+  // 출력 몫은 점점 빨라지며 붙고(simVsAcc), 운동에너지 몫은 가감속과 함께 바로 붙는다.
+  // 땅 가까이(지면효과 안)에서는 곧(0.3초) 따라간다 — 높이마다 드는 토크가 가파르게
+  // 달라지므로(3·5·10ft), 늦게 따라가면 그 호버 높이를 지나쳐 위아래로 출렁인다.
+  // 12ft 아래는 빠르게, 20ft 위는 평소대로, 그 사이는 섞는다.
+  const aglG = S.alt - gnd;
+  const wG = Math.max(0, Math.min(1, (aglG - 12) / 8));
+  const accSlow = simJerkStep(vTgt - vsPow, simVsAcc, dt, VS_ACC_MAX, VS_JERK, 50);
+  const vsFast = vsPow + (vTgt - vsPow) * Math.min(1, dt / VS_IGE_TAU);
+  const vsP = vsFast + (vsPow + accSlow * dt - vsFast) * wG;
+  simVsAcc = (vsP - vsPow) / dt;
   // 기수를 숙여 가속하며 레버를 내려도 강하는 4,000fpm 에서 멎는다(운동에너지 몫 포함)
   S.vs = Math.max(-SIM_VS_DN_MAX, vsP + simKeVs(onGnd));
   if (S.vs <= -SIM_VS_DN_MAX && simVsAcc < 0) simVsAcc = 0;   // 한계에 눌린 채 쌓이지 않게
