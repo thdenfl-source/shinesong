@@ -65,6 +65,27 @@ function applyDelta(field, d){
   }
 }
 
+// ── HDG 를 푼다 ──
+// HDG 버튼을 한 번 더 누르거나 상위모드를 모두 풀 때. 지금 뱅크를 그대로 이어 잡는다
+// (SIM 은 트림으로 · 평소에는 뱅크 목표로) — 푸는 순간 자세가 튀지 않게.
+function hdgRelease() {
+  if (simModeOn && typeof simAfcsLatRelease === 'function') simAfcsLatRelease();
+  else { hdgSelOn = false; rollApOn = false; bankTarget = S.bnk; }
+}
+// ── 상위모드 모두 해제(조이스틱 B1) ──
+// NAV · HDG · ALT · CRHT · G/S(무장 포함) · IAS(SIM) · GSPD 를 한꺼번에 푼다.
+// 각 모드를 끌 때와 같은 길로 풀어 자세·상승률이 튀지 않는다.
+function afcsReleaseAll() {
+  try { if (navApOn) toggleNavAp(); } catch (e) { _swallow(e); }   // NAV 를 풀면 HDG 로 넘어간다 — 그것도 푼다
+  try { if (hdgSelOn || rollApOn) hdgRelease(); } catch (e) { _swallow(e); }
+  try { if (altHoldOn) toggleAltHold(); } catch (e) { _swallow(e); }
+  try { if (crhtOn) toggleCrht(); } catch (e) { _swallow(e); }
+  try { if (gsOn || gsArmed) toggleGs(); } catch (e) { _swallow(e); }
+  try { if (simIasOn && typeof simIasRelease === 'function') simIasRelease(); } catch (e) { _swallow(e); }
+  try { if (gspdOn) toggleGspd(); } catch (e) { _swallow(e); }
+  try { updateHoverBtns(); updateApInhibit(); } catch (e) { _swallow(e); }
+}
+
 // FCP 라벨(IAS/HDG/CRS) 누름: 해당 상위모드 인게이지 + 현재값 동기화
 // - IAS: 속도 프리셀렉트(selSpd)를 현재 속도로
 //        (SIM 모드에서는 IAS 상위모드를 켜고 끈다 — 켜면 지금 속도가 기준)
@@ -75,8 +96,13 @@ function fcpSync(which) {
     if (simModeOn) simIasToggle();
     else selSpd = Math.max(0, Math.round(S.spd));
   } else if (which === 'hdg') {
-    selHdg = ((Math.round(S.hdg) + 359) % 360) + 1;   // 1–360
-    hdgSelOn = true; bankTarget = 0; rollApOn = true;  // 현재 헤딩 유지
+    // IAS·ALT 처럼 한 번 더 누르면 푼다. NAV 가 걸려 있으면 HDG 로 넘긴다(지금 헤딩 유지).
+    if (navApOn) toggleNavAp();
+    else if (hdgSelOn) hdgRelease();
+    else {
+      selHdg = ((Math.round(S.hdg) + 359) % 360) + 1;   // 1–360
+      hdgSelOn = true; bankTarget = 0; rollApOn = true;  // 현재 헤딩 유지
+    }
   } else if (which === 'crs') {
     S.dtoLive = false;   // 코스를 손으로 정하는 순간 '현 위치 기준' 은 끝난다
     // 코스선은 '그 지점을 지나고, 그 지점에서의 방위가 CRS 인 대권' 이다.
@@ -418,7 +444,9 @@ function simStep(ts){
           const step = vs / 60 * dt;
           S.alt = Math.max(0, Math.min(45000, S.alt + step));
           S.vs = vs;
-        } else if (altHoldOn) {
+        } else if (altHoldOn && !simModeOn) {
+          // (SIM 모드의 ALT·CRHT 는 고도를 바로 옮기지 않고 출력(컬렉티브)으로 지킨다 —
+          //  14-simmode.js simAfcsVsCmd. 그 상승률은 아래 S.vs 적분으로 고도가 된다)
           // ALT hold: converge S.alt → selAlt at the pilot-set selVS rate.
           // Sign of climb/descent is determined automatically from the
           // current altitude relative to the target.
@@ -430,7 +458,7 @@ function simStep(ts){
             S.alt = Math.max(0, Math.min(45000, S.alt + step));
             S.vs  = Math.sign(diff) * rate;
           }
-        } else if (crhtOn) {
+        } else if (crhtOn && !simModeOn) {
           // CRHT hold: always 500 fpm — rate is NOT user-configurable.
           const diff = selCrht - S.alt;
           if (Math.abs(diff) < 0.5) { S.alt = selCrht; S.vs = 0; }

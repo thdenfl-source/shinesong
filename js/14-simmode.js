@@ -41,6 +41,18 @@ function simAfcsLat() {
   return simModeOn && !gspdOn && !gspdCoasting && (navApOn || (hdgSelOn && rollApOn));
 }
 function simAfcsVert() { return simModeOn && (altHoldOn || crhtOn); }
+// ALT·CRHT 가 원하는 상승률(fpm) — 목표 고도까지 남은 높이에 비례하고, ALT 는 선택
+// 상승률(selVS) · CRHT 는 500fpm 을 넘지 않는다. 고도가 빠지면 그만큼 올리려 한다.
+// 상승률은 출력을 따라 천천히 붙으므로, 지금 상승률로 조금 뒤(SIM_AFCS_LEAD) 닿을
+// 고도를 보고 정한다 — 그래야 되찾을 때 넘치거나 출렁이지 않는다.
+const SIM_AFCS_ALT_K = 10;     // 1ft 어긋날 때마다 원하는 상승률(fpm)
+const SIM_AFCS_LEAD  = 2;      // 앞을 내다보는 시간(s)
+function simAfcsVsCmd() {
+  const tgt = altHoldOn ? selAlt : selCrht;
+  const rate = altHoldOn ? Math.max(50, Math.abs(selVS)) : 500;
+  const ahead = S.alt + (S.vs || 0) / 60 * SIM_AFCS_LEAD;
+  return Math.max(-rate, Math.min(rate, (tgt - ahead) * SIM_AFCS_ALT_K));
+}
 // GSPD 가 걸려 있으면 GSPD 가 자세와 속도를 맡는다
 function simAfcsPitch() { return simModeOn && simIasOn && !gspdOn; }
 // HDG SEL 을 손으로 넘겨 받는다(좌우 트림을 누를 때) — 지금 뱅크를 트림으로 잡아
@@ -75,8 +87,9 @@ const SPD_ACC_UP   = 5.0;     // 전이양력을 다 받은 뒤의 최대 가속
 const SPD_ETL_KT   = 40;      // 가속이 다 세지는 속도(kt)
 const SPD_DEC_JERK = 6.0;     // 감속이 커지는 빠르기(kt/s²)
 const SPD_DEC_MAX  = 10.0;    // 최대 감속(kt/s) — 원판을 젖히면 항력까지 같이 받는다
-const VS_JERK      = 500;     // 상승률의 변화가 커지는 빠르기(fpm/s²)
-const VS_ACC_MAX   = 1000;    // 상승률이 바뀌는 최대 빠르기(fpm/s)
+// 상승·강하율이 바뀌는 빠르기 — 최소·최대 상승률은 그대로 두고 바뀌는 빠르기만 종전의 반
+const VS_JERK      = 250;     // 상승률의 변화가 커지는 빠르기(fpm/s²)
+const VS_ACC_MAX   = 500;     // 상승률이 바뀌는 최대 빠르기(fpm/s)
 const TQ_TAU       = 0.5;     // 토크가 레버를 따라가는 시간(s) — 엔진·로터 관성
 // ── 남는 토크 → 상승률 ──
 // 제자리에서는 호버 토크에서 100% 까지 올리면 0 → 1,000fpm 이고, 속도가 붙을수록 같은
@@ -645,14 +658,15 @@ function simFly(dt) {
   // 레버 자리가 곧 토크다. 토크는 천천히 따라 오른다(엔진·로터 관성).
   // 컬렉티브 축을 배정하지 않았으면 레버가 없는 셈이다 — 지금 고도를 지킬
   // 만큼만 걸어 둔다(조이스틱 없이 켰다고 저절로 떠오르지 않게).
-  // ALT·CRHT 가 걸려 있으면 고도는 AFCS 가 정하고(07-sim.js) 레버는 무시한다 —
-  // 토크는 AFCS 가 내는 상승률에 드는 만큼으로 따라간다(속도를 줄이며 돌려받는
-  // 운동에너지 몫은 빼고).
+  // ALT·CRHT 가 걸려 있으면 레버는 무시하고 AFCS 가 출력(토크)으로 고도를 지킨다
+  // (simAfcsVsCmd) — 고도를 곧바로 옮기지 않는다. 기수를 숙여 가속하면 운동에너지로
+  // 바뀐 만큼 고도가 빠지려 하고, 뱅크를 주면 필요 토크가 늘어 가라앉으려 한다. 그만큼
+  // 토크를 더 써서 고도를 되찾는다 — 출력이 따라붙는 동안 고도가 조금 빠졌다 돌아온다.
   const vert = simAfcsVert();
   const cfg = (typeof joyAxes === 'object' && joyAxes) ? joyAxes.coll : null;
   let tTgt;
   if (vert) {
-    tTgt = onGnd ? S.tq : tqRequired() + simTqForVs(vsPow);
+    tTgt = tqRequired() + simTqForVs(simAfcsVsCmd() - simKeVs(onGnd));
   }
   // 레버가 없으면: 땅에서는 그대로 서 있고(출력 0), 공중에서는 수평 비행에 드는
   // 만큼 건다(속도를 바꾸면 그 운동에너지만큼은 오르내린다)
@@ -679,10 +693,6 @@ function simFly(dt) {
   // 레버를 따라 천천히 붙되(TQ_TAU), 한 번에 TQ_RATE 보다 빨리 변하지는 않는다
   const dT = (tTgt - S.tq) * Math.min(1, dt / TQ_TAU);
   S.tq += Math.sign(dT) * Math.min(Math.abs(dT), TQ_RATE * dt);
-
-  // ALT·CRHT 중에는 상승률을 AFCS 가 정한다. 상승률의 변화 빠르기만 비워 두어
-  // 모드를 풀었을 때 그 자리에서 이어 가게 한다.
-  if (vert) { simVsAcc = 0; return; }
 
   // ── 남는 토크 → 상승·강하 ──
   // 필요한 토크보다 남으면 오르고, 모자라면 내려간다. 그래서 같은 레버라도
