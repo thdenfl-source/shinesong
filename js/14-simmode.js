@@ -602,7 +602,10 @@ function simFly(dt) {
     }
 
     // 오르내림으로 어긋나는 속도의 바탕 — 아래 '피치 → 속도' 와 IAS 자세가 같이 쓴다
-    const vsTrade = vsPow > 0 ? vsPow : Math.min(0, Math.max(vsPow, S.vs));
+    // ALT·CRHT 가 고도를 지키는 동안에는 AFCS 가 원하는 상승률을 쓴다 — 실제 상승률을 쓰면
+    // 출력이 운동에너지를 메우며 생기는 작은 출렁임이 속도로, 속도가 다시 고도로 번진다
+    const vsTrade = simAfcsVert() ? simAfcsVsCmd()
+                  : (vsPow > 0 ? vsPow : Math.min(0, Math.max(vsPow, S.vs)));
 
     // ── 사이클릭 전후 → 피치 ──
     // 조종간을 밀면(+) 기수가 내려간다. S.pit 은 기수 올림이 +.

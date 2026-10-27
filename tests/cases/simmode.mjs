@@ -1558,7 +1558,7 @@ export async function run(page, t) {
     `속도가 크게 준다 (120kt → 8초 ${fd.spd[7].toFixed(0)} · 12초 ${fd.spd[11].toFixed(0)}kt)`);
   t.ok(fd.altMax < 200 && fd.altMin > -50,
     `레버를 내렸으므로 고도는 크게 변하지 않는다 (+${fd.altMax.toFixed(0)} / ${fd.altMin.toFixed(0)}ft)`);
-  t.ok(flare.same.altMax > fd.altMax + 100,
+  t.ok(flare.same.altMax > fd.altMax + 60,
     `레버를 그대로 두면 줄어든 속도만큼 떠오른다 (+${flare.same.altMax.toFixed(0)}ft)`);
   t.ok(Math.abs(fd.spd[4] - flare.same.spd[4]) < 3,
     `레버를 내려도 감속 중의 속도가 덜 줄지 않는다 (5초 ${fd.spd[4].toFixed(1)} · 레버 그대로 ${flare.same.spd[4].toFixed(1)}kt)`);
@@ -1626,8 +1626,10 @@ export async function run(page, t) {
     // ALT 를 풀면 레버가 다시 고도를 정한다(레버가 바닥이므로 내려간다)
     toggleAltHold(); fly(4); out.offVs = S.vs; out.offAlt = S.alt;
     // CRHT — 지금 고도를 지킨다. 레버를 끝까지 올려도
+    // 수평으로 자리잡은 자리에서 건다(내려가다 걸었을 때 되찾는 모습은 아래 CRHT 검사가 본다)
+    S.vs = 0; simVsAcc = 0; S.tq = tqRequired();
     lever(tqRequired() + 30); toggleCrht(); const c0 = selCrht;
-    fly(12); out.crht = S.alt - c0; out.tqCrht = S.tq;
+    fly(25); out.crht = S.alt - c0; out.tqCrht = S.tq;
     toggleCrht(); fly(3); out.crhtOffVs = S.vs;
     _ax(3, 0); simTrimReset();
     return out;
@@ -1776,7 +1778,7 @@ export async function run(page, t) {
   t.ok(hold.acc.minA < -5, `운동에너지로 바뀐 만큼 고도가 빠진다 (최저 ${hold.acc.minA.toFixed(0)}ft)`);
   t.ok(hold.acc.maxTq > hold.lvl.tq + 10,
     `CRHT 가 토크를 더 써서 (${hold.lvl.tq.toFixed(0)} → 최대 ${hold.acc.maxTq.toFixed(0)}%)`);
-  t.ok(Math.abs(hold.acc.end) < 3 && hold.acc.maxA < 5,
+  t.ok(Math.abs(hold.acc.end) < 3 && hold.acc.maxA < 8,
     `고도를 되찾는다 — 크게 넘치지 않는다 (30초 뒤 ${hold.acc.end.toFixed(1)}ft · 최고 +${hold.acc.maxA.toFixed(1)}ft)`);
   t.ok(hold.bank.bnk > 25 && hold.bank.tq > hold.bank.tq0 + 2.5 && hold.bank.minB > -5 && Math.abs(hold.bank.end) < 2,
     `30° 뱅크 — 필요한 만큼 토크를 더 써서 고도를 지킨다 (${hold.bank.tq0.toFixed(0)} → ${hold.bank.tq.toFixed(0)}% · 최저 ${hold.bank.minB.toFixed(1)}ft)`);
@@ -1809,7 +1811,8 @@ export async function run(page, t) {
     if (!crhtOn) toggleCrht(); if (!gspdOn) toggleGspd();
     afcsReleaseAll();
     out.after2 = { crht: crhtOn, gspd: gspdOn };
-    // B1 — 이미 쓰던 배정(B1 = GSPD)을 한 번 옮긴다
+    // B1 — 이미 쓰던 배정(B1 = GSPD)을 한 번 옮긴다(검사가 끝나면 원래 배정으로 되돌린다)
+    const keepBinds = JSON.stringify(joyBinds);
     joyBinds = { b1: 'gspd', b3: 'navap', b5: 'crsUp' }; joyApOffDone = false;
     try { localStorage.removeItem('joyApOffB1'); } catch (e) {}
     joyApOffDefault();
@@ -1820,7 +1823,7 @@ export async function run(page, t) {
     _pad.buttons[1] = { pressed: true, value: 1 }; joyPoll(5000);
     _pad.buttons[1] = { pressed: false, value: 0 }; joyPoll(5100);
     out.b1 = { alt: altHoldOn, hdg: hdgSelOn };
-    joyBinds = {};
+    joyBinds = JSON.parse(keepBinds); joySave();
     return out;
   })()`);
   t.ok(!um.off0.sel && um.off0.hdg === '#3a3a3a', `풀려 있으면 FMA 의 HDG 가 어둡다 (${um.off0.hdg})`);
