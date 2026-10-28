@@ -63,4 +63,36 @@ export async function run(page, t) {
   t.ok(ov.on.hsi && ov.on.fcp === 0 && Math.abs(ov.on.ch - ov.on.box.h) < 4,
     `계기(ADI·HSI)만 그린다 — FCP 없이 칸을 다 쓴다 (${ov.on.cw}×${ov.on.ch})`);
   t.ok(!ov.off.show && ov.off.parent === 'pfd-wrap', '단독을 풀면 PFD 가 제자리(PFD 창)로 돌아간다');
+
+  // ── 창 선택 줄의 '⛶ 3D 단독' — 3D 지도를 창 가득, PFD 를 왼쪽 위에 ──
+  const before = await page.evaluate(() => ({ l: leftSel, m: midSel, r: rightSel, tri: tripleMode,
+    inRow: !!document.querySelector('#left-tabs #m3d-solo-btn'), txt: document.getElementById('m3d-solo-btn').textContent }));
+  await page.click('#m3d-solo-btn');
+  await page.waitForTimeout(1500);
+  const solo = await page.evaluate(() => {
+    const ov = document.getElementById('pfd-ov'), b = ov.getBoundingClientRect();
+    const d3 = document.getElementById('map3d').getBoundingClientRect();
+    const half = document.getElementById('solo-half-btn'), hb = half.getBoundingClientRect();
+    return { cur: _soloCurrent, left: leftSel, host: document.getElementById('map3d').parentElement.id,
+             d3: { w: d3.width, h: d3.height }, vw: innerWidth, vh: innerHeight,
+             ov: { show: ov.classList.contains('show'), parent: ov.parentElement.id, x: b.x, y: b.y, w: b.width, h: b.height },
+             canvas: cvs.parentElement.id, btn: document.getElementById('m3d-solo-btn').textContent,
+             half: { shown: getComputedStyle(half).display !== 'none', mid: Math.abs(hb.x + hb.width / 2 - innerWidth / 2) < 2, top: hb.y } };
+  });
+  t.ok(before.inRow && /3D 단독/.test(before.txt), `창 선택 줄(PFD·MAP·CDU·3D 탭 옆)에 '${before.txt}' 버튼이 있다`);
+  t.ok(solo.cur === 'm3d' && solo.left === 'm3d' && solo.host === 'map3d-wrap' && solo.d3.w >= solo.vw - 2 && solo.d3.h >= solo.vh * 0.9,
+    `누르면 3D 지도가 화면을 가득 채운다 (${Math.round(solo.d3.w)}×${Math.round(solo.d3.h)})`);
+  t.ok(solo.ov.show && solo.ov.parent === 'map3d-wrap' && solo.canvas === 'pfd-ov' &&
+       Math.abs(solo.ov.w - solo.vw / 4) < 2 && Math.abs(solo.ov.h - solo.vh * 0.6) < 2 && solo.ov.x < 12 && solo.ov.y < 12,
+    `PFD(계기만)가 왼쪽 위에 겹쳐 뜬다 — 가로 1/4 · 높이 3/5 (${Math.round(solo.ov.w)}×${Math.round(solo.ov.h)})`);
+  t.ok(solo.half.shown && solo.half.mid && solo.half.top < 20,
+    '빠져나가는 ✥ HALF 버튼이 위 가운데에 뜬다(오른쪽 위 3D 버튼과 겹치지 않게)');
+  await page.click('#solo-half-btn');
+  await page.waitForTimeout(400);
+  const back = await page.evaluate(() => ({ solo: _soloActive, l: leftSel, m: midSel, r: rightSel, tri: tripleMode,
+    canvas: cvs.parentElement.id, host: document.getElementById('map3d').parentElement.id,
+    show: document.getElementById('pfd-ov').classList.contains('show') }));
+  t.ok(!back.solo && back.l === before.l && back.m === before.m && back.r === before.r && back.tri === before.tri &&
+       back.canvas === 'pfd-wrap' && !back.show && back.host === 'map-wrap',
+    `HALF 를 누르면 들어가기 전 배치(${before.l} · ${before.tri ? before.m + ' · ' : ''}${before.r})로 돌아오고 PFD 도 제자리다`);
 }

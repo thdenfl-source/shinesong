@@ -5,6 +5,7 @@
 // 두 소리가 SND_XFADE 초에 걸쳐 겹쳐 바뀐다(같은 힘 곡선 — 바뀌는 동안 크기가 꺼지지 않게).
 // 바퀴가 떨어지기 직전(LIGHT ON WHEELS)에는 이륙 후 소리를 조금 미리 섞어 둔다.
 // 멈춰(PAUSE) 있으면 소리도 잦아든다.
+// 크기는 토크를 따른다 — 토크 0% 에서 최대의 70%, 100% 이상이면 100%(그 사이는 곧게).
 //
 // 소리 파일(sounds/)은 사용자가 준 녹음을 끊김 없이 되풀이되게 다듬은 것이다 —
 // 음량을 고르게 하고 끝 2.5초를 처음에 겹쳐 섞었다. 압축(AAC·MP3) 파일은 앞에 짧은
@@ -16,7 +17,8 @@
 const SND_FILES = { gnd: 'sounds/heli-ground.wav', air: 'sounds/heli-flight.wav' };
 const SND_XFADE = 2.5;    // 땅 ↔ 공중 소리가 겹쳐 바뀌는 시간(s)
 const SND_LIGHT = 0.3;    // LIGHT ON WHEELS — 바퀴가 떨어지기 직전 미리 섞는 이륙 후 소리의 몫
-const SND_VOL   = 0.8;    // 전체 크기
+const SND_VOL   = 0.8;    // 전체 크기(100% — 두 소리가 겹쳐도 넘치지 않게 조금 낮춰 둔다)
+const SND_TQ_MIN = 0.7;   // 토크 0% 일 때의 크기(100% 의 몫) — 토크 100% 에서 1.0
 const SND_PREF  = 'simSound';
 let sndOn  = false;       // SOUND 버튼
 let sndMix = 0;           // 지금 섞인 몫 — 0 = 이륙 전(땅) · 1 = 이륙 후(공중)
@@ -33,6 +35,11 @@ function sndOnGround() {
 function sndMixTarget() {
   if (!sndOnGround()) return 1;
   return (typeof simLightOnWheels === 'function' && simLightOnWheels()) ? SND_LIGHT : 0;
+}
+// 토크에 따른 크기(0.7 … 1.0) — 계기에 보이는 토크 그대로(SIM 모드가 아니어도)
+function sndTqGain(tq) {
+  const v = Number.isFinite(tq) ? tq : 0;
+  return SND_TQ_MIN + (1 - SND_TQ_MIN) * Math.max(0, Math.min(1, v / 100));
 }
 // 같은 힘 곡선 — 두 소리의 크기(이륙 전, 이륙 후)
 function sndGains(mix) {
@@ -106,7 +113,9 @@ function sndTick(dt) {
   try {
     _snd.gGnd.gain.setTargetAtTime(a, t, 0.05);
     _snd.gAir.gain.setTargetAtTime(b, t, 0.05);
-    _snd.master.gain.setTargetAtTime(sndOn && S.running ? SND_VOL : 0, t, 0.15);
+    let tq = S.tq;
+    try { if (typeof tqShown === 'function') tq = tqShown(); } catch (e) { _swallow(e); }
+    _snd.master.gain.setTargetAtTime(sndOn && S.running ? SND_VOL * sndTqGain(tq) : 0, t, 0.15);
   } catch (e) { _swallow(e); }
 }
 function sndFrame() {

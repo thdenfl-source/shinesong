@@ -1189,13 +1189,14 @@ function panelSolo(screen) {
 function pfdSolo() { panelSolo('pfd'); }        // 종전 이름(좌측 상단 버튼)
 
 // 단독 버튼 라벨(단독 ⇄ 분할) — 지금 단독으로 떠 있는 창의 버튼만 되돌리기가 된다
-const SOLO_BTNS = { pfd: 'pfd-solo-btn', map: 'map-solo-btn', cdu: 'cdu-solo-btn' };
+const SOLO_BTNS = { pfd: 'pfd-solo-btn', map: 'map-solo-btn', cdu: 'cdu-solo-btn', m3d: 'm3d-solo-btn' };
+const SOLO_NAMES = { pfd: 'PFD', map: 'MAP', cdu: 'CDU', m3d: '3D' };
 function updateSoloBtn() {
   Object.keys(SOLO_BTNS).forEach(k => {
     const b = document.getElementById(SOLO_BTNS[k]);
     if (!b) return;
     const on = (_soloActive && _soloCurrent === k);
-    b.textContent = on ? '✥ 분할' : `⛶ ${k.toUpperCase()} 단독`;
+    b.textContent = on ? '✥ 분할' : `⛶ ${SOLO_NAMES[k]} 단독`;
     b.classList.toggle('active', on);
   });
 }
@@ -1311,6 +1312,12 @@ function setSolo(screen) {
     setLeftPage(0);
     void leftPanel.offsetHeight;
     resizePFD();
+  } else if (screen === 'm3d') {
+    // 3D 단독 — 3D 지도를 창 가득(제 창으로) 띄우고, PFD 를 왼쪽 위에 겹친다(pfdOverlaySync).
+    // 다른 패널이 3D 를 갖고 있었으면 서로 맞바꾼다 — 풀면 들어가기 전 배치로 돌아온다.
+    leftPanel.style.display = '';
+    leftPanel.classList.add('solo-panel-visible');
+    selectPanel('left', 'm3d', true);
   } else if (screen === 'map') {
     // MAP: left-panel에 배치 (setLeftPage(1) 방식)
     leftPanel.style.display = '';
@@ -1331,7 +1338,8 @@ function setSolo(screen) {
   // PFD 전체화면은 하단 푸터가 없으므로 떠 있는 HALF 버튼 표시
   // (MAP은 상단 툴바의 FULL/HALF 버튼 사용)
   const halfBtn = document.getElementById('solo-half-btn');
-  if (halfBtn) halfBtn.classList.toggle('show', screen === 'pfd');
+  // (3D 단독도 툴바가 없다 — 위 가운데에 띄운다)
+  if (halfBtn) { halfBtn.classList.toggle('show', screen === 'pfd' || screen === 'm3d'); halfBtn.classList.toggle('m3d', screen === 'm3d'); }
   // MAP 상단 툴바 버튼 라벨: 전체화면(map)일 때 HALF, 그 외 FULL
   const mapFullBtn = document.getElementById('map-full-btn');
   if (mapFullBtn) mapFullBtn.textContent = (screen === 'map') ? 'HALF' : 'FULL';
@@ -1341,14 +1349,19 @@ function setSolo(screen) {
 }
 
 // ── 3D 단독 — PFD 를 3D 화면 왼쪽 위에 겹쳐 띄운다 ──
-// MAP 단독에서 3D 를 켜면(지도 위 겹치기) PFD 창은 가려진다. 그때 PFD 캔버스를 3D 화면의
-// 왼쪽 위 칸(#pfd-ov · 가로 1/4 · 세로 3/5)으로 옮겨 계기만(FCP 없이) 그린다 — 조작부 없이
-// 비행에 몰입하도록. 단독을 풀거나 3D 를 끄면 PFD 창으로 되돌린다. 매 프레임 본다(07 simStep).
+// 3D 단독(탭 줄 · 단독 막대의 3D)이거나, MAP 단독에서 3D 를 켜면(지도 위 겹치기) PFD 창은
+// 가려진다. 그때 PFD 캔버스를 3D 화면의 왼쪽 위 칸(#pfd-ov · 가로 1/4 · 세로 3/5)으로 옮겨
+// 계기만(FCP 없이) 그린다 — 조작부 없이 비행에 몰입하도록. 칸은 3D 가 떠 있는 창에 붙인다
+// (3D 단독 = 3D 창 #map3d-wrap · MAP 단독 + 3D = 지도 창 #map-wrap, 지도 툴바 아래).
+// 단독을 풀거나 3D 를 끄면 PFD 창으로 되돌린다. 매 프레임 본다(07 simStep).
 function pfdOverlaySync() {
   const ov = document.getElementById('pfd-ov'), wrap = document.getElementById('pfd-wrap');
-  const mw = document.getElementById('map-wrap');
+  const mw = document.getElementById('map-wrap'), w3 = document.getElementById('map3d-wrap');
   if (!ov || !wrap || !mw) return;
-  const want = !!(_soloActive && _soloCurrent === 'map' && mw.classList.contains('map3d-on'));
+  const m3d = _soloActive && _soloCurrent === 'm3d' && w3;
+  const want = !!(m3d || (_soloActive && _soloCurrent === 'map' && mw.classList.contains('map3d-on')));
+  const host = m3d ? w3 : mw;
+  if (want && ov.parentElement !== host) host.appendChild(ov);
   if (want === (cvs.parentElement === ov)) return;
   if (want) ov.appendChild(cvs); else wrap.insertBefore(cvs, wrap.firstChild);
   ov.classList.toggle('show', want);

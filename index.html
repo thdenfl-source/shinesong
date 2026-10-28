@@ -739,6 +739,8 @@ body.solo-mode #solo-bar { display: none !important; }
 }
 #solo-half-btn:active { background: #1a3a5a; color: #fff; }
 body.solo-mode #solo-half-btn.show { display: block; }
+/* 3D 단독 — 오른쪽 위는 3D 버튼(화질·CHIN·EXT·FLY·SOUND·MG/DG) 자리라 위 가운데에 띄운다 */
+body.solo-mode #solo-half-btn.show.m3d { top: calc(env(safe-area-inset-top) + 8px); right: auto; left: 50%; transform: translateX(-50%); }
 /* Solo mode: one panel fills everything */
 body.solo-mode #left-panel,
 body.solo-mode #right-panel {
@@ -861,6 +863,8 @@ body.solo-mode .solo-panel-visible {
           z-index: 950; background: #000; border: 1px solid #333; border-radius: 4px;
           overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.6); }
 #pfd-ov.show { display: block; }
+/* 3D 단독(3D 가 제 창) — 툴바가 없으므로 위에 붙인다 */
+#map3d-wrap > #pfd-ov { top: 8px; }
 #map-top-bar {
   position: absolute; top: 8px; left: 8px; right: 8px; z-index: 1000;
   display: flex; gap: 4px;
@@ -1820,6 +1824,7 @@ body.gate-open #gate-overlay { display: none; }
         <li><b>🔇 / 🔊 SOUND</b>(3D 창 FLY 아래): 로터 소리를 켜고 끕니다. 땅에 있으면 <b>이륙 전</b> 소리,
             바퀴가 떨어지면 <b>이륙 후</b> 소리가 나고, 뜨고 내려앉을 때 두 소리가 <b>2.5초에 걸쳐 겹쳐</b> 바뀝니다
             (LIGHT ON WHEELS 에서는 이륙 후 소리를 조금 미리 섞습니다). PAUSE 면 소리도 잦아듭니다.
+            소리 크기는 <b>토크</b>를 따릅니다 — 토크 0% 에서 <b>70%</b>, 100% 이상이면 <b>100%</b>.
             켜 둔 채 앱을 새로 열면, 브라우저 규칙상 화면을 한 번 누르거나 키를 누를 때 소리가 납니다.</li>
         <li><b>3D 창</b>: 각 창의 탭에 <b>3D</b> 가 있습니다. 한 창을 <b>MAP</b>, 다른 창을 <b>3D</b> 로 두면
             <b>2D 지도와 3D 지도를 나란히</b> 볼 수 있습니다(3분할이면 가운데 2D · 우측 3D 처럼).
@@ -1833,8 +1838,9 @@ body.gate-open #gate-overlay { display: none; }
             화면 가득 띄웁니다. 계기비행 연습처럼 PFD 만 크게 보거나, 지도·CDU 를 넓게 볼 때 쓰십시오.
             버튼을 <b>한 번 더 누르면</b>(또는 떠 있는 <b>✥ HALF</b> · 상단 막대의 <b>✕</b>)
             <b>들어가기 전 배치 그대로</b> 돌아옵니다. 단독 중에는 <b>상단 막대</b>에서 다른 창으로 바로 넘어갈 수 있습니다.<br>
-            <b>3D 단독</b> — MAP 단독에서 지도 툴바의 <b>3D</b> 를 켜면, PFD(계기만 · FCP 없이)가 3D 화면
-            <b>왼쪽 위</b>(가로 화면의 1/4 · 높이 3/5)에 겹쳐 뜹니다. 조작부 없이 비행에 몰입할 때 쓰십시오.</li>
+            <b>⛶ 3D 단독</b>(왼쪽 창 탭 줄) — 3D 지도를 화면 가득 띄우고, PFD(계기만 · FCP 없이)를
+            <b>왼쪽 위</b>(가로 화면의 1/4 · 높이 3/5)에 겹쳐 띄웁니다. 조작부 없이 비행에 몰입할 때 쓰십시오.
+            빠져나갈 때는 위 가운데의 <b>✥ HALF</b>. MAP 단독에서 지도 툴바의 <b>3D</b> 를 켜도 같은 PFD 가 겹쳐 뜹니다.</li>
         <li><b>시작 비밀번호</b>: 앱을 열면 먼저 비밀번호를 묻습니다. 맞게 넣으면 그 탭에서는 다시 묻지 않고
             (새로고침해도 그대로), 앱을 새로 열면 다시 묻습니다. 화면 앞에서 막는 잠금이며 보안 장치는 아닙니다.</li>
         <li><b>SIM 모드</b>(FCP 1행 ALT·CRHT·G/S 버튼 오른쪽 <b>SIM</b> 버튼): 조이스틱으로 <b>직접 조종</b>합니다.
@@ -2369,6 +2375,7 @@ body.gate-open #gate-overlay { display: none; }
       <button class="page-tab" data-sel="cdu" data-act="selectPanel" data-arg='["left", "cdu"]'>CDU</button>
       <button class="page-tab" data-sel="m3d" data-act="selectPanel" data-arg='["left", "m3d"]' title="3D 지도 — 2D 지도와 나란히 볼 수 있습니다">3D</button>
       <button class="page-tab split-tab" id="pfd-solo-btn" data-act="pfdSolo" title="PFD 단독 — PFD 만 화면 가득(한 번 더 누르면 원래 배치)">⛶ PFD 단독</button>
+      <button class="page-tab split-tab" id="m3d-solo-btn" data-act="panelSolo" data-arg='["m3d"]' title="3D 단독 — 3D 지도를 화면 가득, PFD(계기만)를 왼쪽 위에 겹쳐(한 번 더 누르면 원래 배치)">⛶ 3D 단독</button>
       <button class="page-tab split-tab" id="split-toggle" data-act="toggleTriple" title="2분할 ⇄ 3분할">⿲ 3분할</button>
     </div>
     <div id="pfd-wrap">
