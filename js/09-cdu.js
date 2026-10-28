@@ -164,6 +164,7 @@ function init(){
   fpRender();
   updateAcOnMap();
   try { updateHdgRefBtns(); } catch(e) { _swallow(e); }   // MG/DG 버튼(복원됐으면 그 상태)
+  try { updatePfdOvBtn(); } catch(e) { _swallow(e); }     // 3D 화면의 계기 ON/OFF
   S.pit = pitchFromSpd(S.spd);
   // NAV1/NAV2 무선의 튜닝 VOR 좌표 해석(ENR_VORS 정의 이후에 실행되도록 지연)
   setTimeout(() => {

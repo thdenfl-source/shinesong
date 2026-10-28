@@ -2208,6 +2208,7 @@ appRegister({
   toggleShip3d,
   toggleSim,
   toggleHdgRef,
+  togglePfdOverlay,
   dgAdjust,
   setSimSpeed,
   toggleHoldEntry,
