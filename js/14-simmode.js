@@ -420,6 +420,8 @@ function simTerrainFt(lat, lon) {
   // 값이 섞여 있어, 그대로 쓰면 바다 위에서 해수면 아래로 내려가거나 울퉁불퉁하다.
   // 3D 지형과 같은 규칙(seaFlatM — 5m 아래는 0m)으로 편다.
   m = (typeof seaFlatM === 'function') ? seaFlatM(m) : Math.max(0, m);
+  // 활주로는 공항표고로 평평하다 — 3D 지형과 같은 규칙(04-map.js rwyFlatM)
+  if (typeof rwyFlatM === 'function') m = rwyFlatM(la, lo, m);
   _simGndFt = m / 0.3048;
   _simGndAt = [la, lo];
   _simGndFresh = true;
