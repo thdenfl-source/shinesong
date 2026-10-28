@@ -20,7 +20,7 @@ function saveSession() {
            crs:S.crs, vs:S.vs, running:S.running, wps:S.wps, awp:S.awp, fwp:S.fwp },
       gps: gpsMode,
       fcp: { selSpd, selAlt, selCrht, selVS, selHdg, hdgSelOn, altHoldOn, crhtOn, gspdOn, rollApOn, bankTarget,
-             gspdActLat, gspdActFwd, gspdRefLat, gspdRefFwd, gspdCoasting },
+             gspdActLat, gspdActFwd, gspdRefLat, gspdRefFwd, gspdCoasting, hdgRef, dgErr },
       nav: { obsOn, navSrc, navRadios, vorObsCrs },
       view: { mapHdgUp, followMode, leftSel, midSel, rightSel, tripleMode },
     };
@@ -47,6 +47,7 @@ function restoreSession() {
     gspdActLat=f.gspdActLat||0; gspdActFwd=f.gspdActFwd||0;
     gspdRefLat=(f.gspdRefLat===undefined?null:f.gspdRefLat); gspdRefFwd=(f.gspdRefFwd===undefined?null:f.gspdRefFwd);
     gspdCoasting=!!f.gspdCoasting;
+    hdgRef = f.hdgRef === 'DG' ? 'DG' : 'MG'; dgErr = hdgRef === 'DG' ? (+f.dgErr || 0) : 0;
     const n = snap.nav || {};
     obsOn=!!n.obsOn; navSrc=n.navSrc||'FMS'; vorObsCrs=n.vorObsCrs??360;
     if (n.navRadios) { try { ['NAV1','NAV2'].forEach(k => { if (n.navRadios[k]) navRadios[k] = Object.assign({}, navRadios[k], n.navRadios[k]); }); } catch(e) { _swallow(e); } }
@@ -162,6 +163,7 @@ function init(){
   _startPosInit(_restored);             // 시작 위치(GPS 는 쓰지 않는다) · 처음이면 출발 공항을 묻는다
   fpRender();
   updateAcOnMap();
+  try { updateHdgRefBtns(); } catch(e) { _swallow(e); }   // MG/DG 버튼(복원됐으면 그 상태)
   S.pit = pitchFromSpd(S.spd);
   // NAV1/NAV2 무선의 튜닝 VOR 좌표 해석(ENR_VORS 정의 이후에 실행되도록 지연)
   setTimeout(() => {

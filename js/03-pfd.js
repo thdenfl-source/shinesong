@@ -1030,6 +1030,9 @@ function drawHSI(x, y, w, h) {
   }
 
   // ── compass ──
+  // HSI 카드는 계기 헤딩(MG = 실제 기수, DG = 방향 자이로 — 오차를 품는다)을 따른다.
+  // 카드 위의 HDG bug·코스·방위 바늘·지상 항적도 카드 기준으로 그린다.
+  const Hi = hdgInd();
   ctx.save(); ctx.translate(cx, cy);
 
   ctx.beginPath(); ctx.arc(0,0,r+3,0,Math.PI*2);
@@ -1039,7 +1042,7 @@ function drawHSI(x, y, w, h) {
 
   // rotating rose
   ctx.save();
-  ctx.rotate(-toMag(S.hdg) * D2R);   // 카드 눈금이 자북(°M)을 가리키게
+  ctx.rotate(-toMag(Hi) * D2R);   // 카드 눈금이 자북(°M)을 가리키게
   for (let a=0;a<360;a+=5) {
     const rad=a*D2R, is30=a%30===0, is10=a%10===0;
     const rOut=r*0.97, rIn=r*(is30?0.87:is10?0.915:0.955);
@@ -1068,7 +1071,7 @@ function drawHSI(x, y, w, h) {
   // Ground track diamond (magenta, on compass ring)
   {
     const trk = computeTrack();
-    const trkRelRad = normAS(trk - S.hdg) * D2R;
+    const trkRelRad = normAS(trk - Hi) * D2R;
     const gtR = r * 0.97;
     const gtX = Math.sin(trkRelRad) * gtR;
     const gtY = -Math.cos(trkRelRad) * gtR;
@@ -1084,7 +1087,7 @@ function drawHSI(x, y, w, h) {
 
   // ── HDG bug (선택 헤딩) — 컴퍼스 링 위 청록 노치 ──
   {
-    const bugRel = normAS(selHdg - S.hdg) * D2R;
+    const bugRel = normAS(selHdg - Hi) * D2R;
     const bR = r * 0.99, bw = 5, bh = 7;
     ctx.save();
     ctx.rotate(bugRel);
@@ -1128,7 +1131,7 @@ function drawHSI(x, y, w, h) {
   const dispCrs = activeCrs(); // 현재 navSrc 에 맞는 표시 코스
 
   ctx.save();
-  ctx.rotate((dispCrs - S.hdg) * D2R);
+  ctx.rotate((dispCrs - Hi) * D2R);
 
   // CRS course arrow — 머리: 화살촉, 꼬리: 선만
   ctx.strokeStyle = CG; ctx.lineWidth = 2.5;
@@ -1170,7 +1173,7 @@ function drawHSI(x, y, w, h) {
   const _b1st = brg1Visible ? brg1Station() : null;
   if (_b1st) {
     const brg1 = bearing(S.lat, S.lon, _b1st.lat, _b1st.lon);
-    ctx.save(); ctx.rotate((brg1 - S.hdg) * D2R);
+    ctx.save(); ctx.rotate((brg1 - Hi) * D2R);
     const C1 = '#44aaff';
     ctx.strokeStyle = C1; ctx.fillStyle = C1; ctx.lineWidth = 2.5;
     ctx.beginPath(); ctx.moveTo(0,-r*0.23); ctx.lineTo(0,-arrowR+14); ctx.stroke();
@@ -1182,7 +1185,7 @@ function drawHSI(x, y, w, h) {
   // ── BRG2 needle (FMS active WP → 녹색 복선, 머리 화살촉·꼬리 선) ──
   if (brg2Visible && S.awp >= 0 && S.awp < S.wps.length) {
     const brg2fms = bearing(S.lat, S.lon, S.wps[S.awp].lat, S.wps[S.awp].lon);
-    ctx.save(); ctx.rotate((brg2fms - S.hdg) * D2R);
+    ctx.save(); ctx.rotate((brg2fms - Hi) * D2R);
     const C2 = '#00cc44', g = 5.5;
     ctx.strokeStyle = C2; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.moveTo(-g,-r*0.23); ctx.lineTo(-g,-arrowR+14); ctx.stroke();
@@ -1196,7 +1199,7 @@ function drawHSI(x, y, w, h) {
   // ── Ground track indicator (purple diamond at compass edge) ──
   if (windSpd > 0) {
     const trk = computeTrack();
-    ctx.save(); ctx.rotate((trk - S.hdg) * D2R);
+    ctx.save(); ctx.rotate((trk - Hi) * D2R);
     const dR = arrowR + 2;
     const ds = r * 0.07;
     ctx.beginPath();
@@ -1239,7 +1242,12 @@ function drawHSI(x, y, w, h) {
   ctx.fillStyle='#00cfff'; ctx.font='bold 11px Helvetica Neue, Arial, sans-serif';
   ctx.fillText('HDG', hdgX+4, txtY);
   ctx.fillStyle='#fff'; ctx.font='bold 13px Helvetica Neue, Arial, sans-serif'; ctx.textAlign='right';
-  ctx.fillText(fmtA(toMag(S.hdg))+'°', hdgX+bw-4, txtY);
+  ctx.fillText(fmtA(toMag(Hi))+'°', hdgX+bw-4, txtY);
+  // DG — 방향 자이로로만 나는 중(자기장에 맞추지 않음). HDG 칸 왼쪽에 호박색으로
+  if (hdgRef === 'DG') {
+    ctx.fillStyle='#ffb000'; ctx.font='bold 12px Helvetica Neue, Arial, sans-serif';
+    ctx.fillText('DG', hdgX-6, txtY);
+  }
   // CRS box
   ctx.fillStyle='#000'; ctx.strokeStyle='#555';
   ctx.fillRect(crsX,boxY,bw,bh); ctx.strokeRect(crsX,boxY,bw,bh);
@@ -1288,7 +1296,7 @@ function drawHsiHoverPage(x, y, w, h, cx, cy, rFull) {
 
   // ── Rotating rose (heading-up) ──
   ctx.save();
-  ctx.rotate(-toMag(S.hdg) * D2R);   // 카드 눈금이 자북(°M)을 가리키게
+  ctx.rotate(-toMag(hdgInd()) * D2R);   // 카드 눈금이 자북(°M)을 가리키게
   for (let a = 0; a < 360; a += 5) {
     const rad = a * D2R, is30 = a % 30 === 0, is10 = a % 10 === 0;
     const rOut = r * 0.97;
