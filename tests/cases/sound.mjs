@@ -87,6 +87,20 @@ export async function run(page, t) {
   t.ok(Math.abs(fade.back - 0.5) < 1e-6, `내려앉으면 거꾸로 겹쳐 이륙 전 소리로 돌아간다 (1.25초에 ${(fade.back * 100).toFixed(0)}%)`);
   t.ok(fade.paused === 0 && fade.off === 0, 'PAUSE 이거나 SOUND 를 끄면 소리가 잦아든다');
 
+  // ── 크기는 토크를 따른다 — 토크 0% 에서 70%, 100% 이상이면 100% ──
+  const vol = await page.evaluate(() => {
+    const g = () => ({ value: 0, setTargetAtTime(v) { this.value = v; } });
+    const fake = { ctx: { currentTime: 0 }, master: { gain: g() }, gGnd: { gain: g() }, gAir: { gain: g() }, src: [], buf: {} };
+    const was = { snd: _snd, on: sndOn, run: S.running, tq: S.tq };
+    _snd = fake; sndOn = true; S.running = true; _simOnGnd = false;
+    const at = tq => { S.tq = tq; sndTick(0.016); return fake.master.gain.value / SND_VOL; };
+    const o = { t0: at(0), t50: at(50), t100: at(100), t130: at(130), shown: tqShown() };
+    _snd = was.snd; sndOn = was.on; S.running = was.run; S.tq = was.tq; sndMix = 0;
+    return o;
+  });
+  t.ok(Math.abs(vol.t0 - 0.7) < 1e-9 && Math.abs(vol.t50 - 0.85) < 1e-9 && Math.abs(vol.t100 - 1) < 1e-9 && Math.abs(vol.t130 - 1) < 1e-9,
+    `소리 크기는 토크를 따른다 — 0% → ${(vol.t0 * 100).toFixed(0)}% · 50% → ${(vol.t50 * 100).toFixed(0)}% · 100% → ${(vol.t100 * 100).toFixed(0)}% · 130% → ${(vol.t130 * 100).toFixed(0)}%`);
+
   // ── 버튼을 누르면 켜지고, 이 기기에 적어 둔다 ──
   const tog = await page.evaluate(() => {
     const b = document.getElementById('snd-btn');
