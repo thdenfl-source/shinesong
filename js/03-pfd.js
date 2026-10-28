@@ -6,12 +6,12 @@
 // ══════════════════════════════════════════════════════
 // PFD CANVAS
 // ══════════════════════════════════════════════════════
-const cvs = document.getElementById('pfd');
-const ctx = cvs.getContext('2d');
+// 그리는 함수들은 이 둘(전역)에 그린다 — 3D 화면에 겹친 계기에 그릴 때는 drawPfdTo 가 잠깐 바꿔 끼운다
+let cvs = document.getElementById('pfd');
+let ctx = cvs.getContext('2d');
 
 function resizePFD() {
-  // 캔버스가 놓인 자리에 맞춘다 — 평소에는 PFD 창(#pfd-wrap), 3D 단독이면 겹쳐 띄운 칸(#pfd-ov)
-  const el = cvs.parentElement || document.getElementById('pfd-wrap');
+  const el = document.getElementById('pfd-wrap');
   cvs.width  = el.clientWidth;
   cvs.height = el.clientHeight;
 }
@@ -24,8 +24,8 @@ function drawPFD() {
   // 중단된다. 그릴 수 없는 크기면 조용히 건너뛴다.
   if (!(W >= 80) || !(H >= 80)) return;
   const ctrlEl = document.querySelector('.ctrl-bar');
-  // 3D 단독에 겹쳐 띄운 PFD 는 FCP 가 없다 — 칸을 다 계기에 쓴다
-  const CTRL_H = (cvs.parentElement && cvs.parentElement.id === 'pfd-ov') ? 0 : (ctrlEl ? ctrlEl.offsetHeight : 80);
+  // 3D 화면에 겹친 계기(drawPfdTo)는 FCP 가 없다 — 칸을 다 계기에 쓴다
+  const CTRL_H = cvs.dataset.noFcp ? 0 : (ctrlEl ? ctrlEl.offsetHeight : 80);
   const usableH = H - CTRL_H;
   const tapW = Math.max(56, Math.min(76, W * 0.082));
   const vsiW = Math.max(28, Math.min(38, W * 0.046));
@@ -64,6 +64,15 @@ function drawPFD() {
 
   drawAI(aiX, 0, aiW, aiH);
   drawHSI(aiX, aiH, aiW, hsiH);
+}
+
+// 같은 PFD 를 다른 캔버스에도 그린다 — 3D 화면에 겹쳐 띄우는 계기(07-sim.js pfdOverlayDraw).
+// 그리는 함수들이 전역 cvs·ctx 에 그리므로 잠깐 바꿔 끼웠다가 되돌린다(그리기는 상태를 남기지
+// 않으므로 한 프레임에 두 번 그려도 된다). 그 캔버스에는 data-no-fcp 를 달아 둔다.
+function drawPfdTo(canvas) {
+  const c0 = cvs, x0 = ctx;
+  cvs = canvas; ctx = canvas.getContext('2d');
+  try { drawPFD(); } finally { cvs = c0; ctx = x0; }
 }
 
 // ────────────────────────────────────────

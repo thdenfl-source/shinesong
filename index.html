@@ -573,7 +573,8 @@ html, body {
                font: bold 10px 'Helvetica Neue', Arial, sans-serif; }
 .hdgref.dg .hdgref-comp { display: block; }
 #snd-btn { position: absolute; top: 136px; right: 8px; z-index: 900; padding: 5px 10px; }
-#hdgref-3d { top: 168px; }
+#pfdov-btn { position: absolute; top: 168px; right: 8px; z-index: 900; padding: 5px 10px; }
+#hdgref-3d { top: 200px; }
 #hdgref-map { top: 48px; }
 /* 출발 공항 고르기(09-cdu.js openStartAirportPicker) */
 .ui-dlg.start-apt { width: min(560px, 94vw); max-width: min(560px, 94vw); }
@@ -591,7 +592,8 @@ html, body {
 #map-wrap #ext-btn { top: 112px; }
 #map-wrap #fly3d-btn { top: 144px; }
 #map-wrap #snd-btn { top: 176px; }
-#map-wrap #hdgref-3d { top: 208px; }
+#map-wrap #pfdov-btn { top: 208px; }
+#map-wrap #hdgref-3d { top: 240px; }
 /* 3D 를 지도 위에 겹쳐 쓰면 3D 쪽 버튼만 둔다 */
 #map-wrap.map3d-on #hdgref-map { display: none; }
 /* When 3D is on, hide the 2D Leaflet map so its panes never paint through */
@@ -857,13 +859,17 @@ body.solo-mode .solo-panel-visible {
 #fdr-timeline { display: none; margin-top: 5px; }
 #fdr-timeline input[type=range] { width: 100%; accent-color: #4488ff; }
 /* ── Map top button bar ── */
-/* 3D 단독 — PFD 를 3D 화면 왼쪽 위에 겹쳐 띄운다(화면 가로 1/4 · 세로 3/5, 지도 툴바 아래).
-   FCP 없이 계기만 — 비행에 몰입하도록(07-sim.js pfdOverlaySync 가 PFD 캔버스를 옮겨 온다) */
-#pfd-ov { display: none; position: absolute; left: 8px; top: 46px; width: 25vw; height: 60vh;
+/* 3D 화면에 겹쳐 띄우는 계기 — 3D 화면 왼쪽 위(가로 1/4 · 높이 3/5). 좁은 창에서는 읽을 만큼은
+   키우되(가로 300px) 오른쪽 3D 버튼 줄(화질·FLY·SOUND·계기·MG/DG)은 가리지 않는다.
+   FCP 없이 계기만 — 비행에 몰입하도록. 3D 창의 '계기' 버튼으로 켜고 끈다(07-sim.js pfdOverlayDraw).
+   지도를 끌거나 확대하는 손이 막히지 않게 눌림은 3D 지도로 흘려보낸다 */
+#pfd-ov { display: none; position: absolute; left: 8px; top: 46px; width: 25%; height: 60%;
+          min-width: min(300px, calc(100% - 120px)); min-height: min(360px, 85%);
           z-index: 950; background: #000; border: 1px solid #333; border-radius: 4px;
-          overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.6); }
+          overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.6); pointer-events: none; }
 #pfd-ov.show { display: block; }
-/* 3D 단독(3D 가 제 창) — 툴바가 없으므로 위에 붙인다 */
+#pfd-ov canvas { display: block; width: 100%; height: 100%; }
+/* 3D 가 제 창(3D 탭 · 3D 단독) — 툴바가 없으므로 위에 붙인다 */
 #map3d-wrap > #pfd-ov { top: 8px; }
 #map-top-bar {
   position: absolute; top: 8px; left: 8px; right: 8px; z-index: 1000;
@@ -1838,9 +1844,10 @@ body.gate-open #gate-overlay { display: none; }
             화면 가득 띄웁니다. 계기비행 연습처럼 PFD 만 크게 보거나, 지도·CDU 를 넓게 볼 때 쓰십시오.
             버튼을 <b>한 번 더 누르면</b>(또는 떠 있는 <b>✥ HALF</b> · 상단 막대의 <b>✕</b>)
             <b>들어가기 전 배치 그대로</b> 돌아옵니다. 단독 중에는 <b>상단 막대</b>에서 다른 창으로 바로 넘어갈 수 있습니다.<br>
-            <b>⛶ 3D 단독</b>(왼쪽 창 탭 줄) — 3D 지도를 화면 가득 띄우고, PFD(계기만 · FCP 없이)를
-            <b>왼쪽 위</b>(가로 화면의 1/4 · 높이 3/5)에 겹쳐 띄웁니다. 조작부 없이 비행에 몰입할 때 쓰십시오.
-            빠져나갈 때는 위 가운데의 <b>✥ HALF</b>. MAP 단독에서 지도 툴바의 <b>3D</b> 를 켜도 같은 PFD 가 겹쳐 뜹니다.</li>
+            <b>⛶ 3D 단독</b>(왼쪽 창 탭 줄) — 3D 지도를 화면 가득 띄웁니다. 빠져나갈 때는 위 가운데의 <b>✥ HALF</b>.<br>
+            <b>3D 화면의 계기</b> — 3D 지도가 떠 있으면(3D 단독 · 3D 탭 창 · 2D 지도 위 3D) 그 <b>왼쪽 위</b>에
+            PFD 의 계기(FCP 없이)가 겹쳐 뜹니다(3D 화면의 가로 1/4 · 높이 3/5 — 좁은 창에서는 읽을 만큼 키우고 비율대로 줄여 그립니다).
+            조작부 없이 비행에 몰입할 때 쓰십시오. 3D 창 오른쪽 위의 <b>계기 ON / OFF</b> 로 보이고 감춥니다(이 기기에 저장).</li>
         <li><b>시작 비밀번호</b>: 앱을 열면 먼저 비밀번호를 묻습니다. 맞게 넣으면 그 탭에서는 다시 묻지 않고
             (새로고침해도 그대로), 앱을 새로 열면 다시 묻습니다. 화면 앞에서 막는 잠금이며 보안 장치는 아닙니다.</li>
         <li><b>SIM 모드</b>(FCP 1행 ALT·CRHT·G/S 버튼 오른쪽 <b>SIM</b> 버튼): 조이스틱으로 <b>직접 조종</b>합니다.
@@ -2639,8 +2646,8 @@ body.gate-open #gate-overlay { display: none; }
     <!-- Page 1: Map -->
     <div id="map-wrap" class="page-content tcut-off">
       <div id="map"></div>
-      <!-- 3D 단독(MAP 단독 + 3D) — PFD(FCP 없이)를 왼쪽 위에 겹쳐 띄운다(07-sim.js pfdOverlaySync) -->
-      <div id="pfd-ov"></div>
+      <!-- 3D 화면에 겹쳐 띄우는 계기(PFD 일부 · FCP 없이) — 3D 가 떠 있는 창의 왼쪽 위(07-sim.js pfdOverlayDraw) -->
+      <div id="pfd-ov"><canvas id="pfd-ov-cvs" data-no-fcp="1"></canvas></div>
       <div id="map3d">
         <!-- 3D 가 제 창(탭의 '3D')을 쓸 때의 SHIP — 메뉴·설정창을 이 창 안에서 연다 -->
         <button class="sim-btn" id="ship3d-btn" data-act="toggleShip3d">⛵ SHIP</button>
@@ -2675,6 +2682,8 @@ body.gate-open #gate-overlay { display: none; }
         <button class="sim-btn" id="fly3d-btn" data-act="toggleSim" title="FLY / PAUSE — 지도 창의 같은 버튼과 같습니다">▶ FLY</button>
         <!-- SOUND — 로터 소리 켜기/끄기(16-sound.js). 땅에서는 이륙 전, 바퀴가 떨어지면 이륙 후 소리 -->
         <button class="sim-btn" id="snd-btn" data-act="toggleSound" title="소리 — 땅에서는 이륙 전, 바퀴가 떨어지면 이륙 후 소리(뜨고 내릴 때 겹쳐 바뀝니다)">🔇 SOUND</button>
+        <!-- 계기 ON/OFF — 3D 화면 왼쪽 위에 겹친 계기(PFD 일부)를 보이고 감춘다(07-sim.js) -->
+        <button class="sim-btn on" id="pfdov-btn" data-act="togglePfdOverlay" title="계기 — 3D 화면 왼쪽 위에 PFD 계기(FCP 없이)를 겹쳐 보이기/감추기">계기 ON</button>
         <!-- MG(Slaved)/DG — 방향 기준. 지도 창의 같은 버튼과 같다(07-sim.js) -->
         <div class="hdgref" id="hdgref-3d">
           <button class="sim-btn hdgref-btn" data-act="toggleHdgRef" title="방향 기준 — MG(Slaved): 자이로를 지구 자기장에 맞춘다 · DG: 방향 자이로만(1시간에 약 6° 어긋난다 → −/+ 로 맞춘다)">MG (Slaved)</button>

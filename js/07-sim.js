@@ -693,15 +693,15 @@ function simStep(ts){
     // (풀스크린→분할 복귀 시 레이아웃이 늦게 잡혀 캔버스가 0크기로 남아
     //  PFD가 검게 되는 경우를 감지해 자동 복구)
     {
-      // (PFD가 좌/우 어느 패널에 있든 clientHeight>0 이면 표시 중 · 3D 단독이면 겹친 칸)
-      try { pfdOverlaySync(); } catch (e) { _swallow(e); }
-      const _pw = cvs.parentElement;
+      // (PFD가 좌/우 어느 패널에 있든 clientHeight>0 이면 표시 중)
+      const _pw = document.getElementById('pfd-wrap');
       if (_pw && _pw.clientHeight > 0 &&
           (cvs.width !== _pw.clientWidth || cvs.height !== _pw.clientHeight)) {
         resizePFD();
       }
     }
     drawPFD();
+    try { pfdOverlayDraw(); } catch (e) { _swallow(e); }   // 3D 화면에 겹친 계기
   }
   } catch(e) {
     // 한 프레임의 예외로 rAF 체인이 끊겨 PFD가 검게 멈추는 것을 방지
@@ -1313,7 +1313,7 @@ function setSolo(screen) {
     void leftPanel.offsetHeight;
     resizePFD();
   } else if (screen === 'm3d') {
-    // 3D 단독 — 3D 지도를 창 가득(제 창으로) 띄우고, PFD 를 왼쪽 위에 겹친다(pfdOverlaySync).
+    // 3D 단독 — 3D 지도를 창 가득(제 창으로) 띄운다. 계기는 왼쪽 위에 겹쳐 뜬다(pfdOverlayDraw).
     // 다른 패널이 3D 를 갖고 있었으면 서로 맞바꾼다 — 풀면 들어가기 전 배치로 돌아온다.
     leftPanel.style.display = '';
     leftPanel.classList.add('solo-panel-visible');
@@ -1348,24 +1348,54 @@ function setSolo(screen) {
   try { pfdOverlaySync(); } catch (e) { _swallow(e); }   // 3D 가 켜져 있으면 PFD 를 겹쳐 띄운다
 }
 
-// ── 3D 단독 — PFD 를 3D 화면 왼쪽 위에 겹쳐 띄운다 ──
-// 3D 단독(탭 줄 · 단독 막대의 3D)이거나, MAP 단독에서 3D 를 켜면(지도 위 겹치기) PFD 창은
-// 가려진다. 그때 PFD 캔버스를 3D 화면의 왼쪽 위 칸(#pfd-ov · 가로 1/4 · 세로 3/5)으로 옮겨
-// 계기만(FCP 없이) 그린다 — 조작부 없이 비행에 몰입하도록. 칸은 3D 가 떠 있는 창에 붙인다
-// (3D 단독 = 3D 창 #map3d-wrap · MAP 단독 + 3D = 지도 창 #map-wrap, 지도 툴바 아래).
-// 단독을 풀거나 3D 를 끄면 PFD 창으로 되돌린다. 매 프레임 본다(07 simStep).
+// ── 3D 화면에 겹쳐 띄우는 계기(PFD 일부) ──
+// 3D 지도가 화면에 떠 있으면(3D 창 · 2D 위 3D 겹치기 · 3D 단독) 그 왼쪽 위에 PFD 의 계기
+// (FCP 없이 · 칸은 3D 화면의 가로 1/4 · 높이 3/5)를 겹쳐 띄운다 — 조작부 없이 비행에 몰입하도록.
+// 3D 창의 '계기' 버튼으로 켜고 끈다(이 기기에 적어 둔다). 칸은 3D 가 떠 있는 창에 붙인다
+// (3D 창·3D 단독 = #map3d-wrap · 2D 위 겹치기 = #map-wrap, 지도 툴바 아래).
+// PFD 창이 함께 보여도 되도록 칸에는 제 캔버스(#pfd-ov-cvs)를 두고 매 프레임 따로 그린다.
+const PFD_OV_PREF = 'pfdOverlay';
+let pfdOvOn = true;
+try { pfdOvOn = localStorage.getItem(PFD_OV_PREF) !== '0'; } catch (e) { pfdOvOn = true; }
+// 3D 지도가 지금 화면에 떠 있으면 그 창(겹친 계기를 붙일 자리)
+function pfdOvHost() {
+  const d3 = document.getElementById('map3d');
+  if (!d3 || !d3.classList.contains('active') || !(d3.offsetWidth > 40) || !(d3.offsetHeight > 40)) return null;
+  return d3.parentElement;
+}
 function pfdOverlaySync() {
-  const ov = document.getElementById('pfd-ov'), wrap = document.getElementById('pfd-wrap');
-  const mw = document.getElementById('map-wrap'), w3 = document.getElementById('map3d-wrap');
-  if (!ov || !wrap || !mw) return;
-  const m3d = _soloActive && _soloCurrent === 'm3d' && w3;
-  const want = !!(m3d || (_soloActive && _soloCurrent === 'map' && mw.classList.contains('map3d-on')));
-  const host = m3d ? w3 : mw;
-  if (want && ov.parentElement !== host) host.appendChild(ov);
-  if (want === (cvs.parentElement === ov)) return;
-  if (want) ov.appendChild(cvs); else wrap.insertBefore(cvs, wrap.firstChild);
-  ov.classList.toggle('show', want);
-  resizePFD();
+  const ov = document.getElementById('pfd-ov');
+  if (!ov) return false;
+  const host = pfdOvOn ? pfdOvHost() : null;
+  if (host && ov.parentElement !== host) host.appendChild(ov);
+  ov.classList.toggle('show', !!host);
+  return !!host;
+}
+// 칸이 좁으면(PFD_OV_MINW 보다) 그 너비로 그려 줄여 보인다 — 계기 배치가 비좁게 겹치지 않고
+// 보통 PFD 를 작게 본 것처럼 보이게(가로·세로를 같은 비율로 줄인다)
+const PFD_OV_MINW = 340;
+function pfdOverlayDraw() {
+  if (!pfdOverlaySync()) return;
+  const ov = document.getElementById('pfd-ov'), c = document.getElementById('pfd-ov-cvs');
+  if (!c) return;
+  const w = ov.clientWidth, h = ov.clientHeight;
+  if (!(w > 0) || !(h > 0)) return;
+  const k = Math.min(1, w / PFD_OV_MINW);
+  const cw = Math.round(w / k), ch = Math.round(h / k);
+  if (c.width !== cw || c.height !== ch) { c.width = cw; c.height = ch; }
+  drawPfdTo(c);
+}
+function togglePfdOverlay() {
+  pfdOvOn = !pfdOvOn;
+  try { localStorage.setItem(PFD_OV_PREF, pfdOvOn ? '1' : '0'); } catch (e) { _swallow(e); }
+  updatePfdOvBtn();
+  pfdOverlaySync();
+}
+function updatePfdOvBtn() {
+  const b = document.getElementById('pfdov-btn');
+  if (!b) return;
+  b.textContent = pfdOvOn ? '계기 ON' : '계기 OFF';
+  b.classList.toggle('on', pfdOvOn);
 }
 
 // solo 상태 변화 시 CDU/Flight Plan 푸터를 다시 그려 FULL⇄HALF 반영
@@ -1383,7 +1413,7 @@ function exitSolo() {
   const mapFullBtn = document.getElementById('map-full-btn');
   if (mapFullBtn) mapFullBtn.textContent = 'FULL';
   document.body.classList.remove('solo-mode');
-  try { pfdOverlaySync(); } catch (e) { _swallow(e); }   // 3D 단독에 겹쳐 둔 PFD 를 제자리로
+  try { pfdOverlaySync(); } catch (e) { _swallow(e); }   // 겹친 계기도 다시 본다(3D 가 아직 떠 있는가)
 
   const leftPanel  = document.getElementById('left-panel');
   const rightPanel = document.getElementById('right-panel');
