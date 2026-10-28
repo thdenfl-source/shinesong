@@ -1374,7 +1374,14 @@ function pfdOverlaySync() {
 // 칸이 좁으면(PFD_OV_MINW 보다) 그 너비로 그려 줄여 보인다 — 계기 배치가 비좁게 겹치지 않고
 // 보통 PFD 를 작게 본 것처럼 보이게(가로·세로를 같은 비율로 줄인다)
 const PFD_OV_MINW = 340;
-function pfdOverlayDraw() {
+// 화면이 바뀌는 주기(약 60fps)보다 자주 그릴 까닭이 없다 — 시뮬을 몰아서 돌릴 때(배속에서 프레임이
+// 튀거나 검사가 수천 번 연달아 부를 때)는 건너뛴다. 매번 그리면 PFD 를 두 번 그리는 셈이라 그만큼 느려진다.
+const PFD_OV_MIN_MS = 15;
+let _pfdOvT = -Infinity;
+function pfdOverlayDraw(force) {
+  const now = performance.now();
+  if (!force && now - _pfdOvT < PFD_OV_MIN_MS) return;
+  _pfdOvT = now;
   if (!pfdOverlaySync()) return;
   const ov = document.getElementById('pfd-ov'), c = document.getElementById('pfd-ov-cvs');
   if (!c) return;
