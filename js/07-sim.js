@@ -669,6 +669,7 @@ function simStep(ts){
   try { updateSuspBtn(); } catch(e) { _swallow(e); }
   try { updateGsBtn(); } catch(e) { _swallow(e); }
   try { updateDgCompass(); } catch(e) { _swallow(e); }
+  try { sndFrame(); } catch(e) { _swallow(e); }   // 로터 소리(16-sound.js)
   try { fpWptLiveTick(ts); } catch(e) { _swallow(e); }
   // 스톱워치에 흘려 넣을 시간 — 기체가 겪는 시간과 같아야 한다.
   // 배속이 걸리면 그만큼 빨리, 시뮬이 멈춰 있으면 함께 멈춘다.
@@ -692,8 +693,9 @@ function simStep(ts){
     // (풀스크린→분할 복귀 시 레이아웃이 늦게 잡혀 캔버스가 0크기로 남아
     //  PFD가 검게 되는 경우를 감지해 자동 복구)
     {
-      // (PFD가 좌/우 어느 패널에 있든 clientHeight>0 이면 표시 중)
-      const _pw = document.getElementById('pfd-wrap');
+      // (PFD가 좌/우 어느 패널에 있든 clientHeight>0 이면 표시 중 · 3D 단독이면 겹친 칸)
+      try { pfdOverlaySync(); } catch (e) { _swallow(e); }
+      const _pw = cvs.parentElement;
       if (_pw && _pw.clientHeight > 0 &&
           (cvs.width !== _pw.clientWidth || cvs.height !== _pw.clientHeight)) {
         resizePFD();
@@ -1335,6 +1337,22 @@ function setSolo(screen) {
   if (mapFullBtn) mapFullBtn.textContent = (screen === 'map') ? 'HALF' : 'FULL';
   updateSoloBtn();
   _refreshCduFooters();   // FULL⇄HALF 라벨 갱신
+  try { pfdOverlaySync(); } catch (e) { _swallow(e); }   // 3D 가 켜져 있으면 PFD 를 겹쳐 띄운다
+}
+
+// ── 3D 단독 — PFD 를 3D 화면 왼쪽 위에 겹쳐 띄운다 ──
+// MAP 단독에서 3D 를 켜면(지도 위 겹치기) PFD 창은 가려진다. 그때 PFD 캔버스를 3D 화면의
+// 왼쪽 위 칸(#pfd-ov · 가로 1/4 · 세로 3/5)으로 옮겨 계기만(FCP 없이) 그린다 — 조작부 없이
+// 비행에 몰입하도록. 단독을 풀거나 3D 를 끄면 PFD 창으로 되돌린다. 매 프레임 본다(07 simStep).
+function pfdOverlaySync() {
+  const ov = document.getElementById('pfd-ov'), wrap = document.getElementById('pfd-wrap');
+  const mw = document.getElementById('map-wrap');
+  if (!ov || !wrap || !mw) return;
+  const want = !!(_soloActive && _soloCurrent === 'map' && mw.classList.contains('map3d-on'));
+  if (want === (cvs.parentElement === ov)) return;
+  if (want) ov.appendChild(cvs); else wrap.insertBefore(cvs, wrap.firstChild);
+  ov.classList.toggle('show', want);
+  resizePFD();
 }
 
 // solo 상태 변화 시 CDU/Flight Plan 푸터를 다시 그려 FULL⇄HALF 반영
@@ -1352,6 +1370,7 @@ function exitSolo() {
   const mapFullBtn = document.getElementById('map-full-btn');
   if (mapFullBtn) mapFullBtn.textContent = 'FULL';
   document.body.classList.remove('solo-mode');
+  try { pfdOverlaySync(); } catch (e) { _swallow(e); }   // 3D 단독에 겹쳐 둔 PFD 를 제자리로
 
   const leftPanel  = document.getElementById('left-panel');
   const rightPanel = document.getElementById('right-panel');

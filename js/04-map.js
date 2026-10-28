@@ -504,6 +504,35 @@ function _map3dApplyQuality(map, chin) {
   if (terr) map.setTerrain({ source: 'terrain', exaggeration: MAP3D_EXAG });
   st.q = map3dQuality;
 }
+// ── 수평 시선에서 화질이 떨어지지 않게 ──
+// maplibre 는 화면 중심이 땅 위에 있다고 보고, '카메라가 중심보다 얼마나 높은가'
+// (= cos(피치) × 중심까지 거리)로 타일마다 화질(줌)을 정한다. SIM 1인칭에서 기수가 꼭
+// 수평이면(120kt 수평 자세 · 카메라 피치 90°) 그 높이가 0 이 되어, 모든 타일을 비스듬히
+// 누운 것으로 보고 화질을 크게 낮춘다 — 1° 만 들거나 숙여도 되돌아왔다.
+// 그래서 그 높이를 '시선 1°' 만큼은 늘 있는 것으로 셈한다(그 밖에는 maplibre 셈 그대로).
+const LOD_MIN_SIN = Math.sin(1 * Math.PI / 180);
+function _map3dLodGuard(map) {
+  if (!map || !map.style || !map.style.tileManagers || typeof map.setSourceTileLodParams !== 'function') return;
+  for (const id in map.style.tileManagers) {
+    let src = null;
+    try { src = map.style.tileManagers[id].getSource(); } catch (e) { _swallow(e); }
+    if (!src || (src.calculateTileZoom && src.calculateTileZoom._lodGuard)) continue;
+    // 따로 정한 셈이 없으면 maplibre 기본값(9.314 · 3)으로 하나 받아 감싼다
+    if (typeof src.calculateTileZoom !== 'function') {
+      try { map.setSourceTileLodParams(9.314, 3, id); } catch (e) { _swallow(e); continue; }
+    }
+    const base = src.calculateTileZoom;
+    if (typeof base !== 'function') continue;
+    // (요청 줌, 타일까지 수평 거리, 카메라 높이(중심 기준), 중심까지 거리, 시야각)
+    const guarded = (zoom, d2, dz, d3, fov) => {
+      const z = Math.max(dz, d3 * LOD_MIN_SIN);
+      if (z === dz) return base(zoom, d2, dz, d3, fov);
+      return base(zoom, d2, z, Math.hypot(Math.sqrt(Math.max(0, d3 * d3 - dz * dz)), z), fov);
+    };
+    guarded._lodGuard = true;
+    src.calculateTileZoom = guarded;
+  }
+}
 function setMap3dQuality(q) {
   if (!MAP3D_QUALITY[q]) return;
   map3dQuality = q;

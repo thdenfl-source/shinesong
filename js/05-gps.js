@@ -993,6 +993,9 @@ function _ml3dSimCamera() {
   // 카메라가 헬기 자리에 있어야 하므로 화면 중심을 지면에 묶지 않는다
   try { if (_ml3d.getCenterClampedToGround && _ml3d.getCenterClampedToGround()) _ml3d.setCenterClampedToGround(false); }
   catch (e) { _swallow(e); }
+  // 꼭 수평으로 볼 때(카메라 피치 90°) 화질이 떨어지지 않게(04-map.js) — 화질을 바꾸면
+  // 바탕을 새로 얹으므로 그때마다 다시 건다(이미 걸려 있으면 그냥 지나간다)
+  try { _map3dLodGuard(_ml3d); } catch (e) { _swallow(e); }
   // 높이는 두 가지를 따로 본다.
   //   · 지면 위 높이(AGL) — 비행 모델의 땅(착지 판정과 같은 값)에서 잰다
   //   · 화면에 그려진 땅  — 지도가 실제로 그린 지형(과장비가 곱해져 있다)

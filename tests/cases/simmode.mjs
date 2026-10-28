@@ -35,7 +35,7 @@ const SETUP = () => {
   windSpd = 0; simSpeed = 1;
   if (!simModeOn) toggleSimMode();
   S.tq = 60; S.vs = 0; S.alt = 2000;   // 모드 진입이 손댄 값을 되돌린다
-  simAcc = 0; simVsAcc = 0;             // 가감속·유입류 지연도 비운다
+  simAcc = 0; simVsAcc = 0; simFlareVs = 0; // 가감속·유입류 지연·플레어 몫도 비운다
   simLookHold(false); simLookReset(); simTrimReset();
 };
 
@@ -2234,6 +2234,63 @@ export async function run(page, t) {
   t.ok(altCap.hold, 'FMA 는 지금 고도를 지키는 동안 ALT');
   t.ok(altCap.sel2 === 1334 && altCap.acq, `ALT ▲ 로 기준을 옮기면 그 고도로 가는 동안 ALT.A (${altCap.sel2}ft)`);
   t.eq(altCap.recap, 1234, '풀었다 다시 누르면 다시 그 순간의 고도');
+
+  // ── 오토로테이션 플레어 ──
+  // 80kt 에서 컬렉티브를 끝까지 내리고 내려오다 기수를 들면 강하가 빠르게 멎는다.
+  // 100ft 에서 20° 로 들면 30ft 언저리에서 거의 멎고, 더 들면 더 높이서 멎는다.
+  // 너무 높이서 들면 멎었다가 속도가 빠진 뒤 다시 떨어져 충격 착륙이 된다.
+  // fly(agl, pit, cush) — agl 에서 pit° 로 들고, cush 를 주면 그 높이에서 기수를 5° 로 고르고
+  // 레버를 호버 −4% 로 올려 받친다. 접지(또는 60초)까지 날아 기록을 돌려준다.
+  const auto = await page.evaluate(`(() => {
+    (${SETUP.toString()})();
+    joyAxes = { coll: { i: 3, inv: false, abs: true } };
+    const run = (flareAt, pit, cush) => {
+      S.alt = 1500; S.spd = 80; S.pit = pitchFromSpd(80); S.bnk = 0; simAcc = 0; S.vs = 0; simVsAcc = 0; simFlareVs = 0;
+      simTrim.pitch = -pitchFromSpd(80);
+      _ax(3, (tqRequired() / SIM_LEVER_TOP) * 2 - 1);
+      let ts = 1000; S.running = true; S.lastT = ts;
+      const step = n => { for (let i = 0; i < n; i++) { ts += 50; joyPoll(ts); simStep(ts); } };
+      step(60);
+      _ax(3, -1);                                   // 컬렉티브 끝까지 내림
+      step(20 * 25);                                // 25초 — 오토로테이션 강하가 자리 잡는다
+      const o = { sink: S.vs, flare: null, arrest: null, best: -1e9, maxVs: -1e9, td: null };
+      simLastTouchdown = null;
+      let flared = false, cushed = false;
+      for (let i = 0; i < 20 * 60 && !simLastTouchdown; i++) {
+        step(1);
+        const agl = S.alt - simGroundFt();
+        if (!flared && agl <= flareAt) { flared = true; simTrim.pitch = -pit; o.flare = agl; }
+        if (flared && cush && !cushed && agl <= cush) {
+          cushed = true; simTrim.pitch = -5; _ax(3, ((hoverPowerTq() - 4) / SIM_LEVER_TOP) * 2 - 1);
+        }
+        if (flared && !cushed && agl > 1) {                // 땅에 닿은 뒤(0fpm)는 빼고 본다
+          if (S.vs > o.best) { o.best = S.vs; o.bestAgl = agl; }
+          if (o.arrest === null && S.vs > -300) o.arrest = agl;
+        }
+        if (cushed) o.maxVs = Math.max(o.maxVs, S.vs);
+      }
+      S.running = false;
+      o.td = simLastTouchdown;
+      simTrimReset();
+      return o;
+    };
+    const pow = (() => {                           // 출력을 걸고 나는 동안은 플레어 몫이 없다
+      S.alt = 2000; S.spd = 80; S.pit = 20; S.tq = tqRequired(); return simFlareTgt(false);
+    })();
+    return { f20: run(100, 20), f30: run(100, 30), high: run(300, 20), good: run(100, 20, 12), pow };
+  })()`);
+  t.ok(auto.f20.sink < -2400 && auto.f20.sink >= -4000, `80kt 에서 컬렉티브를 끝까지 내리면 크게 강하한다 (${auto.f20.sink.toFixed(0)}fpm)`);
+  t.ok(auto.f20.arrest !== null && auto.f20.bestAgl > 12 && auto.f20.bestAgl < 40 && auto.f20.best > -300,
+    `100ft 에서 20° 로 들면 30ft 언저리에서 강하가 거의 멎는다 (${auto.f20.bestAgl.toFixed(0)}ft 에서 ${auto.f20.best.toFixed(0)}fpm)`);
+  t.ok(auto.f30.arrest > auto.f20.arrest + 5,
+    `더 들면 더 빨리(높이서) 멎는다 (30° ${auto.f30.arrest.toFixed(0)}ft · 20° ${auto.f20.arrest.toFixed(0)}ft)`);
+  t.ok(auto.high.arrest > 150 && auto.high.td && auto.high.td.vs > 600 && auto.high.td.grade === '충격 착륙',
+    `너무 높이서(300ft) 들면 멎었다가 다시 떨어져 충격 착륙이다 (${auto.high.arrest.toFixed(0)}ft 에서 멎음 → 접지 ${auto.high.td ? auto.high.td.vs.toFixed(0) : '—'}fpm)`);
+  t.ok(auto.good.td && auto.good.td.vs <= 360 && auto.good.td.grade === '부드러운 접지',
+    `제때 들고 낮게서 기수를 고르며 레버로 받치면 부드럽게 내려앉는다 (접지 ${auto.good.td ? auto.good.td.vs.toFixed(0) : '—'}fpm · ${auto.good.td ? auto.good.td.spd.toFixed(0) : '—'}kt)`);
+  t.ok(auto.good.maxVs < 1500,
+    `레버로 받친 뒤 상승률이 치솟지 않는다 (최대 ${auto.good.maxVs.toFixed(0)}fpm — 땅 가까이의 빠른 몫을 넘겨 받지 않는다)`);
+  t.ok(auto.pow === 0, '출력을 걸고 나는 동안(수평 비행 토크)은 기수를 들어도 플레어 몫이 붙지 않는다');
 
   // 뒷정리 — 다음 검사가 SIM 모드·가짜 패드를 물려받지 않도록
   await page.evaluate(() => {
