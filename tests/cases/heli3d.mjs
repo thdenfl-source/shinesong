@@ -62,6 +62,8 @@ export async function run(page, t) {
   // ── 3D 지도에 얹힌다 ──
   const open = await page.evaluate(async () => {
     const w = ms => new Promise(r => setTimeout(r, ms));
+    // 3D 화면 왼쪽 위에 겹치는 계기(07-sim.js)가 모형의 빛깔을 잴 자리를 가리지 않게 감춰 둔다
+    window.__pfdOvWas = pfdOvOn; pfdOvOn = false; pfdOverlaySync();
     if (typeof simModeOn !== 'undefined' && simModeOn) toggleSimMode(false);
     if (mapHdgUp) toggleMapOrient();
     if (followMode) toggleFollow();
@@ -242,4 +244,5 @@ export async function run(page, t) {
   t.ok(!ext.back.ext && !ext.back.model && ext.back.chin === 2, '다시 누르면 1인칭 — CHIN 창이 돌아온다');
   t.ok(!ext.exit.ext && ext.exit.model && ext.exit.btn === 'none', 'SIM 을 나가면 외부 시점도 풀리고 3D 지도에 모형이 보인다');
   t.ok(ext.joy, '조이스틱 버튼에 「외부 시점」을 배정할 수 있다');
+  await page.evaluate(() => { pfdOvOn = window.__pfdOvWas !== false; pfdOverlaySync(); });
 }
