@@ -17,7 +17,7 @@ export function buildEnv() {
     throw new Error('vendor/leaflet.js 가 없습니다 — 저장소가 온전한지 확인하세요.');
   }
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'vfrsim-test-'));
-  for (const d of ['vendor', 'js']) {
+  for (const d of ['vendor', 'js', 'sounds']) {
     const src = path.join(ROOT, d);
     if (fs.existsSync(src)) fs.cpSync(src, path.join(dir, d), { recursive: true });
   }

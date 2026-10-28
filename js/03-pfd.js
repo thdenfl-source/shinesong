@@ -10,7 +10,8 @@ const cvs = document.getElementById('pfd');
 const ctx = cvs.getContext('2d');
 
 function resizePFD() {
-  const el = document.getElementById('pfd-wrap');
+  // 캔버스가 놓인 자리에 맞춘다 — 평소에는 PFD 창(#pfd-wrap), 3D 단독이면 겹쳐 띄운 칸(#pfd-ov)
+  const el = cvs.parentElement || document.getElementById('pfd-wrap');
   cvs.width  = el.clientWidth;
   cvs.height = el.clientHeight;
 }
@@ -23,7 +24,8 @@ function drawPFD() {
   // 중단된다. 그릴 수 없는 크기면 조용히 건너뛴다.
   if (!(W >= 80) || !(H >= 80)) return;
   const ctrlEl = document.querySelector('.ctrl-bar');
-  const CTRL_H = ctrlEl ? ctrlEl.offsetHeight : 80;
+  // 3D 단독에 겹쳐 띄운 PFD 는 FCP 가 없다 — 칸을 다 계기에 쓴다
+  const CTRL_H = (cvs.parentElement && cvs.parentElement.id === 'pfd-ov') ? 0 : (ctrlEl ? ctrlEl.offsetHeight : 80);
   const usableH = H - CTRL_H;
   const tapW = Math.max(56, Math.min(76, W * 0.082));
   const vsiW = Math.max(28, Math.min(38, W * 0.046));

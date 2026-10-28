@@ -175,6 +175,30 @@ function simKeVs(onGnd, spd = S.spd, acc = simAcc) {
   if (onGnd) return 0;
   return -SIM_KE_EFF * SIM_KE_FPM * spd * acc;
 }
+// ── 오토로테이션 플레어 ──
+// 레버를 내리고(출력 없이) 내려오는 중에 기수를 들면 원판이 뒤로 젖혀져, 앞에서 오던 바람이
+// 원판 아래에서 위로 지난다 — 로터 추력이 커져 강하가 빠르게 멎는다(플레어).
+// 그 몫은 '지금 속도의 자세보다 더 든 각' 에 비례하고, 속도²(동압)를 따라 줄어든다.
+// 감속이 돌려주는 운동에너지 몫(simKeVs)과 함께, 80kt · 레버 끝까지 내림(약 3,000fpm)에서
+// 100ft 쯤에 20° 로 들면 30ft 언저리에서 강하가 거의 멎는다(−200fpm 안팎). 그때 기수를 고르고
+// 레버를 올려 받쳐 내려앉는다. 더 들면 더 빨리(높이서) 멎지만, 너무 높이서 멎으면 속도가 빠진 뒤 다시 떨어진다
+// (충격 착륙) — 그 시점을 익히는 연습이다.
+// 출력을 걸고 나는 동안(레버를 올려 둔 비행)은 고도를 출력이 정하므로 붙지 않는다 — 수평 비행에
+// 드는 토크보다 레버가 FLARE_DEF0 넘게 모자랄 때부터 붙어 FLARE_DEF1 이면 다 붙는다(오토로테이션).
+// 감속하며 레버를 조금(25% 까지) 내려 고도를 지키는 퀵스톱은 그대로다.
+const FLARE_K    = 95;    // 기준 속도에서 1° 더 들 때 줄어드는 강하율(fpm)
+const FLARE_VREF = 80;    // 기준 속도(kt)
+const FLARE_DEF0 = 25;    // 출력이 이만큼(%) 넘게 모자라면 플레어 몫이 붙기 시작한다
+const FLARE_DEF1 = 50;    // 이만큼(%) 모자라면 오토로테이션으로 보고 다 붙는다
+const FLARE_TAU  = 1.2;   // 로터 추력이 따라오는 시간(s)
+let simFlareVs = 0;       // 지금 플레어가 만든 상승률 몫(fpm)
+function simFlareTgt(onGnd) {
+  if (onGnd || !(S.spd > 0)) return 0;
+  const ex = S.pit - pitchFromSpd(S.spd);          // 그 속도의 자세보다 더 든 각(°)
+  if (!(ex > 0)) return 0;
+  const auto = Math.max(0, Math.min(1, (tqRequired() - S.tq - FLARE_DEF0) / (FLARE_DEF1 - FLARE_DEF0)));
+  return FLARE_K * (S.spd / FLARE_VREF) ** 2 * ex * auto;
+}
 
 // 토크(TQ) 상수와 tqRequired()·tqShown() 는 01-state.js 에 있다 —
 // PFD 가 이 파일보다 먼저 그려질 수 있어 TDZ 를 피한다.
@@ -255,6 +279,22 @@ function simTrimHoldSpeed() {
 // 지상속도가 새 기준이 된다 — forceTrim). 4방향 트림은 기준속도를 옮긴다.
 const GSPD_FLY_ACC = 10.5;          // 조종간을 끝까지 밀었을 때의 가감속(kt/s) — 종전 3.5 의 세 배
 let _simOnGnd = false;              // 마지막 적분 구간에 땅에 붙어 있었는가
+// ── 접지 알림 ──
+// 땅(갑판)에 닿는 순간의 강하율로 접지를 가른다 — 오토로테이션 플레어를 익히는 잣대.
+// 360fpm(6ft/s) 까지 부드러운 접지 · 600fpm(10ft/s) 까지 단단한 접지 · 그 넘으면 충격 착륙.
+const TD_SOFT = 360, TD_HARD = 600;
+const TD_QUIET = 100;               // 이보다 살며시 내려앉으면(호버에서 내려놓기) 알리지 않는다
+let simLastTouchdown = null;        // 마지막 접지 { vs(fpm, 양수), spd(kt), grade }
+function simTouchdown(vs, spd) {
+  const v = Math.max(0, -vs);
+  const grade = v <= TD_SOFT ? '부드러운 접지' : v <= TD_HARD ? '단단한 접지' : '충격 착륙';
+  simLastTouchdown = { vs: v, spd, grade };
+  if (v < TD_QUIET) return;
+  try {
+    uiToast(`접지 ${Math.round(v)}fpm · ${Math.round(Math.max(0, spd))}kt — ${grade}`,
+            v > TD_HARD ? 'err' : v > TD_SOFT ? 'warn' : '', 4000);
+  } catch (e) { _swallow(e); }
+}
 // 조종간 몫 — { lat: 좌우, fwd: 전후 } (-1…1, 중립이면 0). GSPD 가 아니면 null.
 function simGspdStick() {
   if (!simModeOn || !gspdOn) return null;
@@ -448,7 +488,7 @@ function simDeckHandoff(toDeck) {
 }
 
 function simStartGround() {
-  S.vs = 0; S.spd = 0; simLat = 0; simAcc = 0; simVsAcc = 0; simNr = 100;
+  S.vs = 0; S.spd = 0; simLat = 0; simAcc = 0; simVsAcc = 0; simFlareVs = 0; simNr = 100;
   S.pit = 0; S.bnk = 0; bankTarget = 0;
   S.tq = 0;                      // 레버를 내려 둔 상태에서 올리며 뜬다
   simSetOnGround();              // 지면 높이 = AGL 0
@@ -504,7 +544,7 @@ function toggleSimMode(on, opt) {
     // 손을 떼면 그 자리에서 날던 대로 — 지금 자세를 그대로 이어받는다
     bankTarget = S.bnk;
     simTrimReset();
-    simAcc = 0; simVsAcc = 0; simNr = 100; // 지금 날던 대로 이어 간다
+    simAcc = 0; simVsAcc = 0; simFlareVs = 0; simNr = 100; // 지금 날던 대로 이어 간다
     simLookReset();
     // 지금 날고 있는 상태를 유지할 만큼의 토크로 레버를 맞춰 둔다(진입 충격 방지)
     const add = simTqForVs(S.vs || 0);
@@ -518,7 +558,7 @@ function toggleSimMode(on, opt) {
     simExitView();
     simIasOn = false;                    // 평소에는 속도가 늘 IAS 로 난다
     // 손을 뗀 자리에서 수평으로 돌려 놓는다(기울어진 채 남지 않게)
-    bankTarget = 0; S.vs = 0; simLat = 0; simAcc = 0; simVsAcc = 0; simNr = 100;
+    bankTarget = 0; S.vs = 0; simLat = 0; simAcc = 0; simVsAcc = 0; simFlareVs = 0; simNr = 100;
     simLookReset();
     selHdg = ((Math.round(hdgInd()) + 359) % 360) + 1;
   }
@@ -615,6 +655,8 @@ function simFly(dt) {
   const deck = simDeckFt();             // 함정 위면 갑판(윗면) 높이
   const gnd = (deck == null) ? simGroundFt() : Math.max(simGroundFt(), deck);
   const onGnd = S.alt <= gnd + 0.5;
+  // 막 땅에 닿았다 — 그 순간의 강하율·속도를 알린다(오토로테이션 착지 연습)
+  if (onGnd && !_simOnGnd && S.running) simTouchdown(S.vs, S.spd);
   _simOnGnd = onGnd;
   // 갑판에 내려앉거나 뜨는 순간 — 속도의 기준(함정 ↔ 땅)을 넘겨 준다
   const onDeck = onGnd && deck != null && deck >= simGroundFt();
@@ -623,7 +665,7 @@ function simFly(dt) {
   // 상승률 가운데 감속이 돌려준 몫(운동에너지)은 빼고 본다 — 이미 속도로 치른
   // 것을 또 치르면 감속 → 상승 → 감속 이 되먹임으로 번진다.
   const vsKe0 = simKeVs(onGnd);
-  const vsPow = S.vs - vsKe0;           // 출력(토크)이 만든 상승률
+  const vsPow = S.vs - vsKe0 - simFlareVs;   // 출력(토크)이 만든 상승률(플레어 몫도 뺀다)
 
   // GSPD 가 걸려 있으면 자세·속도는 GSPD 가 맡는다 — 조종간 좌우·전후는
   // 07-sim.js 의 GSPD 수렴에서 fly-through 로 쓰인다(simGspdStick).
@@ -758,9 +800,14 @@ function simFly(dt) {
   const accSlow = simJerkStep(vTgt - vsPow, simVsAcc, dt, VS_ACC_MAX, VS_JERK, 50);
   const vsFast = vsPow + (vTgt - vsPow) * Math.min(1, dt / VS_IGE_TAU);
   const vsP = vsFast + (vsPow + accSlow * dt - vsFast) * wG;
-  simVsAcc = (vsP - vsPow) / dt;
+  // 이어 받는 '변화 빠르기' 는 평소 한계(VS_ACC_MAX) 안에 둔다 — 땅 가까이의 빠른 몫까지
+  // 그대로 넘기면, 20ft 위로 올라선 뒤 평소 셈이 그 큰 값을 몇십 초 동안 풀지 못해
+  // 상승률이 수천 fpm 으로 치솟는다(플레어 뒤 레버를 올려 받칠 때 드러났다)
+  simVsAcc = Math.max(-VS_ACC_MAX, Math.min(VS_ACC_MAX, (vsP - vsPow) / dt));
+  // 오토로테이션 플레어 — 로터 추력이 곧(FLARE_TAU) 따라온다
+  simFlareVs = onGnd ? 0 : simFlareVs + (simFlareTgt(onGnd) - simFlareVs) * Math.min(1, dt / FLARE_TAU);
   // 기수를 숙여 가속하며 레버를 내려도 강하는 4,000fpm 에서 멎는다(운동에너지 몫 포함)
-  S.vs = Math.max(-SIM_VS_DN_MAX, vsP + simKeVs(onGnd));
+  S.vs = Math.max(-SIM_VS_DN_MAX, vsP + simKeVs(onGnd) + simFlareVs);
   if (S.vs <= -SIM_VS_DN_MAX && simVsAcc < 0) simVsAcc = 0;   // 한계에 눌린 채 쌓이지 않게
   // 땅 아래로는 내려가지 않는다 — 바닥은 해수면이 아니라 '발밑의 지면' 이다
   if (S.alt <= gnd + 0.5 && S.vs < 0) { S.vs = 0; S.alt = gnd; if (simVsAcc < 0) simVsAcc = 0; }
