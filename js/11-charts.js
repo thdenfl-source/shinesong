@@ -2207,6 +2207,8 @@ appRegister({
   toggleShip,
   toggleShip3d,
   toggleSim,
+  toggleHdgRef,
+  dgAdjust,
   setSimSpeed,
   toggleHoldEntry,
   toggleTcut,

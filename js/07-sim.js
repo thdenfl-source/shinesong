@@ -26,7 +26,7 @@ function applyDelta(field, d){
     case 'yaw':
       // ANTI-TORQUE PEDAL — 뱅크 없이 기수만 즉시 회전(홀드 시 약 12°/s)
       S.hdg = normA(S.hdg + d);
-      selHdg = ((Math.round(S.hdg) + 359) % 360) + 1;   // HDG SEL이 되돌리지 않도록 동기
+      selHdg = ((Math.round(hdgInd()) + 359) % 360) + 1;   // HDG SEL이 되돌리지 않도록 동기
       break;
     case 'crs':
       if (navSrc !== 'FMS') {
@@ -105,7 +105,7 @@ function fcpSync(which) {
     if (navApOn) toggleNavAp();
     else if (hdgSelOn) hdgRelease();
     else {
-      selHdg = ((Math.round(S.hdg) + 359) % 360) + 1;   // 1–360
+      selHdg = ((Math.round(hdgInd()) + 359) % 360) + 1;   // 1–360
       hdgSelOn = true; bankTarget = 0; rollApOn = true;  // 현재 헤딩 유지
     }
   } else if (which === 'crs') {
@@ -278,6 +278,36 @@ function updateFlyBtns(){
     b.classList.toggle('on',S.running);
   });
 }
+
+// ── MG(Slaved) / DG — 3D 창과 지도 창의 같은 버튼(누를 때마다 바뀐다) ──
+// MG 로 돌아오면 자이로가 곧 자기 헤딩에 다시 맞는다(오차 0). DG 에서만 −/+ 가 살아 있다.
+function toggleHdgRef() {
+  hdgRef = hdgRef === 'MG' ? 'DG' : 'MG';
+  if (hdgRef === 'MG') dgErr = 0;
+  updateHdgRefBtns();
+}
+// HSI 를 왼쪽(−)·오른쪽(+)으로 1° — 계기 헤딩이 그만큼 줄고 는다
+function dgAdjust(d) {
+  if (hdgRef !== 'DG') return;
+  dgErr = normAS(dgErr + d);
+  updateHdgRefBtns();
+}
+function updateHdgRefBtns() {
+  const dg = hdgRef === 'DG';
+  document.querySelectorAll('.hdgref').forEach(box => {
+    box.classList.toggle('dg', dg);
+    const b = box.querySelector('.hdgref-btn');
+    if (b) b.textContent = dg ? 'DG' : 'MG (Slaved)';
+    box.querySelectorAll('.hdgref-adj button').forEach(x => { x.disabled = !dg; });
+  });
+  updateDgCompass();
+}
+// 자기 나침반(스탠바이) — DG 를 맞출 때 견주는 값(°M). DG 일 때만 보인다
+function updateDgCompass() {
+  if (hdgRef !== 'DG') return;
+  const t = 'COMP ' + fmtA(toMag(S.hdg)) + '°';
+  document.querySelectorAll('.hdgref-comp').forEach(el => { if (el.textContent !== t) el.textContent = t; });
+}
 function toggleSim(){
   S.running=!S.running;
   updateFlyBtns();
@@ -345,6 +375,8 @@ function simStep(ts){
     for(let _sub=0;_sub<_n;_sub++){
     const dt=_tot/_n;
     if(dt>0&&dt<0.5){
+      // DG — 방향 자이로가 1시간에 DG_DRIFT(6°) 씩 어긋난다(나는 동안만, 배속이면 그만큼 빨리)
+      if (hdgRef === 'DG') dgErr = normAS(dgErr - DG_DRIFT / 3600 * dt);
       // SIM 모드: 조종간 입력을 먼저 자세·속도에 반영한다(아래 운동식은 그대로 쓴다)
       try { simFly(dt); } catch(e) { _swallow(e); }
       // smooth bank toward target — GSPD 중에는 ADI 자세 변화 없음(수평 유지)
@@ -560,17 +592,18 @@ function simStep(ts){
             navApOn = false;
             document.getElementById('nav-ap-btn').classList.remove('on');
             bankTarget = 0;
-            selHdg = ((Math.round(S.hdg) + 359) % 360) + 1; hdgSelOn = true;
+            selHdg = ((Math.round(hdgInd()) + 359) % 360) + 1; hdgSelOn = true;
           }
         }
       }
 
       // HDG SEL: 선택 헤딩까지 표준선회(속도의 16% 뱅크). NAV AP·GSPD가 우선.
+      // 계기 헤딩(hdgInd)을 맞춘다 — DG 오차가 있으면 실제 기수는 그만큼 비껴 난다.
       if (hdgSelOn && rollApOn && !navApOn && !gspdOn && !gspdCoasting) {
-        const err  = normAS(selHdg - S.hdg);            // -180 ~ +180
+        const err  = normAS(selHdg - hdgInd());         // -180 ~ +180
         const bMax = stdRateBank(S.spd);
         const aErr = Math.abs(err);
-        if (aErr < 0.5) { bankTarget = 0; _hdgJump += err; S.hdg = normA(selHdg); }
+        if (aErr < 0.5) { bankTarget = 0; _hdgJump += err; S.hdg = normA(selHdg - dgErr); }
         else {
           // 롤아웃 구간에서도 최소 뱅크를 유지 — 비행모델이 |bank|<=0.5°를 무시하므로
           // 그 아래로 떨어지면 선회가 멈춘 채 오차가 남는다(저속에서 발생)
@@ -586,7 +619,7 @@ function simStep(ts){
           navApOn = false;
           document.getElementById('nav-ap-btn').classList.remove('on');
           bankTarget = 0;
-          selHdg = ((Math.round(S.hdg) + 359) % 360) + 1; hdgSelOn = true;
+          selHdg = ((Math.round(hdgInd()) + 359) % 360) + 1; hdgSelOn = true;
         } else {
           holdSyncFromWp();                  // 활성 WP 에 홀딩이 있으면 자동 무장
           const hb = holdBankTarget(dt);     // 홀딩 중이면 홀딩 로직이 우선
@@ -635,6 +668,7 @@ function simStep(ts){
   updateHoverBtns();
   try { updateSuspBtn(); } catch(e) { _swallow(e); }
   try { updateGsBtn(); } catch(e) { _swallow(e); }
+  try { updateDgCompass(); } catch(e) { _swallow(e); }
   try { fpWptLiveTick(ts); } catch(e) { _swallow(e); }
   // 스톱워치에 흘려 넣을 시간 — 기체가 겪는 시간과 같아야 한다.
   // 배속이 걸리면 그만큼 빨리, 시뮬이 멈춰 있으면 함께 멈춘다.

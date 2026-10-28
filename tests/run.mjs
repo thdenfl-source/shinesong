@@ -39,9 +39,10 @@ import * as ship3d from './cases/ship3d.mjs';
 import * as heli3d from './cases/heli3d.mjs';
 import * as ralt from './cases/ralt.mjs';
 import * as startapt from './cases/startapt.mjs';
+import * as hdgref from './cases/hdgref.mjs';
 import * as lock from './cases/lock.mjs';
 
-const SUITES = [smoke, actions, coords, chartcal, hold, nav, gspd, dialog, chartview, procdata, simspd, tascalc, brg, fpwpt, maprot, map3d, dmearc, dme, fporder, wptcrs, brglbl, directto, crssync, locsta, susp, layout, gslope, joystick, geosearch, simmode, ship3d, heli3d, ralt, startapt, lock];
+const SUITES = [smoke, actions, coords, chartcal, hold, nav, gspd, dialog, chartview, procdata, simspd, tascalc, brg, fpwpt, maprot, map3d, dmearc, dme, fporder, wptcrs, brglbl, directto, crssync, locsta, susp, layout, gslope, joystick, geosearch, simmode, ship3d, heli3d, ralt, startapt, hdgref, lock];
 const filter = process.argv.slice(2);
 
 function makeT() {

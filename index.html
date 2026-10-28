@@ -558,6 +558,22 @@ html, body {
 #ext-btn.show { display: block; }
 #ext-btn.on { color: #00e5ff; border-color: #00e5ff; }
 #fly3d-btn { position: absolute; top: 104px; right: 8px; z-index: 900; padding: 5px 10px; }
+/* MG(Slaved)/DG — 방향 기준(07-sim.js toggleHdgRef). 3D 창(FLY 아래)·지도 창(툴바 아래)에 같은 버튼.
+   누를 때마다 바뀌고, DG 일 때만 −/+(HSI 1°)가 살아 있고 자기 나침반(COMP)이 보인다 */
+.hdgref { position: absolute; right: 8px; z-index: 900; width: 86px;
+          display: flex; flex-direction: column; gap: 3px; }
+.hdgref .sim-btn { flex: none; }
+.hdgref .hdgref-btn { padding: 5px 4px; }
+.hdgref.dg .hdgref-btn { color: #ffb000; border-color: #ffb000; }
+.hdgref-adj { display: flex; gap: 3px; }
+.hdgref-adj .sim-btn { flex: 1; padding: 3px 0; font-size: 15px; line-height: 1; }
+.hdgref-adj .sim-btn:disabled { opacity: 0.35; cursor: default; }
+.hdgref-comp { display: none; padding: 2px 0; border-radius: 3px; text-align: center;
+               background: rgba(0,0,0,0.75); color: #ffb000;
+               font: bold 10px 'Helvetica Neue', Arial, sans-serif; }
+.hdgref.dg .hdgref-comp { display: block; }
+#hdgref-3d { top: 136px; }
+#hdgref-map { top: 48px; }
 /* 출발 공항 고르기(09-cdu.js openStartAirportPicker) */
 .ui-dlg.start-apt { width: min(560px, 94vw); max-width: min(560px, 94vw); }
 .start-apt-sub { font-size: 12px; color: #9aa4ae; }
@@ -573,6 +589,9 @@ html, body {
 #map-wrap #chin-btn { top: 80px; }
 #map-wrap #ext-btn { top: 112px; }
 #map-wrap #fly3d-btn { top: 144px; }
+#map-wrap #hdgref-3d { top: 176px; }
+/* 3D 를 지도 위에 겹쳐 쓰면 3D 쪽 버튼만 둔다 */
+#map-wrap.map3d-on #hdgref-map { display: none; }
 /* When 3D is on, hide the 2D Leaflet map so its panes never paint through */
 #map-wrap.map3d-on #map { visibility: hidden; }
 #layer-btn-3d { background: rgba(0,10,30,0.82); border: 1px solid #333; color: #aaa; }
@@ -1820,7 +1839,7 @@ body.gate-open #gate-overlay { display: none; }
             <b>가속은 제자리 3.5kt/s 에서 속도가 붙을수록 커져 40kt 부터 6.5kt/s</b>(전이양력)까지 갑니다
             (예: 120kt 에서 기수 10° 숙이면 1초마다 +0.4 · +1.2 · +2.0 · +2.8kt 로 붙음 / 동고도 120kt 에서
             60kt 자세로 들면 감속 3 → 6 → 9 → 12kt/s 로 세져 8초면 60kt / 제자리에서 기수 5° 숙이면 10초에 36kt · 20초에 100kt).
-            컬렉티브를 올리면 토크가 0.5초쯤에 따라붙고, 상승률도 <b>점점 빨라지며</b> 붙습니다 —
+            컬렉티브를 올리면 토크가 <b>0.25초쯤</b>에 따라붙고(1초에 최대 120% — 종전의 2배 빠르기), 상승률도 <b>점점 빨라지며</b> 붙습니다 —
             상승·강하율이 바뀌는 빠르기는 <b>1초에 최대 500fpm</b>(최소·최대 상승률은 그대로)입니다.<br>
             자세는 <b>위아래 60°</b> 까지 잡힙니다(속도는 뒤로 40kt · 앞으로 160kt 에서 멎습니다).
             <b>땅 위(바퀴형)</b> — 토크를 <b>20% 넘게</b> 쓰면 천천히 앞으로 굴러가고(토크가 클수록), <b>사이클릭을 민 만큼</b>
@@ -2058,6 +2077,17 @@ body.gate-open #gate-overlay { display: none; }
       <ul>
         <li><b>NAV SRC</b>: <b>FMS / NAV1 / NAV2</b>. NAV1·NAV2는 CDU에서 튜닝한 VOR을 따라갑니다.</li>
         <li><b>RNP</b>: NAV SRC 바로 아래. <b>4 / 2 / 1 / 0.3</b> NM — CDI 최대편위(스케일)를 정합니다.</li>
+        <li><b>MG (Slaved) / DG</b> — 방향 기준(MAS). <b>3D 창</b>(FLY 아래)과 <b>지도 창</b>(툴바 아래 오른쪽)에 같은 버튼이 있고,
+            누를 때마다 바뀝니다(두 창이 함께).
+            <b>MG (Slaved)</b> — 방향 자이로를 <b>지구 자기장</b>에 늘 맞춥니다: HSI 가 지도와 꼭 맞습니다(처음 상태).
+            <b>DG</b> — <b>방향 자이로만</b>으로 방향을 정합니다: 지구 자전 등으로 <b>1시간에 약 6°</b> 씩 HSI 가 어긋나고
+            (비행 중에만 · 배속이면 그만큼 빨리), 버튼 아래 <b>− / +</b> 로 HSI 를 <b>왼쪽 / 오른쪽 1°</b> 씩 맞춥니다.
+            이때 버튼 아래에 <b>COMP</b>(자기 나침반) 값이 보이니 그것과 견주어 맞추십시오.
+            DG 이면 PFD 의 HDG 칸 왼쪽에 호박색 <b>DG</b> 가 뜹니다.<br>
+            <b>HSI · HDG 칸 · HDG 유지(HDG 상위모드)</b>는 이 계기 헤딩을 따르므로, 오차가 쌓인 채 HDG 로 날면
+            <b>실제 기수는 그만큼 비껴</b> 갑니다(예: 오차 −6° 면 HDG 090 으로 날아도 실제로는 096).
+            <b>지도 · 3D · NAV(GPS 항법)</b>는 실제 기수를 쓰므로 그대로 맞습니다.
+            <b>MG</b> 로 돌아오면 곧 다시 자기 헤딩에 맞습니다.</li>
         <li><b>SUSP</b>(SIM SPD 오른쪽): 버튼에는 <b>On</b> 만 적히고, 켜지면 <b>NAV 버튼과 같은 녹색</b>으로 바뀝니다. <b>시퀀싱 보류</b> — 켜져 있으면 활성 웨이포인트를 지나도
             <b>다음으로 넘어가지 않고</b> 그 구간의 코스를 계속 따라갑니다. <b>마지막 지점이어도 NAV 가
             풀리지 않아</b>, 홀딩이나 미스드어프로치를 계속 수행할 수 있습니다.
@@ -2611,6 +2641,15 @@ body.gate-open #gate-overlay { display: none; }
         <button class="sim-btn" id="ext-btn" data-act="toggleExtView" title="외부 시점 — 뒤에서 따라가며 내 헬기(흰수리)를 봅니다. 시야 둘러보기(B0 + 햇)로 둘레를 돌아봅니다">EXT</button>
         <!-- FLY/PAUSE — 지도 창의 같은 버튼과 같다(3D 를 제 창으로 쓸 때도 바로 멈추고 이어 간다) -->
         <button class="sim-btn" id="fly3d-btn" data-act="toggleSim" title="FLY / PAUSE — 지도 창의 같은 버튼과 같습니다">▶ FLY</button>
+        <!-- MG(Slaved)/DG — 방향 기준. 지도 창의 같은 버튼과 같다(07-sim.js) -->
+        <div class="hdgref" id="hdgref-3d">
+          <button class="sim-btn hdgref-btn" data-act="toggleHdgRef" title="방향 기준 — MG(Slaved): 자이로를 지구 자기장에 맞춘다 · DG: 방향 자이로만(1시간에 약 6° 어긋난다 → −/+ 로 맞춘다)">MG (Slaved)</button>
+          <div class="hdgref-adj">
+            <button class="sim-btn" data-act="dgAdjust" data-arg='[-1]' title="DG — HSI 를 왼쪽으로 1°" disabled>−</button>
+            <button class="sim-btn" data-act="dgAdjust" data-arg='[1]' title="DG — HSI 를 오른쪽으로 1°" disabled>+</button>
+          </div>
+          <div class="hdgref-comp" title="자기 나침반(스탠바이) — DG 를 맞출 때 견준다"></div>
+        </div>
         <div id="tilt-ctrl">
           <button data-act="tiltAdj" data-arg='[-5]' title="Tilt up">▲</button>
           <button data-act="tiltAdj" data-arg='[5]'  title="Tilt down">▼</button>
@@ -2637,6 +2676,15 @@ body.gate-open #gate-overlay { display: none; }
         <button id="map-ruler-btn" data-act="toggleRuler" title="거리·방위 측정">📏</button>
         <button id="map-full-btn" data-act="toggleMapFull" title="전체화면/분할 전환">FULL</button>
       </div>
+        <!-- MG(Slaved)/DG — 방향 기준. 3D 창의 같은 버튼과 같다(07-sim.js) -->
+        <div class="hdgref" id="hdgref-map">
+          <button class="sim-btn hdgref-btn" data-act="toggleHdgRef" title="방향 기준 — MG(Slaved): 자이로를 지구 자기장에 맞춘다 · DG: 방향 자이로만(1시간에 약 6° 어긋난다 → −/+ 로 맞춘다)">MG (Slaved)</button>
+          <div class="hdgref-adj">
+            <button class="sim-btn" data-act="dgAdjust" data-arg='[-1]' title="DG — HSI 를 왼쪽으로 1°" disabled>−</button>
+            <button class="sim-btn" data-act="dgAdjust" data-arg='[1]' title="DG — HSI 를 오른쪽으로 1°" disabled>+</button>
+          </div>
+          <div class="hdgref-comp" title="자기 나침반(스탠바이) — DG 를 맞출 때 견준다"></div>
+        </div>
       <div id="geo-panel">
         <div id="geo-panel-hdr">주소 · 지명 검색
           <span id="geo-close" data-act="closeGeoSearch" title="닫기">✕</span></div>

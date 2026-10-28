@@ -106,7 +106,7 @@ const SPD_DEC_MAX  = 12.0;    // 최대 감속(kt/s) — 원판을 젖히면 항
 const VS_JERK      = 250;     // 상승률의 변화가 커지는 빠르기(fpm/s²)
 const VS_ACC_MAX   = 500;     // 상승률이 바뀌는 최대 빠르기(fpm/s)
 const VS_IGE_TAU   = 0.3;     // 지면효과 안(땅 가까이)에서 상승률이 토크를 따라가는 시간(s)
-const TQ_TAU       = 0.5;     // 토크가 레버를 따라가는 시간(s) — 엔진·로터 관성
+const TQ_TAU       = 0.25;    // 토크가 레버를 따라가는 시간(s) — 엔진·로터 관성(종전 0.5 의 반 = 2배 빠르게)
 // ── 남는 토크 → 상승률 ──
 // 제자리에서는 호버 토크에서 100% 까지 올리면 0 → 1,000fpm 이고, 속도가 붙을수록 같은
 // 토크로 더 잘 올라 Vy 에서는 100% 에 2,300fpm 이다. 그 위로는 더 오르지 않는다(그 속도의
@@ -520,7 +520,7 @@ function toggleSimMode(on, opt) {
     // 손을 뗀 자리에서 수평으로 돌려 놓는다(기울어진 채 남지 않게)
     bankTarget = 0; S.vs = 0; simLat = 0; simAcc = 0; simVsAcc = 0; simNr = 100;
     simLookReset();
-    selHdg = ((Math.round(S.hdg) + 359) % 360) + 1;
+    selHdg = ((Math.round(hdgInd()) + 359) % 360) + 1;
   }
   updateSimModeBtn();
   try { updateApInhibit(); } catch (e) { _swallow(e); }
@@ -693,7 +693,7 @@ function simFly(dt) {
   // HDG·NAV 가 기수를 잡고 있으면 페달은 무시한다(선택 헤딩으로 되돌리며 싸운다)
   if (a.yaw && !simAfcsLat()) {
     S.hdg = normA(S.hdg + a.yaw * SIM_YAW_RATE * dt);
-    selHdg = ((Math.round(S.hdg) + 359) % 360) + 1;
+    selHdg = ((Math.round(hdgInd()) + 359) % 360) + 1;
   }
 
   // ── 컬렉티브 → 토크 ──

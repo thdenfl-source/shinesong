@@ -1526,6 +1526,36 @@ export async function run(page, t) {
   t.ok(grad.tq[0] < grad.lever - 3 && Math.abs(grad.tq[3] - grad.lever) < 1.5,
     `토크도 레버를 천천히 따라간다 (0.3초 ${grad.tq[0].toFixed(0)}% → 3초 ${grad.tq[3].toFixed(0)}% · 레버 ${grad.lever.toFixed(0)}%)`);
 
+  // ── 토크는 레버를 종전의 2배 빠르기로 따라간다 ──
+  // 엔진·로터 관성 TQ_TAU 0.25초(종전 0.5) · 최대 120%/s(종전 60). 레버를 한 번에 20% 올리면
+  // 0.25초에 2/3 남짓, 0.75초면 거의 다 따라간다(종전에는 0.25초에 4할 · 0.75초에 8할).
+  const tqResp = await page.evaluate(`(() => {
+    (${SETUP.toString()})();
+    const fly = ${FLY};
+    joyAxes = { coll: { i: 3, inv: false, abs: true } };
+    S.alt = 4000; _simGndFt = 0; S.bnk = 0;
+    simTrim.pitch = -pitchFromSpd(70); S.spd = 70;
+    _ax(3, (tqRequired() / SIM_LEVER_TOP) * 2 - 1); fly(6);
+    const t0 = S.tq, lever = t0 + 20;
+    _ax(3, Math.min(1, (lever / SIM_LEVER_TOP) * 2 - 1));
+    S.running = true; let ts = 1000; S.lastT = ts;
+    let q = 0, t = 0, maxRate = 0, prev = S.tq;
+    for (let i = 1; i <= 40; i++) {                 // 50ms × 40 = 2초
+      ts += 50; joyPoll(ts); simStep(ts);
+      maxRate = Math.max(maxRate, Math.abs(S.tq - prev) / 0.05); prev = S.tq;
+      if (i === 5)  q = (S.tq - t0) / 20;          // 0.25초
+      if (i === 15) t = (S.tq - t0) / 20;          // 0.75초
+    }
+    S.running = false;
+    simTrimReset();
+    return { q, t, maxRate, tau: TQ_TAU, rate: TQ_RATE };
+  })()`);
+  t.ok(tqResp.tau === 0.25 && tqResp.rate === 120,
+    `토크가 레버를 따라가는 시간 ${tqResp.tau}초 · 최대 ${tqResp.rate}%/s — 종전(0.5초 · 60%/s)의 2배 빠르기`);
+  t.ok(tqResp.q > 0.6, `레버 +20% — 0.25초에 ${(tqResp.q * 100).toFixed(0)}% 따라간다(종전 4할)`);
+  t.ok(tqResp.t > 0.93, `0.75초면 ${(tqResp.t * 100).toFixed(0)}% — 거의 다 따라간다(종전 8할)`);
+  t.ok(tqResp.maxRate <= tqResp.rate + 0.5, `그래도 1초에 ${tqResp.rate}% 보다 빨리 바뀌지 않는다 (최대 ${tqResp.maxRate.toFixed(0)}%/s)`);
+
   // ── 기수를 들며 레버를 내리면 — 고도는 크게 변하지 않고 속도가 점점 빠르게, 크게 준다 ──
   // 감속이 정해진 빠르기로 커진다(1초에 3kt/s 씩 · 최대 12kt/s). 레버를 내려 고도를 눌러도 속도를
   // 돌려받지 않는다 — 줄어든 속도가 고도로 돌아와 고도를 실제로 잃지 않았으므로.
