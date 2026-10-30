@@ -1848,6 +1848,10 @@ body.gate-open #gate-overlay { display: none; }
             <b>3D 화면의 계기</b> — 3D 지도가 떠 있으면(3D 단독 · 3D 탭 창 · 2D 지도 위 3D) 그 <b>왼쪽 위</b>에
             PFD 의 계기(FCP 없이)가 겹쳐 뜹니다(3D 화면의 가로 1/4 · 높이 3/5 — 좁은 창에서는 읽을 만큼 키우고 비율대로 줄여 그립니다).
             조작부 없이 비행에 몰입할 때 쓰십시오. 3D 창 오른쪽 위의 <b>계기 ON / OFF</b> 로 보이고 감춥니다(이 기기에 저장).</li>
+        <li><b>활주로 평탄화</b> — 지도의 ICAO 공항 활주로 면(끝 너머 60m · 옆 30m 여유)은 <b>공항표고</b>로 평평합니다.
+            지형 자료는 활주로 위에서도 들쑥날쑥해 착륙·활주할 때 기체가 튀었습니다. 그 밖 150m 에 걸쳐 원래 땅으로
+            부드럽게 이어 턱이 지지 않습니다. 3D 지형 · SIM 의 땅 · 전파고도가 같은 높이를 씁니다.
+            활주로 좌표 자료가 없는 속초·울진은 공항 기준점 둘레(반지름 400m)를 폅니다.</li>
         <li><b>시작 비밀번호</b>: 앱을 열면 먼저 비밀번호를 묻습니다. 맞게 넣으면 그 탭에서는 다시 묻지 않고
             (새로고침해도 그대로), 앱을 새로 열면 다시 묻습니다. 화면 앞에서 막는 잠금이며 보안 장치는 아닙니다.</li>
         <li><b>SIM 모드</b>(FCP 1행 ALT·CRHT·G/S 버튼 오른쪽 <b>SIM</b> 버튼): 조이스틱으로 <b>직접 조종</b>합니다.
@@ -2112,6 +2116,10 @@ body.gate-open #gate-overlay { display: none; }
       <h3>4. PFD · HOVER PAGE</h3>
       <ul>
         <li><b>NAV SRC</b>: <b>FMS / NAV1 / NAV2</b>. NAV1·NAV2는 CDU에서 튜닝한 VOR을 따라갑니다.</li>
+        <li><b>접근절차 자동 튜닝</b> — 비행계획에서 접근절차를 불러오면(＋ ADD APPROACH) <b>NAV1 은 그 공항의 VOR</b>,
+            <b>NAV2 는 그 활주로의 LOC</b> 주파수로 저절로 맞춥니다(알림으로 보여 줍니다). VOR 은 절차 경로에 든 VOR →
+            비행장 자료의 VOR(공항 25NM 안 — 주파수가 같은 먼 국은 잡지 않습니다) → 공항에서 가장 가까운 VOR(30NM 안) 순으로,
+            LOC 는 절차 이름의 활주로(RWY 36R) → 같은 방향 → 그 공항의 다른 LOC 순으로 고릅니다. 맞출 국이 없으면 그대로 둡니다.</li>
         <li><b>RNP</b>: NAV SRC 바로 아래. <b>4 / 2 / 1 / 0.3</b> NM — CDI 최대편위(스케일)를 정합니다.</li>
         <li><b>MG (Slaved) / DG</b> — 방향 기준(MAS). <b>3D 창</b>(FLY 아래)과 <b>지도 창</b>(툴바 아래 오른쪽)에 같은 버튼이 있고,
             누를 때마다 바뀝니다(두 창이 함께).
@@ -2967,6 +2975,7 @@ body.gate-open #gate-overlay { display: none; }
   <script src="js/data/loc-stations.js"></script>
   <script src="js/data/enr-routes.js"></script>
   <script src="js/data/airspace.js"></script>
+  <script src="js/data/runways.js"></script>
   <!-- 앱 코드 -->
   <script src="js/00-ui.js"></script>
   <script src="js/01-state.js"></script>

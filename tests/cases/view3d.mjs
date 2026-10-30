@@ -36,7 +36,7 @@ export async function run(page, t) {
     const ov = document.getElementById('pfd-ov'), c = document.getElementById('pfd-ov-cvs'), b = ov.getBoundingClientRect();
     const texts = [], orig = CanvasRenderingContext2D.prototype.fillText;
     CanvasRenderingContext2D.prototype.fillText = function (s, ...a) { if (this.canvas === c) texts.push(String(s)); return orig.call(this, s, ...a); };
-    try { pfdOverlayDraw(); } finally { CanvasRenderingContext2D.prototype.fillText = orig; }
+    try { pfdOverlayDraw(true); } finally { CanvasRenderingContext2D.prototype.fillText = orig; }
     const host = ov.parentElement.getBoundingClientRect();
     return { show: ov.classList.contains('show'), host: ov.parentElement.id, x: b.x - host.x, y: b.y - host.y, w: b.width, h: b.height,
              hw: host.width, hh: host.height, hsi: texts.includes('HDG') && texts.includes('CRS'), cw: c.width, ch: c.height,

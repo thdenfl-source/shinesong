@@ -426,6 +426,8 @@ function terrainFtAt(lat, lon) {
   try { m = _tcElev(lat, lon); } catch (e) { m = null; }
   if (m == null) return null;
   m = (typeof seaFlatM === 'function') ? seaFlatM(m) : Math.max(0, m);
+  // 활주로는 공항표고로 평평하다 — 3D 지형·SIM 의 땅과 같은 규칙(04-map.js rwyFlatM)
+  if (typeof rwyFlatM === 'function') m = rwyFlatM(lat, lon, m);
   return m / 0.3048;
 }
 // ── 전파고도(RA, ft) ──

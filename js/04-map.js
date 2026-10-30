@@ -304,6 +304,54 @@ function seaFlatM(m) {
   if (m >= SEA_BLEND_M) return m;
   return (m - SEA_FLAT_M) * SEA_BLEND_M / (SEA_BLEND_M - SEA_FLAT_M);
 }
+// ── 활주로는 공항표고로 평평하게 ──
+// 지형 자료는 활주로 위에서도 수 m 씩 들쑥날쑥하다(칸이 성기고 주변 건물·둑이 섞인다).
+// 지도의 ICAO 공항 활주로(data/runways.js — 끝 너머 RWY_END_M · 옆 RWY_SIDE_M 여유)를
+// 공항표고로 펴고, 그 밖 RWY_BLEND_M 에 걸쳐 원래 땅으로 부드럽게 잇는다(턱이 지지 않게).
+// 바다 펴기 다음에 건다. 3D 지형(_demMake)과 SIM 의 땅(simTerrainFt)·전파고도(terrainFtAt)가
+// 같은 규칙을 쓴다 — 화면 속 활주로와 바퀴가 닿는 높이가 같다.
+const RWY_END_M = 60, RWY_SIDE_M = 30, RWY_BLEND_M = 150;
+const RWY_MIN_Z = 12;     // 3D 지형은 이 단계부터 편다(한 칸 30m 안팎 — 그보다 성기면 활주로가 한 칸도 안 된다)
+const _rwyZones = (typeof RUNWAYS === 'undefined' ? [] : RUNWAYS).flatMap(ap => {
+  const elevM = ap.elev * 0.3048;
+  const zone = (lat0, lon0, ux, uy, half, halfW, rad) => {
+    const kx = 111320 * Math.cos(lat0 * Math.PI / 180), ky = 110540;
+    const R = half + halfW + rad + RWY_BLEND_M;
+    return { elevM, lat0, lon0, kx, ky, ux, uy, half, halfW, rad,
+             s: lat0 - R / ky, n: lat0 + R / ky, w0: lon0 - R / kx, e: lon0 + R / kx };
+  };
+  if (ap.rwys) return ap.rwys.map(r => {
+    const lat0 = (r.a[0] + r.b[0]) / 2, lon0 = (r.a[1] + r.b[1]) / 2;
+    const kx = 111320 * Math.cos(lat0 * Math.PI / 180), ky = 110540;
+    const dx = (r.b[1] - r.a[1]) * kx, dy = (r.b[0] - r.a[0]) * ky, L = Math.hypot(dx, dy) || 1;
+    return zone(lat0, lon0, dx / L, dy / L, L / 2 + RWY_END_M, r.w / 2 + RWY_SIDE_M, 0);
+  });
+  const ref = (typeof AIRPORTS_KR !== 'undefined') ? AIRPORTS_KR.find(a => a.icao === ap.apt) : null;
+  return (ap.disk && ref) ? [zone(ref.lat, ref.lon, 1, 0, 0, 0, ap.disk)] : [];
+});
+// 그 자리를 얼마나 펴는가 — { elevM(공항표고, m), w(0 … 1) } · 활주로 둘레 밖이면 null
+function rwyFlatAt(lat, lon, zones = _rwyZones) {
+  let best = null;
+  for (const z of zones) {
+    if (lat < z.s || lat > z.n || lon < z.w0 || lon > z.e) continue;
+    const x = (lon - z.lon0) * z.kx, y = (lat - z.lat0) * z.ky;
+    const u = x * z.ux + y * z.uy, v = y * z.ux - x * z.uy;          // 활주로 방향 · 옆
+    const d = Math.max(0, Math.hypot(Math.max(0, Math.abs(u) - z.half), Math.max(0, Math.abs(v) - z.halfW)) - z.rad);
+    if (d >= RWY_BLEND_M) continue;
+    const t = 1 - d / RWY_BLEND_M, w = t * t * (3 - 2 * t);
+    if (!best || w > best.w) best = { elevM: z.elevM, w };
+  }
+  return best;
+}
+// 지형 높이(m · 바다를 편 뒤)에 활주로 평탄화를 얹는다
+function rwyFlatM(lat, lon, m, zones) {
+  const f = rwyFlatAt(lat, lon, zones);
+  return f ? m + (f.elevM - m) * f.w : m;
+}
+// 이 위경도 범위에 걸치는 활주로들(3D 지형 타일 한 장을 고칠 때 미리 추린다)
+function _rwyZonesIn(s, n, w0, e) {
+  return _rwyZones.filter(z => z.n >= s && z.s <= n && z.e >= w0 && z.w0 <= e);
+}
 const DEM_URL = 'https://s3.amazonaws.com/elevation-tiles-prod/terrarium';
 // 지형 타일(ArrayBuffer) — 바다를 편 것을 타일 저장소에 두고 함께 쓴다
 async function _demTile(z, x, y) {
@@ -319,16 +367,43 @@ async function _demMake(z, x, y) {
   const cv = _mapCanvas(bmp.width, bmp.height), ctx = cv.getContext('2d', { willReadFrequently: true });
   ctx.drawImage(bmp, 0, 0);
   const img = ctx.getImageData(0, 0, bmp.width, bmp.height), d = img.data;
-  let sea = false;
-  for (let i = 0; i < d.length; i += 4) {
-    // terrarium: 높이 = R×256 + G + B/256 − 32768
-    const m = d[i] * 256 + d[i + 1] + d[i + 2] / 256 - 32768;
-    if (m >= SEA_BLEND_M) continue;
-    const v = seaFlatM(m) + 32768, vi = Math.floor(v);
+  const W = bmp.width, H = bmp.height, n = 1 << z;
+  const put = (i, m) => {                      // terrarium 부호로 적는다
+    const v = m + 32768, vi = Math.floor(v);
     d[i] = vi >> 8; d[i + 1] = vi & 255; d[i + 2] = Math.min(255, Math.round((v - vi) * 256)); d[i + 3] = 255;
-    sea = true;
+  };
+  const get = i => d[i] * 256 + d[i + 1] + d[i + 2] / 256 - 32768;   // 높이 = R×256 + G + B/256 − 32768
+  let changed = false;
+  // ① 바다 펴기 — 타일 전체
+  for (let i = 0; i < d.length; i += 4) {
+    const m = get(i);
+    if (m >= SEA_BLEND_M) continue;
+    put(i, seaFlatM(m)); changed = true;
   }
-  if (!sea) return blob;                       // 바다·낮은 땅이 없는 타일은 받은 그대로
+  // ② 활주로 펴기 — 걸치는 활주로 둘레의 칸만(한 칸이 30m 보다 작은 단계부터 · RWY_MIN_Z)
+  if (z >= RWY_MIN_Z) {
+    const gx = lon => (lon + 180) / 360 * n * W - x * W;
+    const gy = lat => { const r = lat * Math.PI / 180; return (1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2 * n * H - y * H; };
+    const lonAt = px => (x + (px + 0.5) / W) / n * 360 - 180;
+    const latAt = py => Math.atan(Math.sinh(Math.PI * (1 - 2 * (y + (py + 0.5) / H) / n))) * 180 / Math.PI;
+    const zones = _rwyZonesIn(latAt(H - 1), latAt(0), lonAt(0), lonAt(W - 1));
+    const done = zones.length ? new Uint8Array(W * H) : null;   // 겹친 둘레의 칸을 두 번 펴지 않게
+    for (const zn of zones) {
+      const x0 = Math.max(0, Math.floor(gx(zn.w0))), x1 = Math.min(W - 1, Math.ceil(gx(zn.e)));
+      const y0 = Math.max(0, Math.floor(gy(zn.n))), y1 = Math.min(H - 1, Math.ceil(gy(zn.s)));
+      for (let py = y0; py <= y1; py++) {
+        const lat = latAt(py);
+        for (let px = x0; px <= x1; px++) {
+          const k = py * W + px;
+          if (done[k]) continue;
+          done[k] = 1;
+          const i = k * 4, m = get(i), m2 = rwyFlatM(lat, lonAt(px), m, zones);
+          if (m2 !== m) { put(i, m2); changed = true; }
+        }
+      }
+    }
+  }
+  if (!changed) return blob;                   // 바다·낮은 땅·활주로가 없는 타일은 받은 그대로
   ctx.putImageData(img, 0, 0);
   return _canvasToBlob(cv, 'image/png');       // 높이 값이다 — 손실 없이(PNG)
 }
