@@ -172,14 +172,15 @@ let simVsAcc = 0;             // 지금 상승률이 바뀌는 빠르기(fpm/s)
 // (감속이 빨라진 만큼 줄여, 동고도 감속에서 떠오르는 높이가 지나치지 않게 한다)
 const CLIMB_PIT_OFF = 1;   // 상승 중 같은 속도에 드는 기수 들림(°) — 상승 80kt = 5°
 const DESC_DEC_K = 0.5;     // 강하 파워 감속: 남은 속도(kt)당 감속(kt/s) — 정비례
-const DESC_KE_K = 0.5;      // 강하 파워에서 감속이 돌려주는 상승률 몫(반)
+const DESC_KE_K = 0.5;
+const DESC_TQ = 5;          // 수평 비행 토크보다 이만큼(%) 모자라야 강하 파워로 본다(고도 유지 중 미세한 차는 빼고)      // 강하 파워에서 감속이 돌려주는 상승률 몫(반)
 const SIM_KE_EFF = 0.5;        // 운동에너지 중 고도로 옮겨 가는 몫(나머지는 항력으로 잃는다)
 const SIM_KE_FPM = 0.514444 * 0.514444 / 9.80665 * 196.8504;   // kt × kt/s → fpm (≈5.31)
 // 지금의 속도·가감속이 만드는 상승률(fpm). 땅 위에서는 미끄럼이 멈춰 세울 뿐이다.
 function simKeVs(onGnd, spd = S.spd, acc = simAcc) {
   if (onGnd) return 0;
   // 강하 파워에서 기수를 들어 줄어드는 강하율은 반만(DESC_KE_K)
-  const k = (acc < 0 && S.tq < tqRequired()) ? DESC_KE_K : 1;
+  const k = (acc < 0 && S.tq < tqRequired() - DESC_TQ) ? DESC_KE_K : 1;
   return -SIM_KE_EFF * k * SIM_KE_FPM * spd * acc;
 }
 // ── 오토로테이션 플레어 ──
@@ -713,8 +714,9 @@ function simFly(dt) {
     // 기수 4° 80kt, 7.5° 45kt (1° = 10kt). 그 속도로 천천히 수렴한다.
     // 기수를 더 들면 뒤로도 간다(16° ≈ −40kt).
     // 오르내리는 동안에도 같은 자세면 같은 속도로 수렴한다(상승·강하로 어긋나지 않는다).
-    // 상승 중에는 기수 5° 가 80kt(수평 비행에서는 4°) — 오르는 만큼(500fpm 에서 다) 1° 를 덜 들어 본다
-    const climbK = Math.max(0, Math.min(1, (S.vs || 0) / 500));
+    // 상승 파워에서는 기수 5° 가 80kt(수평 비행에서는 4°) — 남는 토크만큼(10% 에서 다) 1° 를 덜 들어 본다
+    // (상승률로 가르면 감속 → 상승 → 감속 으로 되먹임이 생긴다)
+    const climbK = Math.max(0, Math.min(1, (S.tq - tqRequired()) / 10));
     const sTgt = Math.max(SIM_SPD_BACK, Math.min(SIM_SPD_MAX, spdFromPitch(S.pit - CLIMB_PIT_OFF * climbK)));
     if (onGnd) {
       // 바퀴로 구른다 — 토크 20% 를 넘기면 천천히 앞으로, 사이클릭을 민 만큼 더 빨리
@@ -730,7 +732,7 @@ function simFly(dt) {
       // 가감속은 점점 커진다 — 기수를 들면 감속이, 숙이면 가속이 갈수록 세진다
       const ds = sTgt - S.spd;
       const lim = simAccLimit(ds);
-      if (S.tq < tqRequired() && ds < 0 && S.spd > 0) {
+      if (S.tq < tqRequired() - DESC_TQ && ds < 0 && S.spd > 0) {
         // 강하 파워에서 기수를 들면 — 감속이 점점 세지지 않고 남은 속도에 정비례해 곧바로 준다
         simAcc = Math.max(-lim.max, ds * DESC_DEC_K);
       } else {
