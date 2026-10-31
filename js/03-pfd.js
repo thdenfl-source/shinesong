@@ -450,6 +450,19 @@ function drawAI(x, y, w, h) {
     ctx.fillStyle = '#ffb000'; ctx.textAlign = 'center';
     ctx.fillText(txt, cx, ty + th * 0.72);
   }
+  // PARKING BRAKE — 파킹 브레이크 걸림(SIM) · 걸린 채 활주 착륙하면 빨갛게
+  if (typeof simParkBrakeOn === 'function' && simParkBrakeOn()) {
+    const warn = simParkWarnOn();
+    const txt = warn ? 'PARKING BRAKE SET' : 'PARKING BRAKE';
+    const col = warn ? '#ff3030' : '#ffb000';
+    ctx.font = `bold ${Math.max(10, w * 0.032)}px Helvetica Neue, Arial, sans-serif`;
+    const tw = ctx.measureText(txt).width + 14, th = Math.max(16, w * 0.045);
+    const ty = aiY + aiH - 2 * th - 22;
+    ctx.fillStyle = 'rgba(0,0,0,0.75)'; ctx.fillRect(cx - tw / 2, ty, tw, th);
+    ctx.strokeStyle = col; ctx.lineWidth = 1.5; ctx.strokeRect(cx - tw / 2, ty, tw, th);
+    ctx.fillStyle = col; ctx.textAlign = 'center';
+    ctx.fillText(txt, cx, ty + th * 0.72);
+  }
   ctx.restore();  // end inner clip (AI content area)
 
   // AFCS strip drawn last in outer clip — sky/horizon cannot overwrite it
