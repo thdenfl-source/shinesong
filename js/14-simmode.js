@@ -187,11 +187,11 @@ function simKeVs(onGnd, spd = S.spd, acc = simAcc) {
 // 출력을 걸고 나는 동안(레버를 올려 둔 비행)은 고도를 출력이 정하므로 붙지 않는다 — 수평 비행에
 // 드는 토크보다 레버가 FLARE_DEF0 넘게 모자랄 때부터 붙어 FLARE_DEF1 이면 다 붙는다(오토로테이션).
 // 감속하며 레버를 조금(25% 까지) 내려 고도를 지키는 퀵스톱은 그대로다.
-const FLARE_K    = 95;    // 기준 속도에서 1° 더 들 때 줄어드는 강하율(fpm)
+const FLARE_K    = 30;    // 기준 속도에서 1° 더 들 때 줄어드는 강하율(fpm)
 const FLARE_VREF = 80;    // 기준 속도(kt)
 const FLARE_DEF0 = 25;    // 출력이 이만큼(%) 넘게 모자라면 플레어 몫이 붙기 시작한다
 const FLARE_DEF1 = 50;    // 이만큼(%) 모자라면 오토로테이션으로 보고 다 붙는다
-const FLARE_TAU  = 1.2;   // 로터 추력이 따라오는 시간(s)
+const FLARE_TAU  = 1.5;   // 로터 추력이 따라오는 시간(s)
 let simFlareVs = 0;       // 지금 플레어가 만든 상승률 몫(fpm)
 function simFlareTgt(onGnd) {
   if (onGnd || !(S.spd > 0)) return 0;
