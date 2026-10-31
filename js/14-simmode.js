@@ -180,7 +180,7 @@ const SIM_KE_FPM = 0.514444 * 0.514444 / 9.80665 * 196.8504;   // kt × kt/s →
 function simKeVs(onGnd, spd = S.spd, acc = simAcc) {
   if (onGnd) return 0;
   // 강하 파워에서 기수를 들어 줄어드는 강하율은 반만(DESC_KE_K)
-  const k = (acc < 0 && S.tq < tqRequired() - DESC_TQ) ? DESC_KE_K : 1;
+  const k = (acc < 0 && !simAfcsVert() && S.tq < tqRequired() - DESC_TQ) ? DESC_KE_K : 1;
   return -SIM_KE_EFF * k * SIM_KE_FPM * spd * acc;
 }
 // ── 오토로테이션 플레어 ──
@@ -716,7 +716,8 @@ function simFly(dt) {
     // 오르내리는 동안에도 같은 자세면 같은 속도로 수렴한다(상승·강하로 어긋나지 않는다).
     // 상승 파워에서는 기수 5° 가 80kt(수평 비행에서는 4°) — 남는 토크만큼(10% 에서 다) 1° 를 덜 들어 본다
     // (상승률로 가르면 감속 → 상승 → 감속 으로 되먹임이 생긴다)
-    const climbK = Math.max(0, Math.min(1, (S.tq - tqRequired()) / 10));
+    const manual = !simAfcsPitch() && !simAfcsVert() && S.spd > 40;   // 조종사가 직접 몰 때(40kt 위)만
+    const climbK = manual ? Math.max(0, Math.min(1, (S.tq - tqRequired()) / 10)) : 0;
     const sTgt = Math.max(SIM_SPD_BACK, Math.min(SIM_SPD_MAX, spdFromPitch(S.pit - CLIMB_PIT_OFF * climbK)));
     if (onGnd) {
       // 바퀴로 구른다 — 토크 20% 를 넘기면 천천히 앞으로, 사이클릭을 민 만큼 더 빨리
@@ -732,7 +733,7 @@ function simFly(dt) {
       // 가감속은 점점 커진다 — 기수를 들면 감속이, 숙이면 가속이 갈수록 세진다
       const ds = sTgt - S.spd;
       const lim = simAccLimit(ds);
-      if (S.tq < tqRequired() - DESC_TQ && ds < 0 && S.spd > 0) {
+      if (manual && S.tq < tqRequired() - DESC_TQ && ds < 0) {
         // 강하 파워에서 기수를 들면 — 감속이 점점 세지지 않고 남은 속도에 정비례해 곧바로 준다
         simAcc = Math.max(-lim.max, ds * DESC_DEC_K);
       } else {
