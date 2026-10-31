@@ -203,21 +203,21 @@ export async function run(page, t) {
     const down  = hold(-10);                    // 기수 내림 10° → 140kt
     const max   = hold(-60);                    // 끝까지 숙여도 자세는 60° 까지
     return { level, four, seven, down, max,
-             law: [spdFromPitch(0), spdFromPitch(4), spdFromPitch(7.5), spdFromPitch(-10)],
-             inv: [pitchFromSpd(120), pitchFromSpd(80), pitchFromSpd(0), pitchFromSpd(140)] };
+             law: [spdFromPitch(0), spdFromPitch(5), spdFromPitch(7.5), spdFromPitch(8.5), spdFromPitch(-10)],
+             inv: [pitchFromSpd(120), pitchFromSpd(70), pitchFromSpd(0), pitchFromSpd(140)] };
   })()`);
-  t.eq(trimSpd.law.join('/'), '120/80/0/140',
+  t.eq(trimSpd.law.join('/'), '120/70/35/0/140',
     `자세-속도 식이 기재와 같다 (0°→${trimSpd.law[0]} · 4°→${trimSpd.law[1]} · ` +
     `7.5°→${trimSpd.law[2]} · −10°→${trimSpd.law[3]}kt)`);
-  t.ok(Math.abs(trimSpd.inv[0]) < 0.01 && Math.abs(trimSpd.inv[1] - 4) < 0.01
-       && Math.abs(trimSpd.inv[2] - 7.5) < 0.01 && Math.abs(trimSpd.inv[3] + 10) < 0.01,
-    `거꾸로도 같다 (120kt→${trimSpd.inv[0].toFixed(1)}° · 80kt→${trimSpd.inv[1].toFixed(1)}° · 호버→${trimSpd.inv[2].toFixed(1)}°)`);
+  t.ok(Math.abs(trimSpd.inv[0]) < 0.01 && Math.abs(trimSpd.inv[1] - 5) < 0.01
+       && Math.abs(trimSpd.inv[2] - 8.5) < 0.01 && Math.abs(trimSpd.inv[3] + 10) < 0.01,
+    `거꾸로도 같다 (120kt→${trimSpd.inv[0].toFixed(1)}° · 70kt→${trimSpd.inv[1].toFixed(1)}° · 호버→${trimSpd.inv[2].toFixed(1)}°)`);
   t.ok(Math.abs(trimSpd.level.pit) < 0.6 && Math.abs(trimSpd.level.spd - 120) < 8,
     `수평 자세로 날면 120kt 에서 멎는다 (${trimSpd.level.pit.toFixed(1)}° · ${trimSpd.level.spd.toFixed(0)}kt)`);
   t.ok(Math.abs(trimSpd.four.pit - 4) < 0.6 && Math.abs(trimSpd.four.spd - 80) < 8,
     `기수 4° 면 80kt 다 (${trimSpd.four.pit.toFixed(1)}° · ${trimSpd.four.spd.toFixed(0)}kt)`);
-  t.ok(Math.abs(trimSpd.seven.pit - 7.5) < 0.6 && Math.abs(trimSpd.seven.spd) < 3,
-    `기수 7.5° 면 호버(0kt)다 (${trimSpd.seven.pit.toFixed(1)}° · ${trimSpd.seven.spd.toFixed(1)}kt)`);
+  t.ok(Math.abs(trimSpd.seven.pit - 7.5) < 0.6 && Math.abs(trimSpd.seven.spd - 35) < 3,
+    `기수 7.5° 면 35kt 다 (${trimSpd.seven.pit.toFixed(1)}° · ${trimSpd.seven.spd.toFixed(1)}kt)`);
   t.ok(Math.abs(trimSpd.down.pit + 10) < 0.6 && Math.abs(trimSpd.down.spd - 140) < 8,
     `기수를 10° 숙이면 140kt 다 (${trimSpd.down.pit.toFixed(1)}° · ${trimSpd.down.spd.toFixed(0)}kt)`);
   t.ok(Math.abs(trimSpd.max.pit + 60) < 1.5,
@@ -2232,7 +2232,7 @@ export async function run(page, t) {
   });
   t.ok(altCap.on && altCap.sel === 1234, `ALT 를 누르면 그 순간의 고도(1,234ft)가 기준이다 (${altCap.sel}ft · 종전 3,000ft 로 갔다)`);
   t.ok(altCap.hold, 'FMA 는 지금 고도를 지키는 동안 ALT');
-  t.ok(altCap.sel2 === 1334 && altCap.acq, `ALT ▲ 로 기준을 옮기면 그 고도로 가는 동안 ALT.A (${altCap.sel2}ft)`);
+  t.ok(altCap.sel2 === 1300 && altCap.acq, `ALT ▲ 로 기준을 옮기면 그 고도로 가는 동안 ALT.A (${altCap.sel2}ft)`);
   t.eq(altCap.recap, 1234, '풀었다 다시 누르면 다시 그 순간의 고도');
 
   // ── 오토로테이션 플레어 ──

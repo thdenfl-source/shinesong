@@ -48,7 +48,10 @@ function applyDelta(field, d){
     case 'alt':
       // ALT +/- now adjusts the AFCS target (selAlt). Auto-engages ALT hold so
       // S.alt converges to the new target at selVS rate. Disengages CRHT.
-      selAlt    = Math.max(0, Math.min(45000, selAlt + d));
+      // 기준이 그 단위가 아니면(누른 순간 고도 1,237 처럼) 먼저 그 단위로 맞춘다(▲ 1,300 · ▼ 1,200)
+      { const st = Math.abs(d) || 100;
+        const next = d > 0 ? Math.floor(selAlt / st) * st + st : Math.ceil(selAlt / st) * st - st;
+        selAlt = Math.max(0, Math.min(45000, next)); }
       altHoldOn = true;
       crhtOn    = false;
       updateHoverBtns();
