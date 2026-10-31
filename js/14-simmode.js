@@ -718,7 +718,7 @@ function simFly(dt) {
     // (상승률로 가르면 감속 → 상승 → 감속 으로 되먹임이 생긴다)
     const manual = !simAfcsPitch() && !simAfcsVert() && S.spd > 40;   // 조종사가 직접 몰 때(40kt 위)만
     const climbK = manual ? Math.max(0, Math.min(1, (S.tq - tqRequired()) / 10)) : 0;
-    const sTgt = Math.max(SIM_SPD_BACK, Math.min(SIM_SPD_MAX, spdFromPitch(S.pit - CLIMB_PIT_OFF * climbK)));
+    const sTgt = Math.max(SIM_SPD_BACK, Math.min(SIM_SPD_MAX, spdFromPitch(S.pit + CLIMB_PIT_OFF * climbK)));
     if (onGnd) {
       // 바퀴로 구른다 — 토크 20% 를 넘기면 천천히 앞으로, 사이클릭을 민 만큼 더 빨리
       let acc;
