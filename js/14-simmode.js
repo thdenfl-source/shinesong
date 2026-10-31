@@ -170,12 +170,17 @@ let simVsAcc = 0;             // 지금 상승률이 바뀌는 빠르기(fpm/s)
 // ½v² 가 줄어든 만큼이 g·h 이므로 상승률 = −v·a/g. 주고받는 몫이 같아야
 // 감속·가속을 되풀이해도 고도가 저절로 쌓이지 않는다.
 // (감속이 빨라진 만큼 줄여, 동고도 감속에서 떠오르는 높이가 지나치지 않게 한다)
+const CLIMB_PIT_OFF = 1;   // 상승 중 같은 속도에 드는 기수 들림(°) — 상승 80kt = 5°
+const DESC_DEC_K = 0.5;     // 강하 파워 감속: 남은 속도(kt)당 감속(kt/s) — 정비례
+const DESC_KE_K = 0.5;      // 강하 파워에서 감속이 돌려주는 상승률 몫(반)
 const SIM_KE_EFF = 0.5;        // 운동에너지 중 고도로 옮겨 가는 몫(나머지는 항력으로 잃는다)
 const SIM_KE_FPM = 0.514444 * 0.514444 / 9.80665 * 196.8504;   // kt × kt/s → fpm (≈5.31)
 // 지금의 속도·가감속이 만드는 상승률(fpm). 땅 위에서는 미끄럼이 멈춰 세울 뿐이다.
 function simKeVs(onGnd, spd = S.spd, acc = simAcc) {
   if (onGnd) return 0;
-  return -SIM_KE_EFF * SIM_KE_FPM * spd * acc;
+  // 강하 파워에서 기수를 들어 줄어드는 강하율은 반만(DESC_KE_K)
+  const k = (acc < 0 && S.tq < tqRequired()) ? DESC_KE_K : 1;
+  return -SIM_KE_EFF * k * SIM_KE_FPM * spd * acc;
 }
 // ── 오토로테이션 플레어 ──
 // 레버를 내리고(출력 없이) 내려오는 중에 기수를 들면 원판이 뒤로 젖혀져, 앞에서 오던 바람이
@@ -188,7 +193,7 @@ function simKeVs(onGnd, spd = S.spd, acc = simAcc) {
 // 출력을 걸고 나는 동안(레버를 올려 둔 비행)은 고도를 출력이 정하므로 붙지 않는다 — 수평 비행에
 // 드는 토크보다 레버가 FLARE_DEF0 넘게 모자랄 때부터 붙어 FLARE_DEF1 이면 다 붙는다(오토로테이션).
 // 감속하며 레버를 조금(25% 까지) 내려 고도를 지키는 퀵스톱은 그대로다.
-const FLARE_K    = 30;    // 기준 속도에서 1° 더 들 때 줄어드는 강하율(fpm)
+const FLARE_K    = 15;   // 강하율 감소를 종전의 반으로    // 기준 속도에서 1° 더 들 때 줄어드는 강하율(fpm)
 const FLARE_VREF = 80;    // 기준 속도(kt)
 const FLARE_DEF0 = 25;    // 출력이 이만큼(%) 넘게 모자라면 플레어 몫이 붙기 시작한다
 const FLARE_DEF1 = 50;    // 이만큼(%) 모자라면 오토로테이션으로 보고 다 붙는다
@@ -708,7 +713,9 @@ function simFly(dt) {
     // 기수 4° 80kt, 7.5° 45kt (1° = 10kt). 그 속도로 천천히 수렴한다.
     // 기수를 더 들면 뒤로도 간다(16° ≈ −40kt).
     // 오르내리는 동안에도 같은 자세면 같은 속도로 수렴한다(상승·강하로 어긋나지 않는다).
-    const sTgt = Math.max(SIM_SPD_BACK, Math.min(SIM_SPD_MAX, spdFromPitch(S.pit)));
+    // 상승 중에는 기수 5° 가 80kt(수평 비행에서는 4°) — 오르는 만큼(500fpm 에서 다) 1° 를 덜 들어 본다
+    const climbK = Math.max(0, Math.min(1, (S.vs || 0) / 500));
+    const sTgt = Math.max(SIM_SPD_BACK, Math.min(SIM_SPD_MAX, spdFromPitch(S.pit - CLIMB_PIT_OFF * climbK)));
     if (onGnd) {
       // 바퀴로 구른다 — 토크 20% 를 넘기면 천천히 앞으로, 사이클릭을 민 만큼 더 빨리
       let acc;
@@ -723,7 +730,12 @@ function simFly(dt) {
       // 가감속은 점점 커진다 — 기수를 들면 감속이, 숙이면 가속이 갈수록 세진다
       const ds = sTgt - S.spd;
       const lim = simAccLimit(ds);
-      simAcc = simJerkStep(ds, simAcc, dt, lim.max, lim.jerk, 1, lim.jerk * JERK_RELEASE);
+      if (S.tq < tqRequired() && ds < 0 && S.spd > 0) {
+        // 강하 파워에서 기수를 들면 — 감속이 점점 세지지 않고 남은 속도에 정비례해 곧바로 준다
+        simAcc = Math.max(-lim.max, ds * DESC_DEC_K);
+      } else {
+        simAcc = simJerkStep(ds, simAcc, dt, lim.max, lim.jerk, 1, lim.jerk * JERK_RELEASE);
+      }
     }
     S.spd = Math.max(SIM_SPD_BACK, Math.min(SIM_SPD_MAX, S.spd + simAcc * dt));
 

@@ -926,7 +926,7 @@ function _follow3d() {
 // 수평 비행에서의 카메라 각도. 지도 엔진은 85° 까지만 기울일 수 있어(그 위는
 // 지평선 너머라 그릴 것이 없다) 기준을 낮춰 두어야 기수를 들었을 때 위를 볼
 // 여유가 생긴다. 78° 로 두면 기수 6° 에서 벌써 끝에 닿았다.
-const SIM_EYE_MIN_M = 8;      // 땅에 있어도 이 정도 눈높이는 둔다(m)
+const SIM_EYE_MIN_M = 3;      // 조종석 눈높이(m) — 기체 높이 위에 늘 더한다(땅에서 뜨는 순간부터 오르는 게 보이게)
 // 눈높이의 바닥 — 지면, 함정 위에서는 갑판(지면 위 m). 갑판 끝을 넘는 순간 바닥이
 // 한 번에 7m 바뀌므로 시선이 덜컥 뛰지 않게 잠깐(0.4초)에 걸쳐 따라간다.
 let _simEyeFloor = null, _simEyeT = 0;
@@ -1006,7 +1006,8 @@ function _ml3dSimCamera() {
   // 공중에서는 지형의 기복·타일 바뀜이 카메라를 흔들지 않게 걸러서 따라간다.
   const vis = simVisAlt();
   const drawnM = vis.drawn;
-  const camAlt = Math.max(vis.alt, drawnM + _simEyeFloorM(vis.phys) + SIM_EYE_MIN_M);
+  // 종전에는 '땅 + 8m' 아래로 내려가지 않아 26ft 까지 떠도 화면이 그대로였다 — 이제 기체 높이 + 눈높이
+  const camAlt = Math.max(vis.alt, drawnM + _simEyeFloorM(vis.phys)) + SIM_EYE_MIN_M;
   const aglM = camAlt - drawnM;
   // 시선(둘러보기)을 기체 자세 위에 얹는다
   let look = { yaw: 0, pitch: 0 };
