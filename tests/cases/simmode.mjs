@@ -2379,8 +2379,8 @@ export async function run(page, t) {
     rotorChar = false; S.spd = 0;
     return o;
   });
-  t.ok(rcFast.yaw === 0 && rcFast.ped === 0 && rcFast.coll === 5,
-    `20kt 이상에서는 컬렉티브→요·요→피치가 없고 컬렉티브→피치만 남는다 (요 ${rcFast.yaw} · 페달 ${rcFast.ped} · 레버 ${rcFast.coll})`);
+  t.ok(rcFast.yaw === 0 && rcFast.ped === 0 && rcFast.coll === 0,
+    `20kt 이상(전진 비행)에서는 컬렉티브→요·요→피치·컬렉티브→피치가 모두 없다 (요 ${rcFast.yaw} · 페달 ${rcFast.ped} · 레버 ${rcFast.coll})`);
 
   // FORCE TRIM — 누르고 자세를 바꾼 뒤 놓으면 그 자세로 잡힌다 · 3점 접지
   const ftr = await page.evaluate(`(() => {
