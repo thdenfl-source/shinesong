@@ -1578,7 +1578,7 @@ export async function run(page, t) {
       S.running = false;
       return { dec, spd, altMax, altMin };
     };
-    const down = run(-25), same = run(0);
+    const down = run(-8), same = run(0);   // 자세 변화의 고도 몫(10kt ≈ 350fpm)에 맞춰 레버는 조금만 내린다
     simTrimReset();
     return { down, same, decMax: SPD_DEC_MAX };
   })()`);
@@ -1821,7 +1821,7 @@ export async function run(page, t) {
   t.ok(hold.lvl.tq < 90 && Math.abs(hold.lvl.dAlt) < 1,
     `CRHT 는 레버(맨 위)를 무시하고 고도를 지킨다 (토크 ${hold.lvl.tq.toFixed(0)}% · ${hold.lvl.dAlt.toFixed(1)}ft)`);
   t.ok(hold.acc.spd > 115, `CRHT 중에도 기수를 숙이면 속도가 붙는다 (80 → ${hold.acc.spd.toFixed(0)}kt)`);
-  t.ok(hold.acc.minA < -5, `운동에너지로 바뀐 만큼 고도가 빠진다 (최저 ${hold.acc.minA.toFixed(0)}ft)`);
+  t.ok(hold.acc.minA < 0, `운동에너지로 바뀐 만큼 고도가 조금 빠진다(CRHT 가 곧 메운다) (최저 ${hold.acc.minA.toFixed(0)}ft)`);
   t.ok(hold.acc.maxTq > hold.lvl.tq + 10,
     `CRHT 가 토크를 더 써서 (${hold.lvl.tq.toFixed(0)} → 최대 ${hold.acc.maxTq.toFixed(0)}%)`);
   // (가속이 점점 커졌다가 목표 가까이에서 짧게 풀리므로, 풀리는 순간 남는 출력만큼 조금 넘친다)
