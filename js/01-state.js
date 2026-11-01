@@ -636,6 +636,11 @@ function stopTrimHold() {
   try { if (typeof simTrimRelease === 'function') simTrimRelease(); } catch (e) { _swallow(e); }
 }
 
+// 화면의 FORCE TRIM 버튼 — 누르고 바로 놓은 것과 같다
+function forceTrimBtn() { forceTrim(); forceTrimRelease(); }
+function forceTrimRelease() {
+  try { if (typeof simFtrRelease === 'function') simFtrRelease(); } catch (e) { _swallow(e); }
+}
 function forceTrim() {
   // SIM 모드 IAS — 조종간으로 옮겨 간 지금 속도를 새 기준으로 잡는다
   if (simModeOn && simIasOn && !gspdOn) { selSpd = simIasClamp(S.spd); return; }

@@ -175,7 +175,7 @@ document.addEventListener('keydown', e => {
   const t = e.target;
   if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
   if (typeof joyKeyOwned === 'function' && joyKeyOwned(e)) return;   // 조종 장치에 배정한 키
-  if (e.key === 'Enter') { e.preventDefault(); forceTrim(); return; }
+  if (e.key === 'Enter') { e.preventDefault(); if (!e.repeat) forceTrim(); return; }
   if (e.key === ' ' || e.code === 'Space') {
     e.preventDefault();                        // 페이지 스크롤 방지
     if (typeof simModeOn !== 'undefined' && simModeOn) {   // SIM: 휠 브레이크 · 두 번이면 파킹 브레이크
@@ -195,6 +195,7 @@ document.addEventListener('keydown', e => {
 document.addEventListener('keyup', e => {
   // HDG 키(3/4)를 떼면 버튼과 동일하게 뱅크 목표 해제(수평 복귀)
   if (_keyTrimMap[e.key]) stopTrimHold();
+  if (e.key === 'Enter' && typeof forceTrimRelease === 'function') forceTrimRelease();
   if ((e.key === ' ' || e.code === 'Space') && typeof simSpaceUp === 'function') simSpaceUp();
 });
 

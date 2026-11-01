@@ -23,8 +23,9 @@ const JOY_REPEAT_DELAY = 350, JOY_REPEAT_INT = 80;   // 화면 버튼 홀드와 
 const JOY_ACTIONS = [
   { id: 'sim',    grp: '운항',   label: 'FLY / PAUSE',   kind: 'press',
     run: () => toggleSim() },
-  { id: 'ftr',    grp: '운항',   label: 'FORCE TRIM',    kind: 'press',
-    run: () => forceTrim() },
+  { id: 'ftr',    grp: '운항',   label: 'FORCE TRIM',    kind: 'hold',
+    // 누르고 있는 동안 조종간으로 자세를 옮기고, 놓으면 그 자세가 새 트림이다(SIM)
+    on: () => forceTrim(), off: () => forceTrimRelease() },
   { id: 'gspd',   grp: '운항',   label: 'GSPD (호버)',    kind: 'press',
     run: () => toggleGspd() },
   { id: 'hovpos', grp: '운항',   label: 'HOVER POSITION', kind: 'press',

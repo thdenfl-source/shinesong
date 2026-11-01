@@ -2117,6 +2117,7 @@ appRegister({
   fdrStop,
   fetchWx,
   forceTrim,
+  forceTrimBtn,
   fpBackToCdu,
   fpBksp,
   fpConfirmIdent,
