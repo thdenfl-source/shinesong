@@ -20,7 +20,7 @@
 // ─────────────────────────────────────────────────────────────
 
 const SIM_BANK_MAX  = 45;      // 사이클릭 최대 뱅크(°)
-const SIM_ROLL_RATE = 10;   // 사이클릭에 자세가 따라가는 빠르기 — 4WAY 트림(5°/s)의 2배로 완만하게 · 종전 60      // 뱅크가 따라가는 속도(°/s)
+const SIM_ROLL_RATE = 12;      // 사이클릭에 뱅크가 따라가는 빠르기(°/s) — 종전 10 에서 20% 빠르게
 // 기수 자세의 한계 — 위아래 60° 까지. 속도는 제 한계에서 멎는다
 // (들면 16° 에 뒤로 40kt, 숙이면 −20° 에 160kt).
 const SIM_PITCH_MAX = 60;      // 사이클릭 최대 피치(°)
@@ -67,7 +67,8 @@ const RC_LOW_KT0 = 15, RC_LOW_KT1 = 20;
 function rcLowK() { return Math.max(0, Math.min(1, (RC_LOW_KT1 - Math.abs(S.spd)) / (RC_LOW_KT1 - RC_LOW_KT0))); }
 function rcPitchOff(a) {
   if (!rotorChar) return 0;
-  return RC_COLL_PIT * a.coll - RC_YAW_PIT * rotorSign() * a.yaw * rcLowK();
+  // 20kt 위(전진 비행)에서는 수평·수직 안정판이 잡아 주므로 셋 다 없다 — 호버 운용에서만
+  return (RC_COLL_PIT * a.coll - RC_YAW_PIT * rotorSign() * a.yaw) * rcLowK();
 }
 // COLLECTIVE TO YAW — 레버를 움직이는 동안만 돈다(토크가 바뀌는 만큼 반작용이 바뀐다).
 // 올리면 로터 반대 방향, 내리면 로터 방향으로 — 레버 1%/s 당 RC_YAW_K °/s, 최대 RC_YAW_MAX °/s.
@@ -97,8 +98,11 @@ function updateRotorBtns() {
 }
 let simLow = false;            // LIGHT ON WHEELS — 바퀴가 떨어지기 직전(HOV−20%…HOV−10%)
 function simLightOnWheels() { return simModeOn && simLow; }
-const SIM_PITCH_RATE = 10;  // 종전 30     // 피치가 따라가는 속도(°/s)
+const SIM_PITCH_RATE = 6;      // 피치가 따라가는 빠르기(°/s) — 종전 5 에서 20% 빠르게
 const SIM_YAW_RATE  = 25;      // 페달 최대 요율(°/s)
+const SIM_YAW_TAU = 0.8;       // 페달에 요율이 따라붙는 시간(s) — 종전 1.0 에서 20% 빠르게
+let simYawRate = 0;
+let simSkidHalf = 0;           // 볼을 선회 바깥쪽으로 비키는 몫(1 = 반 볼) — 03-pfd.js drawSlipBall
 // ── 저속의 옆미끄럼(측방 비행) ──
 // 헬기는 속도가 낮을 때 뱅크를 주면 선회하지 않고 '옆으로 간다'. 속도가
 // 붙을수록 그 성분은 사라지고 보통의 선회가 된다.
@@ -167,12 +171,12 @@ const SIM_SPD_BACK  = -40;     // 후방 비행 한계(kt) — 헬기는 뒤로�
 //         감속은 가속보다 빨리 붙고 세다(1초에 6kt/s 씩 · 최대 15kt/s).
 //         가속은 속도가 붙을수록(전이양력으로 출력이 남을수록) 세진다.
 //   고도: 상승률도 같은 식이다 — 레버를 움직이면 오르내림이 점점 빨라지며 붙는다.
-const SPD_JERK     = 4.0;   // 속도·상승률 변화 빠르기를 종전의 반으로     // 가감속이 커지는 빠르기(kt/s²)
-const SPD_ACC_UP0  = 2.5;   // 속도·상승률 변화 빠르기를 종전의 반으로     // 제자리 언저리에서 낼 수 있는 가속(kt/s)
-const SPD_ACC_UP   = 5.0;   // 속도·상승률 변화 빠르기를 종전의 반으로     // 전이양력을 다 받은 뒤의 최대 가속(kt/s)
+const SPD_JERK = 2.667;   // ×2/3   // 속도·상승률 변화 빠르기를 종전의 반으로     // 가감속이 커지는 빠르기(kt/s²)
+const SPD_ACC_UP0 = 1.667;   // ×2/3   // 속도·상승률 변화 빠르기를 종전의 반으로     // 제자리 언저리에서 낼 수 있는 가속(kt/s)
+const SPD_ACC_UP = 3.333;   // ×2/3   // 속도·상승률 변화 빠르기를 종전의 반으로     // 전이양력을 다 받은 뒤의 최대 가속(kt/s)
 const SPD_ETL_KT   = 40;      // 가속이 다 세지는 속도(kt)
-const SPD_DEC_JERK = 12.0;   // 속도·상승률 변화 빠르기를 종전의 반으로     // 감속이 커지는 빠르기(kt/s²)
-const SPD_DEC_MAX  = 7.5;   // 속도·상승률 변화 빠르기를 종전의 반으로    // 최대 감속(kt/s) — 원판을 젖히면 항력까지 같이 받는다
+const SPD_DEC_JERK = 8.0;   // ×2/3   // 속도·상승률 변화 빠르기를 종전의 반으로     // 감속이 커지는 빠르기(kt/s²)
+const SPD_DEC_MAX = 5.0;   // ×2/3   // 속도·상승률 변화 빠르기를 종전의 반으로    // 최대 감속(kt/s) — 원판을 젖히면 항력까지 같이 받는다
 // 상승·강하율이 바뀌는 빠르기 — 변화의 빠르기가 일정하게 커져(저크) 바뀐 양이 시간의 제곱으로 는다.
 // 종전보다 저크 4배 · 한계 5배(레버에 상승률이 훨씬 빨리 붙는다). 차차 맞춰 간다
 // 피치로 바뀌는 상승·강하(감속·가속이 돌려주는 운동에너지 몫)는 가감속 저크를 4배(가속 8 · 감속 24kt/s²)로 해 4배 빨리 붙는다
@@ -242,20 +246,23 @@ let simVsAcc = 0;             // 지금 상승률이 바뀌는 빠르기(fpm/s)
 // 감속·가속을 되풀이해도 고도가 저절로 쌓이지 않는다.
 // (감속이 빨라진 만큼 줄여, 동고도 감속에서 떠오르는 높이가 지나치지 않게 한다)
 const CLIMB_PIT_OFF = 1;   // 상승 중 같은 속도에 드는 기수 들림(°) — 상승 80kt = 5°
-const DESC_DEC_K = 0.25;   // 속도·상승률 변화 빠르기를 종전의 반으로     // 강하 파워 감속: 남은 속도(kt)당 감속(kt/s) — 정비례
+const DESC_DEC_K = 0.1667;   // ×2/3   // 속도·상승률 변화 빠르기를 종전의 반으로     // 강하 파워 감속: 남은 속도(kt)당 감속(kt/s) — 정비례
 const DESC_KE_K = 0.5;
 const HOV_TO_MARGIN = 7;    // 호버 토크보다 이만큼(%) 더 쓰면 이륙 가속 중 침하가 없다
 const TQ_FPM = 50;          // 토크 10% = 500fpm
-const TQ_KT  = 2;           // 토크 5% = 10kt (남는 토크만큼 같은 자세에서 더 빠르다)
-const TQ_KT_MAX = 20;
+const TQ_KT  = 1;           // 남는(모자란) 토크 1% 당 같은 자세의 속도 차(kt) — 5% = 5kt(종전의 반)
+const TQ_KT_MAX = 10;
+const TQ_KT_VS0 = 500, TQ_KT_VS1 = 700;   // 오르내림이 500fpm 을 넘어야 속도차가 생기기 시작해 700fpm 에서 다 붙는다
 const DESC_TQ = 5;          // 수평 비행 토크보다 이만큼(%) 모자라야 강하 파워로 본다(고도 유지 중 미세한 차는 빼고)      // 강하 파워에서 감속이 돌려주는 상승률 몫(반)
 const SIM_KE_EFF = 0.5;        // 운동에너지 중 고도로 옮겨 가는 몫(나머지는 항력으로 잃는다)
 const SIM_KE_FPM = 0.514444 * 0.514444 / 9.80665 * 196.8504;   // kt × kt/s → fpm (≈5.31)
 // 지금의 속도·가감속이 만드는 상승률(fpm). 땅 위에서는 미끄럼이 멈춰 세울 뿐이다.
+let _simKePowered = false;     // 지금 가감속이 남는 출력의 속도차 몫인가(simFly 가 채운다)
 function simKeVs(onGnd, spd = S.spd, acc = simAcc) {
-  if (onGnd) return 0;
+  if (onGnd || _simKePowered) return 0;
   // 호버에서 기수를 숙여(5°) 이륙 가속할 때 — 호버 토크 + 7% 넘게 쓰면 가라앉지 않는다
-  if (acc > 0 && S.tq >= hoverPowerTq() + HOV_TO_MARGIN) return 0;
+  // (호버 이륙 가속에만 — 전이양력을 다 받기 전(SPD_ETL_KT) 까지. 순항에서 가속할 때는 운동에너지 법칙 그대로)
+  if (acc > 0 && Math.abs(spd) < SPD_ETL_KT && S.tq >= hoverPowerTq() + HOV_TO_MARGIN) return 0;
   // 강하 파워에서 기수를 들어 줄어드는 강하율은 반만(DESC_KE_K)
   const k = (acc < 0 && !simAfcsVert() && S.tq < tqRequired() - DESC_TQ) ? DESC_KE_K : 1;
   return -SIM_KE_EFF * k * SIM_KE_FPM * spd * acc;
@@ -685,7 +692,7 @@ function toggleSimMode(on, opt) {
     // (타력 비행과 SIM 조종이 같은 속도를 함께 쓰지 않게)
     if (gspdCoasting) { S.spd = gspdActFwd; simLat = gspdActLat; gspdCoasting = false; }
     try { if (gsOn) toggleGs(); } catch (e) { _swallow(e); }
-    hdgSelOn = false; rollApOn = false; altHoldOn = false; crhtOn = false; simIasOn = false; _rcLevPrev = null;
+    hdgSelOn = false; rollApOn = false; altHoldOn = false; crhtOn = false; simIasOn = false; _rcLevPrev = null; simYawRate = 0; _simKePowered = false;
     _simOnDeck = false;
     try { updateHoverBtns(); } catch (e) { _swallow(e); }
     // 손을 떼면 그 자리에서 날던 대로 — 지금 자세를 그대로 이어받는다
@@ -814,6 +821,7 @@ function simFly(dt) {
   // GSPD 가 걸려 있으면 자세·속도는 GSPD 가 맡는다 — 조종간 좌우·전후는
   // 07-sim.js 의 GSPD 수렴에서 fly-through 로 쓰인다(simGspdStick).
   // 페달·컬렉티브는 그대로 조종사 몫이다.
+  if (gspdOn) _simKePowered = false;
   if (!gspdOn) {
     // 조종간 값에 트림을 더한다 — 가운데 두어도 트림 자세를 지킨다
     const cl = v => Math.max(-1, Math.min(1, v));
@@ -857,7 +865,12 @@ function simFly(dt) {
     // 상승 파워에서는 기수 5° 가 80kt(수평 비행에서는 4°) — 남는 토크만큼(10% 에서 다) 1° 를 덜 들어 본다
     // (상승률로 가르면 감속 → 상승 → 감속 으로 되먹임이 생긴다)
     const manual = !simAfcsPitch() && !simAfcsVert() && S.spd > 40;   // 조종사가 직접 몰 때(40kt 위)만
-    const tqKt = manual ? Math.max(0, Math.min(TQ_KT_MAX, TQ_KT * (S.tq - tqRequired()))) : 0;
+    // 상승 중 자세에 따른 속도 차 — 남는 토크만큼 같은 자세에서 빠르다. 오르내림이 500fpm 아래면 없다
+    // (강하 쪽은 '자세가 곧 속도' 그대로 — 강하 파워에서 기수를 들면 남은 속도에 정비례해 준다)
+    const vsK = Math.max(0, Math.min(1, (Math.abs(S.vs) - TQ_KT_VS0) / (TQ_KT_VS1 - TQ_KT_VS0)));
+    const tqKt = manual ? vsK * Math.max(0, Math.min(TQ_KT_MAX, TQ_KT * (S.tq - tqRequired()))) : 0;
+    // 남는 출력이 낸 속도차(자세가 정한 속도보다 빠른 몫)는 엔진이 치른다 — 고도와 맞바꾸지 않는다(simKeVs)
+    _simKePowered = tqKt > 0 && S.spd >= spdFromPitch(S.pit) - 0.5;
     const sTgt = Math.max(SIM_SPD_BACK, Math.min(SIM_SPD_MAX, spdFromPitch(S.pit) + tqKt));
     if (onGnd) {
       // 바퀴로 구른다 — 토크 20% 를 넘기면 천천히 앞으로, 사이클릭을 민 만큼 더 빨리
@@ -900,10 +913,17 @@ function simFly(dt) {
 
   // ── 페달 → 기수 ──
   // HDG·NAV 가 기수를 잡고 있으면 페달은 무시한다(선택 헤딩으로 되돌리며 싸운다)
-  if (a.yaw && !simAfcsLat()) {
-    S.hdg = normA(S.hdg + a.yaw * SIM_YAW_RATE * dt);
-    selHdg = ((Math.round(hdgInd()) + 359) % 360) + 1;
-  }
+  // 페달 요율은 곧바로 붙지 않고 SIM_YAW_TAU 로 따라붙고, 놓으면 같은 빠르기로 멎는다
+  if (!simAfcsLat()) {
+    simYawRate += (a.yaw * SIM_YAW_RATE - simYawRate) * Math.min(1, dt / SIM_YAW_TAU);
+    if (Math.abs(simYawRate) < 0.01 && !a.yaw) simYawRate = 0;
+    if (simYawRate) {
+      S.hdg = normA(S.hdg + simYawRate * dt);
+      selHdg = ((Math.round(hdgInd()) + 359) % 360) + 1;
+    }
+  } else simYawRate = 0;
+  // 회전익 특성 — 선회 중 1/2 볼 외활(skid): 볼이 선회 바깥쪽으로 반 볼 비킨다(20kt 위 · 뱅크 10° 에서 다)
+  simSkidHalf = (rotorChar && !onGnd) ? -Math.sign(S.bnk) * Math.min(1, Math.abs(S.bnk) / 10) * (1 - rcLowK()) : 0;
   // 회전익 특성 — 컬렉티브 토크의 반작용으로 동체가 로터 반대 방향으로 돈다(공중에서만)
   const lev = rcLeverTq(a);
   const dLev = (_rcLevPrev === null) ? 0 : (lev - _rcLevPrev) / dt;

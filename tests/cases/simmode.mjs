@@ -1618,8 +1618,8 @@ export async function run(page, t) {
   const ac = accel.acc;
   t.ok(ac[1] < ac[3] && ac[3] <= ac[6] && ac[6] <= ac[10],
     `가속이 점점 세진다 (1·3·6·10초 ${[1, 3, 6, 10].map(k => ac[k].toFixed(1)).join(' · ')}kt/s)`);
-  t.ok(accel.spd[10] > 30 && accel.spd[20] > 78,
-    `제자리에서 10초 ${accel.spd[10].toFixed(0)}kt · 20초 ${accel.spd[20].toFixed(0)}kt (종전 일정한 3.5kt/s 보다 빠르다)`);
+  t.ok(accel.spd[10] > 18 && accel.spd[20] > 50,   // 증감속 ×2/3
+    `제자리에서 10초 ${accel.spd[10].toFixed(0)}kt · 20초 ${accel.spd[20].toFixed(0)}kt (가속이 점점 붙는다)`);
 
   // ── 상위모드가 잡은 축은 조종간을 무시한다 ──
   // HDG SEL·NAV 는 좌우(뱅크)·페달을, ALT(선택 고도로 가는 것 포함)·CRHT 는 컬렉티브를 가져간다.
@@ -1803,7 +1803,7 @@ export async function run(page, t) {
     const lvl = { tq: S.tq, dAlt: S.alt - c0 };
     simTrim.pitch = 0;                             // 기수를 수평으로 → 120kt 로 가속
     let minA = 0, maxA = 0, maxTq = 0;
-    step(30, () => { minA = Math.min(minA, S.alt - c0); maxA = Math.max(maxA, S.alt - c0); maxTq = Math.max(maxTq, S.tq); });
+    step(45, () => { minA = Math.min(minA, S.alt - c0); maxA = Math.max(maxA, S.alt - c0); maxTq = Math.max(maxTq, S.tq); });   // 증감속 ×2/3 — 가속이 길어졌다
     const acc = { minA, maxA, maxTq, end: S.alt - c0, spd: S.spd };
     const tq0 = S.tq; let minB = 0;
     _ax(0, (30 / 45) * 0.92 + 0.08);               // 오른쪽 30° 뱅크(조종간 데드존 몫을 얹는다)
@@ -1825,8 +1825,8 @@ export async function run(page, t) {
   t.ok(hold.acc.maxTq > hold.lvl.tq + 10,
     `CRHT 가 토크를 더 써서 (${hold.lvl.tq.toFixed(0)} → 최대 ${hold.acc.maxTq.toFixed(0)}%)`);
   // (가속이 점점 커졌다가 목표 가까이에서 짧게 풀리므로, 풀리는 순간 남는 출력만큼 조금 넘친다)
-  t.ok(Math.abs(hold.acc.end) < 3 && hold.acc.maxA < 15,
-    `고도를 되찾는다 — 크게 넘치지 않는다 (30초 뒤 ${hold.acc.end.toFixed(1)}ft · 최고 +${hold.acc.maxA.toFixed(1)}ft)`);
+  t.ok(Math.abs(hold.acc.end) < 3 && hold.acc.maxA < 20,
+    `고도를 되찾는다 — 크게 넘치지 않는다 (45초 뒤 ${hold.acc.end.toFixed(1)}ft · 최고 +${hold.acc.maxA.toFixed(1)}ft)`);
   t.ok(hold.bank.bnk > 25 && hold.bank.tq > hold.bank.tq0 + 2.5 && hold.bank.minB > -5 && Math.abs(hold.bank.end) < 2,
     `30° 뱅크 — 필요한 만큼 토크를 더 써서 고도를 지킨다 (${hold.bank.tq0.toFixed(0)} → ${hold.bank.tq.toFixed(0)}% · 최저 ${hold.bank.minB.toFixed(1)}ft)`);
   t.ok(hold.alt.maxAlt < 3302 && Math.abs(hold.alt.end - 3300) < 2,
@@ -2255,14 +2255,16 @@ export async function run(page, t) {
       step(20 * 25);                                // 25초 — 오토로테이션 강하가 자리 잡는다
       const o = { sink: S.vs, flare: null, arrest: null, best: -1e9, maxVs: -1e9, td: null };
       simLastTouchdown = null;
-      let flared = false, cushed = false;
+      let flared = false, cushed = false, settled = false;
       for (let i = 0; i < 20 * 60 && !simLastTouchdown; i++) {
         step(1);
         const agl = S.alt - simGroundFt();
         if (!flared && agl <= flareAt) { flared = true; simTrim.pitch = -pit; o.flare = agl; }
         if (flared && cush && !cushed && agl <= cush) {
-          cushed = true; simTrim.pitch = -5; _ax(3, ((hoverPowerTq() - 4) / SIM_LEVER_TOP) * 2 - 1);
+          cushed = true; simTrim.pitch = -5; _ax(3, ((hoverPowerTq() - 8) / SIM_LEVER_TOP) * 2 - 1);
         }
+        // 지면효과에 받쳐 뜬 채 머물지 않게, 땅 가까이서 레버를 조금 더 내려 내려앉는다(전진 속도에서는 드는 토크가 작다)
+        if (cushed && !settled && agl <= cush - 8) { settled = true; _ax(3, ((tqRequired() - 20) / SIM_LEVER_TOP) * 2 - 1); }
         if (flared && !cushed && agl > 1) {                // 땅에 닿은 뒤(0fpm)는 빼고 본다
           if (S.vs > o.best) { o.best = S.vs; o.bestAgl = agl; }
           if (o.arrest === null && S.vs > -300) o.arrest = agl;
@@ -2343,6 +2345,27 @@ export async function run(page, t) {
   t.ok(cy.up < -1 && Math.abs(cy.hold) < 0.2 && cy.dn > 1,
     `레버를 올리면 왼쪽 · 멈추면 그대로 · 내리면 오른쪽(CW) (${cy.up.toFixed(1)}° · ${cy.hold.toFixed(1)}° · ${cy.dn.toFixed(1)}°)`);
 
+  // 회전익 특성 — 선회 중 1/2 볼 외활 · 페달 요율은 지연되어 붙는다
+  const skid = await page.evaluate(`(() => {
+    (${SETUP.toString()})();
+    const fly = ${FLY};
+    const DEAD = 0.08;
+    const stick = (k) => (k === 0 ? 0 : Math.sign(k) * (Math.abs(k) * (1 - DEAD) + DEAD));
+    joyAxes = { roll: { i: 0, inv: false }, pitch: { i: 1, inv: false }, yaw: { i: 2, inv: false } };
+    S.alt = 2000; S.spd = 100; rotorChar = true;
+    _ax(0, stick(20 / SIM_BANK_MAX)); fly(4);
+    const o = { right: simSkidHalf, bnk: S.bnk };
+    rotorChar = false; fly(0.1); o.off = simSkidHalf;
+    _ax(0, 0); fly(4);
+    simYawRate = 0; _ax(2, 1); fly(0.3); o.yaw03 = simYawRate; fly(3); o.yaw3 = simYawRate;
+    _ax(2, 0); fly(3); o.yawOff = simYawRate;
+    return o;
+  })()`);
+  t.ok(skid.right === -1 && skid.off === 0,
+    `오른쪽 선회(${skid.bnk.toFixed(0)}°)에서 볼이 바깥(왼쪽)으로 반 볼 비킨다 · 끄면 없다 (${skid.right} / ${skid.off})`);
+  t.ok(skid.yaw03 > 3 && skid.yaw03 < 12 && skid.yaw3 > 23 && Math.abs(skid.yawOff) < 2,
+    `페달 요율은 곧바로 붙지 않는다 (0.3초 ${skid.yaw03.toFixed(1)} · 3초 ${skid.yaw3.toFixed(1)} · 놓고 3초 ${skid.yawOff.toFixed(1)}°/s)`);
+
   // FPV(예상 항적) 버튼
   const fpv = await page.evaluate(() => {
     const b = document.getElementById('fpv-btn'); const o = { a: fpvOn };
@@ -2358,8 +2381,8 @@ export async function run(page, t) {
     rotorChar = false; S.spd = 0;
     return o;
   });
-  t.ok(rcFast.yaw === 0 && rcFast.ped === 0 && rcFast.coll === 5,
-    `20kt 이상에서는 컬렉티브→요·요→피치가 없고 컬렉티브→피치만 남는다 (요 ${rcFast.yaw} · 페달 ${rcFast.ped} · 레버 ${rcFast.coll})`);
+  t.ok(rcFast.yaw === 0 && rcFast.ped === 0 && rcFast.coll === 0,
+    `20kt 이상(전진 비행)에서는 컬렉티브→요·요→피치·컬렉티브→피치가 모두 없다 (요 ${rcFast.yaw} · 페달 ${rcFast.ped} · 레버 ${rcFast.coll})`);
 
   // FORCE TRIM — 누르고 자세를 바꾼 뒤 놓으면 그 자세로 잡힌다 · 3점 접지
   const ftr = await page.evaluate(`(() => {

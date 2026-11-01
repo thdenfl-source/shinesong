@@ -316,7 +316,9 @@ function drawSlipBall(cx, top, half) {
   const th = SLIP_ROOM - 4, r = th / 2, cy = top + r;
   const sb = (gpsMode || _fdrPlaying) ? 0 : slipBall;
   const k = Math.max(-1, Math.min(1, Math.atan(sb) / D2R / SLIP_BALL_FS));
-  const bx = cx + k * (half - r);
+  // 회전익 특성의 선회 외활 — 볼을 반 볼(반지름)만큼 바깥쪽으로(14-simmode.js simSkidHalf)
+  const skid = (typeof simSkidHalf !== 'undefined' && simModeOn && !gpsMode && !_fdrPlaying) ? simSkidHalf : 0;
+  const bx = Math.max(cx - half + r, Math.min(cx + half - r, cx + k * (half - r) + skid * r));
   ctx.save();
   // 관(가로로 누운 캡슐)
   ctx.beginPath();
