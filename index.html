@@ -601,6 +601,28 @@ html, body {
 #map-wrap #pfdov-btn { top: 208px; }
 #map-wrap #hdgref-3d { top: 240px; }
 #map-wrap #rotor-3d { top: 350px; }
+
+/* ── 3D 조작 버튼 묶음(#ctl3d) — 오른쪽 한 줄, 너비는 가장 넓은 버튼(MG (Slaved)·회전익 특성)에 맞춘다 ── */
+#ctl3d { position: absolute; top: 8px; right: 8px; z-index: 900; width: 96px;
+         display: flex; flex-direction: column; gap: 3px; }
+#map-wrap #ctl3d { top: 48px; }
+#ctl3d-body { display: flex; flex-direction: column; gap: 3px; }
+#ctl3d.collapsed #ctl3d-body { display: none; }
+#ctl3d-tog { padding: 3px 4px; font-size: 11px; color: #9aa4ae; }
+#ctl3d .sim-btn, #ctl3d #chin-btn, #ctl3d .hdgref, #ctl3d #rotor-3d {
+  position: static !important; top: auto !important; right: auto !important;
+  width: 100%; box-sizing: border-box; margin: 0; }
+#ctl3d > #ctl3d-body > .sim-btn, #ctl3d-tog { padding: 5px 4px; text-align: center; }
+#ctl3d #chin-btn { display: none; gap: 3px; }
+#ctl3d #chin-btn.show { display: flex; }
+#ctl3d #chin-btn .sim-btn { flex: 1; width: auto; padding: 5px 0; font-size: 10px; }
+#ctl3d #chin-btn .sim-btn.on { color: #00e5ff; border-color: #00e5ff; }
+#ctl3d #chin-btn .sim-btn:not(.on) { color: #777; border-color: #444; }
+#ctl3d #ext-btn { display: none; }
+#ctl3d #ext-btn.show { display: block; }
+/* SIM 이 켜지면 축척과 우하단 3D 확대·기울기 버튼을 감춘다 */
+#map3d.sim3d .vfr-scale, #map3d.sim3d .maplibregl-ctrl-bottom-right,
+#map3d.sim3d .maplibregl-ctrl-bottom-left, #map3d.sim3d #tilt-ctrl { display: none !important; }
 /* 3D 를 지도 위에 겹쳐 쓰면 3D 쪽 버튼만 둔다 */
 #map-wrap.map3d-on #hdgref-map { display: none; }
 /* When 3D is on, hide the 2D Leaflet map so its panes never paint through */
@@ -2666,10 +2688,6 @@ body.gate-open #gate-overlay { display: none; }
       <div id="map3d">
         <!-- 3D 가 제 창(탭의 '3D')을 쓸 때의 SHIP — 메뉴·설정창을 이 창 안에서 연다 -->
         <button class="sim-btn" id="ship3d-btn" data-act="toggleShip3d">⛵ SHIP</button>
-        <!-- 3D 화질 — 상 → 중 → 하(낮출수록 부드럽다 · 04-map.js) -->
-        <button class="sim-btn" id="q3d-btn" data-act="cycleMap3dQuality" title="3D 화질 — 누를 때마다 상 → 중 → 하. 낮출수록 저고도에서도 부드럽습니다">화질 중</button>
-        <!-- SIM 1인칭에서만 보인다 — 아래 좌·우 CHIN 창을 끄고 켠다 -->
-        <button class="sim-btn" id="chin-btn" data-act="toggleChinView" title="CHIN BUBBLE — 발밑 창(좌·우)을 끄고 켭니다">CHIN</button>
         <!-- SIM 1인칭에서만 — 화면 아래 가운데로 보이는 내 헬기의 기수(nose) · 15-heli3d.js -->
         <div id="sim-nose" aria-hidden="true">
           <svg viewBox="0 0 400 100" preserveAspectRatio="xMidYMax meet">
@@ -2691,29 +2709,42 @@ body.gate-open #gate-overlay { display: none; }
             <path d="M 14 100 C 52 42, 132 13, 200 11 C 268 13, 348 42, 386 100" fill="none" stroke="#6d737a" stroke-width="1.2"/>
           </svg>
         </div>
-        <!-- SIM 에서만 보인다 — 1인칭 ↔ 외부 시점(뒤에서 내 헬기를 본다) -->
-        <button class="sim-btn" id="ext-btn" data-act="toggleExtView" title="외부 시점 — 뒤에서 따라가며 내 헬기(흰수리)를 봅니다. 시야 둘러보기(B0 + 햇)로 둘레를 돌아봅니다">EXT</button>
-        <!-- FLY/PAUSE — 지도 창의 같은 버튼과 같다(3D 를 제 창으로 쓸 때도 바로 멈추고 이어 간다) -->
-        <button class="sim-btn" id="fly3d-btn" data-act="toggleSim" title="FLY / PAUSE — 지도 창의 같은 버튼과 같습니다">▶ FLY</button>
-        <!-- SOUND — 로터 소리 켜기/끄기(16-sound.js). 땅에서는 이륙 전, 바퀴가 떨어지면 이륙 후 소리 -->
-        <button class="sim-btn" id="snd-btn" data-act="toggleSound" title="소리 — 땅에서는 이륙 전, 바퀴가 떨어지면 이륙 후 소리(뜨고 내릴 때 겹쳐 바뀝니다)">🔇 SOUND</button>
-        <!-- 계기 ON/OFF — 3D 화면 왼쪽 위에 겹친 계기(PFD 일부)를 보이고 감춘다(07-sim.js) -->
-        <button class="sim-btn on" id="pfdov-btn" data-act="togglePfdOverlay" title="계기 — 3D 화면 왼쪽 위에 PFD 계기(FCP 없이)를 겹쳐 보이기/감추기">계기 ON</button>
-        <!-- MG(Slaved)/DG — 방향 기준. 지도 창의 같은 버튼과 같다(07-sim.js) -->
-        <div class="hdgref" id="hdgref-3d">
-          <button class="sim-btn hdgref-btn" data-act="toggleHdgRef" title="방향 기준 — MG(Slaved): 자이로를 지구 자기장에 맞춘다 · DG: 방향 자이로만(1시간에 약 6° 어긋난다 → −/+ 로 맞춘다)">MG (Slaved)</button>
-          <div class="hdgref-adj">
-            <button class="sim-btn" data-act="dgAdjust" data-arg='[-1]' title="DG — HSI 를 왼쪽으로 1°" disabled>−</button>
-            <button class="sim-btn" data-act="dgAdjust" data-arg='[1]' title="DG — HSI 를 오른쪽으로 1°" disabled>+</button>
+        <!-- 3D 조작 버튼 — 오른쪽 한 줄, 같은 너비. ☰ 로 접고 편다(04-map.js toggleCtl3d) -->
+        <div id="ctl3d">
+          <button class="sim-btn" id="ctl3d-tog" data-act="toggleCtl3d" title="버튼 접기/펴기">▲ 접기</button>
+          <div id="ctl3d-body">
+          <!-- 3D 화질 — 상 → 중 → 하(낮출수록 부드럽다 · 04-map.js) -->
+          <button class="sim-btn" id="q3d-btn" data-act="cycleMap3dQuality" title="3D 화질 — 누를 때마다 상 → 중 → 하. 낮출수록 저고도에서도 부드럽습니다">화질 중</button>
+          <!-- SIM 1인칭에서만 보인다 — 아래 좌·우 CHIN 창을 끄고 켠다 -->
+          <div id="chin-btn">
+            <button class="sim-btn on" id="chin-l-btn" data-act="toggleChinView" data-arg='["L"]' title="L CHIN — 왼쪽 발밑 창 켜기/끄기">L CHIN</button>
+            <button class="sim-btn on" id="chin-r-btn" data-act="toggleChinView" data-arg='["R"]' title="R CHIN — 오른쪽 발밑 창 켜기/끄기">R CHIN</button>
           </div>
-          <div class="hdgref-comp" title="자기 나침반(스탠바이) — DG 를 맞출 때 견준다"></div>
-        </div>
-        <!-- 회전익 특성 — COLLECTIVE TO YAW · COLLECTIVE TO PITCH · YAW TO PITCH (14-simmode.js) -->
-        <div id="rotor-3d">
-          <button class="sim-btn rotor-main" data-act="toggleRotorChar" title="회전익 특성 — 컬렉티브→요(로터 반대 방향, 최대 요율의 15%) · 컬렉티브→피치(±5°) · 페달→피치(±2°)">회전익 특성</button>
-          <div class="rotor-dir">
-            <button class="sim-btn on" data-rdir="CW" data-act="setRotorDir" data-arg='["CW"]' title="시계방향 로터(위에서 볼 때)" disabled>CW ↻</button>
-            <button class="sim-btn" data-rdir="CCW" data-act="setRotorDir" data-arg='["CCW"]' title="반시계방향 로터(위에서 볼 때)" disabled>CCW ↺</button>
+          <!-- SIM 에서만 보인다 — 1인칭 ↔ 외부 시점(뒤에서 내 헬기를 본다) -->
+          <button class="sim-btn" id="ext-btn" data-act="toggleExtView" title="외부 시점 — 뒤에서 따라가며 내 헬기(흰수리)를 봅니다. 시야 둘러보기(B0 + 햇)로 둘레를 돌아봅니다">EXT</button>
+          <!-- FLY/PAUSE — 지도 창의 같은 버튼과 같다(3D 를 제 창으로 쓸 때도 바로 멈추고 이어 간다) -->
+          <button class="sim-btn" id="fly3d-btn" data-act="toggleSim" title="FLY / PAUSE — 지도 창의 같은 버튼과 같습니다">▶ FLY</button>
+          <!-- SOUND — 로터 소리 켜기/끄기(16-sound.js). 땅에서는 이륙 전, 바퀴가 떨어지면 이륙 후 소리 -->
+          <button class="sim-btn" id="snd-btn" data-act="toggleSound" title="소리 — 땅에서는 이륙 전, 바퀴가 떨어지면 이륙 후 소리(뜨고 내릴 때 겹쳐 바뀝니다)">🔇 SOUND</button>
+          <!-- 계기 ON/OFF — 3D 화면 왼쪽 위에 겹친 계기(PFD 일부)를 보이고 감춘다(07-sim.js) -->
+          <button class="sim-btn on" id="pfdov-btn" data-act="togglePfdOverlay" title="계기 — 3D 화면 왼쪽 위에 PFD 계기(FCP 없이)를 겹쳐 보이기/감추기">계기 ON</button>
+          <!-- MG(Slaved)/DG — 방향 기준. 지도 창의 같은 버튼과 같다(07-sim.js) -->
+          <div class="hdgref" id="hdgref-3d">
+            <button class="sim-btn hdgref-btn" data-act="toggleHdgRef" title="방향 기준 — MG(Slaved): 자이로를 지구 자기장에 맞춘다 · DG: 방향 자이로만(1시간에 약 6° 어긋난다 → −/+ 로 맞춘다)">MG (Slaved)</button>
+            <div class="hdgref-adj">
+              <button class="sim-btn" data-act="dgAdjust" data-arg='[-1]' title="DG — HSI 를 왼쪽으로 1°" disabled>−</button>
+              <button class="sim-btn" data-act="dgAdjust" data-arg='[1]' title="DG — HSI 를 오른쪽으로 1°" disabled>+</button>
+            </div>
+            <div class="hdgref-comp" title="자기 나침반(스탠바이) — DG 를 맞출 때 견준다"></div>
+          </div>
+          <!-- 회전익 특성 — COLLECTIVE TO YAW · COLLECTIVE TO PITCH · YAW TO PITCH (14-simmode.js) -->
+          <div id="rotor-3d">
+            <button class="sim-btn rotor-main" data-act="toggleRotorChar" title="회전익 특성 — 컬렉티브→요(로터 반대 방향, 최대 요율의 15%) · 컬렉티브→피치(±5°) · 페달→피치(±2°)">회전익 특성</button>
+            <div class="rotor-dir">
+              <button class="sim-btn on" data-rdir="CW" data-act="setRotorDir" data-arg='["CW"]' title="시계방향 로터(위에서 볼 때)" disabled>CW ↻</button>
+              <button class="sim-btn" data-rdir="CCW" data-act="setRotorDir" data-arg='["CCW"]' title="반시계방향 로터(위에서 볼 때)" disabled>CCW ↺</button>
+            </div>
+          </div>
           </div>
         </div>
         <div id="tilt-ctrl">

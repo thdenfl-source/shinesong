@@ -2292,6 +2292,20 @@ export async function run(page, t) {
     `레버로 받친 뒤 상승률이 치솟지 않는다 (최대 ${auto.good.maxVs.toFixed(0)}fpm — 땅 가까이의 빠른 몫을 넘겨 받지 않는다)`);
   t.ok(auto.pow === 0, '출력을 걸고 나는 동안(수평 비행 토크)은 기수를 들어도 플레어 몫이 붙지 않는다');
 
+  // G/S — SIM 에서도 강하선을 잡으면 강하각에 맞춰 고도가 내려간다(출력으로)
+  const gsSim = await page.evaluate(() => {
+    const keep = gsDeviation;
+    S.alt = 1500; S.spd = 120; S.vs = 0;
+    window.gsDeviation = () => ({ angle: 3, path: S.alt, dev: 0 });
+    gsOn = true;
+    const o = { vert: simAfcsVert(), cmd: simAfcsVsCmd(),
+                base: -Math.max(20, groundSpdKt()) * Math.tan(3 * D2R) * FT_PER_NM / 60 };
+    gsOn = false; window.gsDeviation = keep;
+    return o;
+  });
+  t.ok(gsSim.vert && Math.abs(gsSim.cmd - gsSim.base) < 1 && gsSim.cmd < -300,
+    `G/S 를 잡으면 SIM 에서도 강하각 3° 에 맞는 강하율을 출력으로 낸다 (${gsSim.cmd.toFixed(0)}fpm)`);
+
   // 회전익 특성 — 전이성향: 호버에서 CW 는 왼쪽으로 흐르고, 오른쪽 3° 뱅크로 막는다
   const drift = await page.evaluate(`(() => {
     (${SETUP.toString()})();

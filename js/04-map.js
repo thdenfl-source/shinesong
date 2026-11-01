@@ -742,7 +742,8 @@ function _init3dMap() {
 // (창 하나가 너비 약 1/3 · 높이 2/9 · index.html). CHIN 창은 같은 바탕(위성·지형·함정)을 그리는 작은 3D 지도
 // 두 장이다 — 카메라는 같은 눈 자리에서 기체를 따라 앞아래를 본다(05-gps.js 의
 // _ml3dChinCamera). SIM 1인칭에서만 쓰고, 나오면 지도를 지워 그래픽 자원을 돌려준다.
-let chinViewOn = true;            // CHIN 창을 쓸 것인가(CHIN 버튼으로 끄고 켠다)
+let chinL = true, chinR = true;   // L CHIN · R CHIN — 왼쪽만·오른쪽만·둘 다·모두 끔
+let chinViewOn = true;            // 둘 중 하나라도 켜져 있는가(chinL || chinR)
 let _chinMaps = [];               // [{ map, side: -1 왼쪽 · +1 오른쪽, ship: 함정 레이어를 얹었나 }]
 function _chinWanted() {
   // 외부 시점(15-heli3d.js)에서는 조종석 창이 뜻이 없다 — 닫는다
@@ -759,8 +760,16 @@ function syncChinView() {
   const btn = document.getElementById('chin-btn');
   if (btn) {
     if (btn.classList.contains('show') !== sim) btn.classList.toggle('show', sim);
-    if (btn.classList.contains('on') !== chinViewOn) btn.classList.toggle('on', chinViewOn);
+    const bl = document.getElementById('chin-l-btn'), br = document.getElementById('chin-r-btn');
+    if (bl && bl.classList.contains('on') !== chinL) bl.classList.toggle('on', chinL);
+    if (br && br.classList.contains('on') !== chinR) br.classList.toggle('on', chinR);
   }
+  // SIM 이면 축척·3D 확대/기울기 버튼을 감춘다(index.html #map3d.sim3d)
+  if (d3.classList.contains('sim3d') !== sim) d3.classList.toggle('sim3d', sim);
+  // 켜진 쪽 CHIN 창만 보인다
+  const pl = document.getElementById('chin-l'), pr = document.getElementById('chin-r');
+  if (pl) pl.style.visibility = chinL ? '' : 'hidden';
+  if (pr) pr.style.visibility = chinR ? '' : 'hidden';
   // 1인칭의 기수(15-heli3d.js) — 외부 시점·SIM 해제면 숨긴다
   try { if (typeof heli3dNoseSync === 'function' && !(sim && !((typeof simExtView !== 'undefined') && simExtView))) heli3dNoseSync(null); }
   catch (e) { _swallow(e); }
@@ -812,12 +821,21 @@ function _chinDestroy() {
   _chinMaps.forEach(c => { try { c.map.remove(); } catch (e) { _swallow(e); } });
   _chinMaps = [];
 }
-function toggleChinView() {
-  chinViewOn = !chinViewOn;
+function toggleChinView(side) {
+  if (side === 'L') chinL = !chinL;
+  else if (side === 'R') chinR = !chinR;
+  else { const v = !(chinL || chinR); chinL = chinR = v; }
+  chinViewOn = chinL || chinR;
   syncChinView();
   requestAnimationFrame(() => { try { if (_ml3d) _applyFollow(); } catch (e) { _swallow(e); } });
 }
 
+// 3D 조작 버튼 묶음 접기/펴기(index.html #ctl3d)
+function toggleCtl3d() {
+  const box = document.getElementById('ctl3d'); if (!box) return;
+  const c = box.classList.toggle('collapsed');
+  const t = document.getElementById('ctl3d-tog'); if (t) t.textContent = c ? '▼ 3D 버튼' : '▲ 접기';
+}
 // 3D(maplibre)용 이중 축척 — 2D L.Control.DualScale과 동일한 마크업/CSS·계산방식
 class DualScale3D {
   onAdd(map) {

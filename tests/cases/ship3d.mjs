@@ -446,6 +446,19 @@ export async function run(page, t) {
     out.off = { n: _chinMaps.length, main: box('map3d'), rowShown: getComputedStyle(document.getElementById('chin-row')).display };
     toggleChinView(); await wait(50); _applyFollow();
     out.on = _chinMaps.length;
+    // L CHIN 만 끄면 오른쪽만 남는다 · 둘 다 끄면 닫힌다
+    const vis = id => getComputedStyle(document.getElementById(id)).visibility;
+    toggleChinView('L'); await wait(50);
+    out.lr = { l: vis('chin-l'), r: vis('chin-r'), n: _chinMaps.length,
+               lBtn: document.getElementById('chin-l-btn').classList.contains('on') };
+    toggleChinView('R'); await wait(50); out.lr.none = _chinMaps.length;
+    toggleChinView('L'); toggleChinView('R'); await wait(50); _applyFollow();
+    // SIM 이면 축척·3D 확대 버튼이 감춰지고, 버튼 묶음은 접었다 편다
+    const sc = document.querySelector('#map3d .vfr-scale');
+    out.ui = { scale: sc ? getComputedStyle(sc).display : 'none',
+               tilt: getComputedStyle(document.getElementById('tilt-ctrl')).display };
+    toggleCtl3d(); out.ui.fold = getComputedStyle(document.getElementById('ctl3d-body')).display;
+    toggleCtl3d(); out.ui.unfold = getComputedStyle(document.getElementById('ctl3d-body')).display;
     // SIM 을 끄면 닫힌다
     toggleSimMode(false); await wait(50);
     out.exit = { n: _chinMaps.length, cls: document.getElementById('map3d').classList.contains('chin-on'),
@@ -455,6 +468,11 @@ export async function run(page, t) {
   });
   t.eq(chin.n, 2, 'SIM 1인칭에서 3D 창 아래에 CHIN 창 두 개가 열린다');
   t.ok(chin.rowShown === 'flex' && chin.btn !== 'none', `CHIN 창과 CHIN 버튼이 보인다 (${chin.rowShown} · ${chin.btn})`);
+  t.ok(chin.lr.l === 'hidden' && chin.lr.r === 'visible' && chin.lr.n === 2 && !chin.lr.lBtn,
+    `L CHIN 을 끄면 오른쪽 창만 보인다 (${chin.lr.l} · ${chin.lr.r})`);
+  t.eq(chin.lr.none, 0, 'L·R CHIN 을 모두 끄면 CHIN 창이 닫힌다');
+  t.ok(chin.ui.scale === 'none' && chin.ui.tilt === 'none', `SIM 에서는 축척·3D 확대/기울기 버튼이 없다 (${chin.ui.scale} · ${chin.ui.tilt})`);
+  t.ok(chin.ui.fold === 'none' && chin.ui.unfold === 'flex', '3D 버튼 묶음을 접고 편다');
   const M = chin.main, mBot = M.y + M.h;
   t.ok(Math.abs(chin.mainH - M.h) < 2 && Math.abs(chin.off.main.h - M.h) < 1,
     `정면 시야는 창 가득 그대로다 — CHIN 을 켜도 줄지 않는다 (${M.h.toFixed(0)}px · 끄면 ${chin.off.main.h.toFixed(0)}px)`);
