@@ -313,21 +313,30 @@ function simTrimNudge(dir) {
   simTrim.roll = Math.max(-SIM_TRIM_MAX_ROLL, Math.min(SIM_TRIM_MAX_ROLL, simTrim.roll));
   simTrim.pitch = Math.max(-SIM_TRIM_MAX_PITCH, Math.min(SIM_TRIM_MAX_PITCH, simTrim.pitch));
   // 자세는 3초에 15° 로 따라간다(simTrimSlew)
-  if (dir === 'R' || dir === 'L') _simTrimSlewing.roll = true; else _simTrimSlewing.pitch = true;
+  if (dir === 'R' || dir === 'L') { _simTrimSlewing.roll = true; _simTrimFast.roll = 0; } else { _simTrimSlewing.pitch = true; _simTrimFast.pitch = 0; }
 }
-function simTrimReset() { simTrim = { roll: 0, pitch: 0 }; simTrimHeld = { roll: null, pitch: null }; _simTrimSlewing = { roll: false, pitch: false }; simTrimAct = { roll: 0, pitch: 0 }; }
+function simTrimReset() { simTrim = { roll: 0, pitch: 0 }; simTrimHeld = { roll: null, pitch: null }; _simTrimSlewing = { roll: false, pitch: false }; _simTrimFast = { roll: 0, pitch: 0 }; simTrimAct = { roll: 0, pitch: 0 }; }
 // 4방향 트림은 한 번에 튀지 않고 3초에 15°(5°/s)로 옮겨 간다 — simTrim 은 기준(누른 만큼 곧바로),
 // 자세에 쓰는 몫(simTrimAct)이 그 기준을 따라간다. 트림 버튼이 아닌 곳(GSPD·IAS 풀기 등)이
 // 기준을 바꾸면 곧바로 맞춘다(자세가 튀지 않게 이미 맞춰 넣는 값이다).
 const SIM_TRIM_RATE = 5;
 let simTrimAct = { roll: 0, pitch: 0 };
 let _simTrimSlewing = { roll: false, pitch: false };
+// 트림을 놓으면 남은 몫을 0.3초 안에 마저 옮긴다(놓은 뒤 질질 끌며 멈추지 않게)
+const SIM_TRIM_FINISH = 0.3;
+let _simTrimFast = { roll: 0, pitch: 0 };
+function simTrimRelease() {
+  for (const k of ['roll', 'pitch']) {
+    if (!_simTrimSlewing[k]) continue;
+    _simTrimFast[k] = Math.abs(simTrim[k] - simTrimAct[k]) / SIM_TRIM_FINISH;
+  }
+}
 function simTrimSlew(dt) {
   for (const k of ['roll', 'pitch']) {
     const d = simTrim[k] - simTrimAct[k];
     if (!_simTrimSlewing[k] || !d) { simTrimAct[k] = simTrim[k]; _simTrimSlewing[k] = false; continue; }
-    simTrimAct[k] += Math.sign(d) * Math.min(Math.abs(d), SIM_TRIM_RATE * dt);
-    if (simTrimAct[k] === simTrim[k]) _simTrimSlewing[k] = false;
+    simTrimAct[k] += Math.sign(d) * Math.min(Math.abs(d), Math.max(SIM_TRIM_RATE, _simTrimFast[k]) * dt);
+    if (simTrimAct[k] === simTrim[k]) { _simTrimSlewing[k] = false; _simTrimFast[k] = 0; }
   }
 }
 // Against trim — 조종간을 중립 밖으로 쥐고 있는 동안은 그 순간의 트림을 붙잡아 둔다.

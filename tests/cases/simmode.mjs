@@ -2300,14 +2300,17 @@ export async function run(page, t) {
     const stick = (k) => (k === 0 ? 0 : Math.sign(k) * (Math.abs(k) * (1 - DEAD) + DEAD));
     joyAxes = { roll: { i: 0, inv: false }, pitch: { i: 1, inv: false } };
     S.alt = 2000; _simGndFt = 0; S.spd = 100; S.bnk = 0; simTrimReset();
-    for (let i = 0; i < 10; i++) simTrimNudge('L');
+    for (let i = 0; i < 20; i++) simTrimNudge('L');    // 0.5° × 20 = 10°
     const o = { pend: simTrimAct.roll };
     fly(1); o.after1 = simTrimAct.roll;
     fly(2); o.after3 = simTrimAct.roll;
+    simTrimReset(); _ax(0, 0); fly(1);
+    for (let i = 0; i < 10; i++) simTrimNudge('L');
+    fly(0.5); simTrimRelease(); o.atRel = simTrimAct.roll; fly(0.3); o.rel03 = simTrimAct.roll;
     simTrimReset(); _ax(0, 0); fly(3);
     // 조종간 왼쪽 10° 로 쥐고 → 트림 왼쪽 10°
     _ax(0, stick(-10 / SIM_BANK_MAX)); fly(3); o.stickOnly = S.bnk;
-    for (let i = 0; i < 10; i++) simTrimNudge('L');
+    for (let i = 0; i < 20; i++) simTrimNudge('L');
     fly(4); o.held = S.bnk; o.trim = simTrim.roll;
     _ax(0, 0); fly(4); o.released = S.bnk;
     simTrimReset();
@@ -2315,6 +2318,8 @@ export async function run(page, t) {
   })()`);
   t.ok(trimT.pend === 0 && trimT.after1 < -4 && trimT.after1 > -6 && Math.abs(trimT.after3 + 10) < 0.01,
     `트림 10° 는 한 번에 튀지 않고 5°/s 로 옮겨 간다 (곧바로 ${trimT.pend}° · 1초 ${trimT.after1.toFixed(1)}° · 3초 ${trimT.after3.toFixed(1)}°)`);
+  t.ok(trimT.atRel > -4 && Math.abs(trimT.rel03 + 5) < 0.01,
+    `트림을 놓으면 남은 몫을 0.3초 안에 마저 옮긴다 (놓을 때 ${trimT.atRel.toFixed(1)}° → 0.3초 뒤 ${trimT.rel03.toFixed(1)}° · 목표 −5°)`);
   t.ok(Math.abs(trimT.held - trimT.stickOnly) < 1 && Math.abs(trimT.trim + 10) < 0.01,
     `조종간을 쥔 채 트림을 넣으면 자세는 그대로다 (조종간 ${trimT.stickOnly.toFixed(1)}° → 트림 뒤 ${trimT.held.toFixed(1)}°)`);
   t.ok(Math.abs(trimT.released + 10) < 1,
