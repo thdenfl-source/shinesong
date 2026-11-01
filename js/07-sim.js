@@ -1398,6 +1398,19 @@ function pfdOverlayDraw(force) {
   if (c.width !== cw || c.height !== ch) { c.width = cw; c.height = ch; }
   drawPfdTo(c);
 }
+// ADI 의 예상 항적(FPV · 초록 원) 켜기/끄기 — 3D 창의 FPV 버튼
+let fpvOn = true;
+try { fpvOn = localStorage.getItem('fpvOn') !== '0'; } catch (e) { _swallow(e); }
+function toggleFpv() {
+  fpvOn = !fpvOn;
+  try { localStorage.setItem('fpvOn', fpvOn ? '1' : '0'); } catch (e) { _swallow(e); }
+  updateFpvBtn();
+}
+function updateFpvBtn() {
+  const b = document.getElementById('fpv-btn'); if (!b) return;
+  b.classList.toggle('on', fpvOn); b.textContent = fpvOn ? 'FPV ON' : 'FPV OFF';
+}
+try { document.addEventListener('DOMContentLoaded', updateFpvBtn); updateFpvBtn(); } catch (e) { _swallow(e); }
 function togglePfdOverlay() {
   pfdOvOn = !pfdOvOn;
   try { localStorage.setItem(PFD_OV_PREF, pfdOvOn ? '1' : '0'); } catch (e) { _swallow(e); }

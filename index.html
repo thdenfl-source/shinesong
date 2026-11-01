@@ -2727,7 +2727,8 @@ body.gate-open #gate-overlay { display: none; }
           <!-- SOUND — 로터 소리 켜기/끄기(16-sound.js). 땅에서는 이륙 전, 바퀴가 떨어지면 이륙 후 소리 -->
           <button class="sim-btn" id="snd-btn" data-act="toggleSound" title="소리 — 땅에서는 이륙 전, 바퀴가 떨어지면 이륙 후 소리(뜨고 내릴 때 겹쳐 바뀝니다)">🔇 SOUND</button>
           <!-- 계기 ON/OFF — 3D 화면 왼쪽 위에 겹친 계기(PFD 일부)를 보이고 감춘다(07-sim.js) -->
-          <button class="sim-btn on" id="pfdov-btn" data-act="togglePfdOverlay" title="계기 — 3D 화면 왼쪽 위에 PFD 계기(FCP 없이)를 겹쳐 보이기/감추기">계기 ON</button>
+          <button class="sim-btn on" id="fpv-btn" data-act="toggleFpv" title="ADI 의 예상 항적(초록 원 · FPV) 보이기/감추기">FPV ON</button>
+            <button class="sim-btn on" id="pfdov-btn" data-act="togglePfdOverlay" title="계기 — 3D 화면 왼쪽 위에 PFD 계기(FCP 없이)를 겹쳐 보이기/감추기">계기 ON</button>
           <!-- MG(Slaved)/DG — 방향 기준. 지도 창의 같은 버튼과 같다(07-sim.js) -->
           <div class="hdgref" id="hdgref-3d">
             <button class="sim-btn hdgref-btn" data-act="toggleHdgRef" title="방향 기준 — MG(Slaved): 자이로를 지구 자기장에 맞춘다 · DG: 방향 자이로만(1시간에 약 6° 어긋난다 → −/+ 로 맞춘다)">MG (Slaved)</button>

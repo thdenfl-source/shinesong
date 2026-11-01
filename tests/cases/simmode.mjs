@@ -139,7 +139,7 @@ export async function run(page, t) {
     fly(6);
     const r = { bnk: S.bnk, hdg: S.hdg, turned: normAS(S.hdg - hdg0),
                 lat: S.lat, lon: S.lon };
-    _ax(0, 0); fly(3);              // 가운데로 되돌리면 수평
+    _ax(0, 0); fly(6);              // 가운데로 되돌리면 수평(자세는 10°/s 로 따라간다)
     r.level = S.bnk;
     return r;
   })()`);
@@ -166,7 +166,7 @@ export async function run(page, t) {
     S.spd = 80;
     _ax(1, 1); fly(5);              // 앞으로(+) = 기수 내림
     const fwd = { pit: S.pit, spd: S.spd };
-    _ax(1, -1); fly(8);             // 뒤로 = 기수 올림 → 감속
+    _ax(1, -1); fly(12);            // 뒤로 = 기수 올림 → 감속
     return { fwd, aft: { pit: S.pit, spd: S.spd } };
   })()`);
   t.ok(pitch.fwd.pit < -10, `앞으로 밀면 기수가 내려간다 (${pitch.fwd.pit.toFixed(1)}°)`);
@@ -1175,17 +1175,17 @@ export async function run(page, t) {
     return { one, oneP, t1, rolled, back, level, nose, held, heldR, maxR, maxP,
              holdMs: SIM_TRIM_HOLD_MS, repMs: SIM_TRIM_REP_MS };
   })()`);
-  t.ok(trim.one.roll === 1 && trim.one.pitch === 0, `한 번 누르면 뱅크가 1° 옮겨 간다 (${trim.one.roll}°)`);
+  t.ok(trim.one.roll === 0.5 && trim.one.pitch === 0, `한 번 누르면 뱅크가 0.5° 옮겨 간다 (${trim.one.roll}°)`);
   t.ok(trim.oneP.pitch === 0.5 && trim.oneP.roll === 0, `피치는 한 번에 0.5° 다 (${trim.oneP.pitch}°)`);
   t.eq(trim.rolled.axis, 0, '조종간은 가운데 그대로다');
-  t.ok(Math.abs(trim.rolled.bnk - 10) < 0.6, `우 트림 10번이면 10° 기운 채 난다 (${trim.rolled.bnk.toFixed(1)}°)`);
-  t.ok(Math.abs(trim.back + 10) < 0.6, `반대로 20번 넘기면 왼쪽 10° (${trim.back.toFixed(1)}°)`);
+  t.ok(Math.abs(trim.rolled.bnk - 5) < 0.6, `우 트림 10번이면 5° 기운 채 난다 (${trim.rolled.bnk.toFixed(1)}°)`);
+  t.ok(Math.abs(trim.back + 5) < 0.6, `반대로 20번 넘기면 왼쪽 5° (${trim.back.toFixed(1)}°)`);
   t.ok(Math.abs(trim.level) < 0.6, `트림을 풀면 수평으로 돌아온다 (${trim.level.toFixed(1)}°)`);
   t.ok(Math.abs(trim.nose.pit + 10) < 0.6, `앞 트림 20번이면 기수가 10° 내려간다 (${trim.nose.pit.toFixed(1)}°)`);
   t.ok(trim.holdMs === 500 && trim.repMs === 100,
     `0.5초 넘게 누르면 홀드다 — 그 전에 떼면 딸깍 한 번(1°) (${trim.holdMs}ms · ${trim.repMs}ms 마다)`);
   t.eq(trim.held, -4, `피치 햇을 누르고 있으면 계속 옮겨 간다 (${trim.held}° — 첫 0.5° + 0.1초마다 0.5° × 7)`);
-  t.eq(trim.heldR.roll, 8, `뱅크도 똑같이 이어 간다 (${trim.heldR.roll}° — 1° 씩)`);
+  t.eq(trim.heldR.roll, 4, `뱅크도 똑같이 이어 간다 (${trim.heldR.roll}° — 0.5° 씩)`);
   t.ok(trim.maxR === 30 && trim.maxP === -20,
     `한없이 쌓이지는 않는다 (뱅크 ±${trim.maxR}° · 피치 ${trim.maxP}°)`);
 
@@ -1282,16 +1282,16 @@ export async function run(page, t) {
     return { btnArmed, btnClick, btnThree, btnPitch, btnHeld, btnStop,
              hatClick, hatThree, hatRoll, hatHeld, dupKeyFirst, dupHeld, dupPadFirst, boundKey };
   })()`);
-  t.eq(joyTrim.btnClick.roll, 1, `4방향 트림 딸깍 한 번이면 1° 다 (${joyTrim.btnClick.roll}°)`);
+  t.eq(joyTrim.btnClick.roll, 0.5, `4방향 트림 딸깍 한 번이면 0.5° 다 (${joyTrim.btnClick.roll}°)`);
   t.ok(joyTrim.btnArmed && joyTrim.btnClick.timer === null && joyTrim.btnClick.int === null,
     '누르는 동안 홀드가 걸려 있다가 떼면 풀린다');
-  t.eq(joyTrim.btnThree, 3, `세 번 딸깍이면 3° 다 (${joyTrim.btnThree}°)`);
+  t.eq(joyTrim.btnThree, 1.5, `세 번 딸깍이면 1.5° 다 (${joyTrim.btnThree}°)`);
   t.eq(joyTrim.btnPitch, 0.5, `▲ 는 한 번에 피치 0.5° 다 (${joyTrim.btnPitch}°)`);
-  t.eq(joyTrim.btnHeld, 8, `4방향 트림을 누르고 있으면 이어 간다 (${joyTrim.btnHeld}° — 첫 1° + 7번)`);
+  t.eq(joyTrim.btnHeld, 4, `4방향 트림을 누르고 있으면 이어 간다 (${joyTrim.btnHeld}° — 첫 0.5° + 7번)`);
   t.ok(joyTrim.btnStop.timer === null && joyTrim.btnStop.int === null, '떼면 반복이 멈춘다');
   t.eq(joyTrim.hatClick, -0.5, `축 9 햇 ▼ 딸깍 한 번이면 피치 0.5° 다 (${joyTrim.hatClick}°)`);
   t.eq(joyTrim.hatThree, -1.5, `햇 세 번 딸깍이면 1.5° 다 (${joyTrim.hatThree}°)`);
-  t.eq(joyTrim.hatRoll, -1, `햇 ◀ 도 한 번에 1° 다 (${joyTrim.hatRoll}°)`);
+  t.eq(joyTrim.hatRoll, -0.5, `햇 ◀ 도 한 번에 0.5° 다 (${joyTrim.hatRoll}°)`);
   t.eq(joyTrim.hatHeld, 4, `햇 ▲ 를 누르고 있으면 이어 간다 (${joyTrim.hatHeld}° — 0.5° × 8)`);
   t.eq(joyTrim.dupKeyFirst.pitch, 0.5,
     `햇과 방향키가 함께 들어와도 한 칸(0.5°)이다 (${joyTrim.dupKeyFirst.pitch}°)`);
@@ -1654,7 +1654,7 @@ export async function run(page, t) {
     out.rel = { on: hdgSelOn || rollApOn, b0, lat: simAfcsLat() };
     fly(1); out.rel.b1 = S.bnk;
     // 풀린 뒤에는 조종간이 다시 뱅크를 잡는다
-    simTrimReset(); _ax(0, -0.5); fly(2); out.manual = S.bnk;
+    simTrimReset(); _ax(0, -0.5); fly(4); out.manual = S.bnk;
     _ax(0, 0); fly(3);
     // ALT — 선택 고도 3,300ft · 500fpm. 레버를 끝까지 내려도 오르고, 닿으면 선다
     S.alt = 3000; S.vs = 0; simVsAcc = 0;   // 선회하며 가라앉은 만큼 되돌려 놓고 시작한다
@@ -1972,7 +1972,7 @@ export async function run(page, t) {
   t.eq(look.trimDuring, look.trimBefore, '둘러보는 동안에는 트림이 바뀌지 않는다');
   t.ok(Math.abs(normAS0(look.back.bearing - 90)) < 3 && Math.abs(look.back.pitch - 90) < 3,
     `B0 을 놓으면 정면으로 돌아온다 (방위 ${look.back.bearing}° · ${look.back.pitch.toFixed(0)}°)`);
-  t.eq(look.trimAfter, look.trimBefore + 1, 'B0 없이 누른 햇은 종전대로 트림(1°)이다');
+  t.eq(look.trimAfter, look.trimBefore + 0.5, 'B0 없이 누른 햇은 종전대로 트림(0.5°)이다');
   t.ok(Math.abs(look.comp.pitch + 30) < 0.5 && Math.abs(look.comp.yaw - 180) < 0.5,
     `오른쪽 30° 뱅크에서 오른쪽을 보면 30° 내려다본다 (${look.comp.pitch.toFixed(1)}° · 방위 ${look.comp.yaw.toFixed(0)}°)`);
 
@@ -2300,14 +2300,17 @@ export async function run(page, t) {
     const stick = (k) => (k === 0 ? 0 : Math.sign(k) * (Math.abs(k) * (1 - DEAD) + DEAD));
     joyAxes = { roll: { i: 0, inv: false }, pitch: { i: 1, inv: false } };
     S.alt = 2000; _simGndFt = 0; S.spd = 100; S.bnk = 0; simTrimReset();
-    for (let i = 0; i < 10; i++) simTrimNudge('L');
+    for (let i = 0; i < 20; i++) simTrimNudge('L');    // 0.5° × 20 = 10°
     const o = { pend: simTrimAct.roll };
     fly(1); o.after1 = simTrimAct.roll;
     fly(2); o.after3 = simTrimAct.roll;
+    simTrimReset(); _ax(0, 0); fly(1);
+    for (let i = 0; i < 10; i++) simTrimNudge('L');
+    fly(0.5); simTrimRelease(); o.atRel = simTrimAct.roll; fly(0.3); o.rel03 = simTrimAct.roll;
     simTrimReset(); _ax(0, 0); fly(3);
     // 조종간 왼쪽 10° 로 쥐고 → 트림 왼쪽 10°
     _ax(0, stick(-10 / SIM_BANK_MAX)); fly(3); o.stickOnly = S.bnk;
-    for (let i = 0; i < 10; i++) simTrimNudge('L');
+    for (let i = 0; i < 20; i++) simTrimNudge('L');
     fly(4); o.held = S.bnk; o.trim = simTrim.roll;
     _ax(0, 0); fly(4); o.released = S.bnk;
     simTrimReset();
@@ -2315,15 +2318,43 @@ export async function run(page, t) {
   })()`);
   t.ok(trimT.pend === 0 && trimT.after1 < -4 && trimT.after1 > -6 && Math.abs(trimT.after3 + 10) < 0.01,
     `트림 10° 는 한 번에 튀지 않고 5°/s 로 옮겨 간다 (곧바로 ${trimT.pend}° · 1초 ${trimT.after1.toFixed(1)}° · 3초 ${trimT.after3.toFixed(1)}°)`);
+  t.ok(trimT.atRel > -4 && Math.abs(trimT.rel03 + 5) < 0.01,
+    `트림을 놓으면 남은 몫을 0.3초 안에 마저 옮긴다 (놓을 때 ${trimT.atRel.toFixed(1)}° → 0.3초 뒤 ${trimT.rel03.toFixed(1)}° · 목표 −5°)`);
   t.ok(Math.abs(trimT.held - trimT.stickOnly) < 1 && Math.abs(trimT.trim + 10) < 0.01,
     `조종간을 쥔 채 트림을 넣으면 자세는 그대로다 (조종간 ${trimT.stickOnly.toFixed(1)}° → 트림 뒤 ${trimT.held.toFixed(1)}°)`);
   t.ok(Math.abs(trimT.released + 10) < 1,
     `놓으면 트림으로 넣은 경사만 남는다 (${trimT.released.toFixed(1)}°)`);
 
+  // COLLECTIVE TO YAW — 실제 비행에서 레버를 움직이는 동안만 돈다
+  const cy = await page.evaluate(`(() => {
+    (${SETUP.toString()})();
+    const fly = ${FLY};
+    S.alt = 1000; _simGndFt = 0; S.spd = 0; S.hdg = 90; rotorChar = true; rotorDir = 'CW';
+    _ax(3, 0); fly(1);
+    const h0 = S.hdg;
+    for (let i = 1; i <= 10; i++) { _ax(3, 0.05 * i); fly(0.1); }    // 1초에 걸쳐 레버를 올린다
+    const up = normAS(S.hdg - h0), h1 = S.hdg;
+    fly(1); const hold = normAS(S.hdg - h1), h2 = S.hdg;
+    for (let i = 1; i <= 10; i++) { _ax(3, 0.5 - 0.05 * i); fly(0.1); }  // 내린다
+    const dn = normAS(S.hdg - h2);
+    rotorChar = false; _ax(3, 0);
+    return { up, hold, dn };
+  })()`);
+  t.ok(cy.up < -1 && Math.abs(cy.hold) < 0.2 && cy.dn > 1,
+    `레버를 올리면 왼쪽 · 멈추면 그대로 · 내리면 오른쪽(CW) (${cy.up.toFixed(1)}° · ${cy.hold.toFixed(1)}° · ${cy.dn.toFixed(1)}°)`);
+
+  // FPV(예상 항적) 버튼
+  const fpv = await page.evaluate(() => {
+    const b = document.getElementById('fpv-btn'); const o = { a: fpvOn };
+    toggleFpv(); o.b = fpvOn; o.txt = b.textContent; toggleFpv(); o.c = fpvOn;
+    return o;
+  });
+  t.ok(fpv.a && !fpv.b && fpv.txt === 'FPV OFF' && fpv.c, 'FPV 버튼으로 ADI 예상 항적을 끄고 켠다');
+
   // 회전익 특성 — 20kt 이상이면 컬렉티브 투 피치만 남는다
   const rcFast = await page.evaluate(() => {
     rotorChar = true; rotorDir = 'CW'; S.spd = 25;
-    const o = { yaw: rcYawRate({ coll: 1 }), ped: rcPitchOff({ coll: 0, yaw: 1 }), coll: rcPitchOff({ coll: 1, yaw: 0 }) };
+    const o = { yaw: rcYawRate(10), ped: rcPitchOff({ coll: 0, yaw: 1 }), coll: rcPitchOff({ coll: 1, yaw: 0 }) };
     rotorChar = false; S.spd = 0;
     return o;
   });
@@ -2370,26 +2401,22 @@ export async function run(page, t) {
   const rc = await page.evaluate(() => {
     const o = {};
     rotorChar = false; rotorDir = 'CW';
-    o.off = rcPitchOff({ coll: 1, yaw: 1 }) === 0 && rcYawRate({ coll: 1 }) === 0;
+    o.off = rcPitchOff({ coll: 1, yaw: 1 }) === 0 && rcYawRate(20) === 0;
     toggleRotorChar();
     o.top = rcPitchOff({ coll: 1, yaw: 0 }); o.bot = rcPitchOff({ coll: -1, yaw: 0 });
-    o.yawTopCW = rcYawRate({ coll: 1 }); o.yawBotCW = rcYawRate({ coll: -1 });
-    { const h = hoverPowerTq(); const c = -10 / TQ_SPAN; o.yawHov10 = rcYawRate({ coll: c });
-      o.yawHov = rcYawRate({ coll: 0 }); o.yawHovExp = -0.15 * 25 * 0.6; }
+    o.upCW = rcYawRate(10); o.dnCW = rcYawRate(-10); o.still = rcYawRate(0); o.cap = rcYawRate(1000);
     o.pedOppCW = rcPitchOff({ coll: 0, yaw: -1 }); o.pedWithCW = rcPitchOff({ coll: 0, yaw: 1 });
     setRotorDir('CCW');
-    o.yawTopCCW = rcYawRate({ coll: 1 }); o.pedOppCCW = rcPitchOff({ coll: 0, yaw: 1 });
+    o.yawTopCCW = rcYawRate(10); o.pedOppCCW = rcPitchOff({ coll: 0, yaw: 1 });
     o.btn = document.querySelector('#rotor-3d [data-rdir=CCW]').classList.contains('on');
     rotorChar = false; rotorDir = 'CW'; updateRotorBtns();
     return o;
   });
   t.ok(rc.off, '회전익 특성을 끄면 커플링이 없다');
   t.ok(Math.abs(rc.top - 5) < 1e-6 && Math.abs(rc.bot + 5) < 1e-6, `COLLECTIVE TO PITCH ±5° (${rc.top} / ${rc.bot})`);
-  t.ok(Math.abs(rc.yawTopCW + 0.15 * 25) < 1e-6 && Math.abs(rc.yawBotCW) < 1e-9,
-    `COLLECTIVE TO YAW — CW 로터는 최상단에서 왼쪽으로 최대 요율의 15% (${rc.yawTopCW})`);
-  t.ok(Math.abs(rc.yawHov10) < 1e-6 && Math.abs(rc.yawHov - rc.yawHovExp) < 1e-6,
-    `COLLECTIVE TO YAW 는 호버 −10% 에서 시작한다 (호버−10%: ${rc.yawHov10} · 호버: ${rc.yawHov.toFixed(2)}°/s — 최대의 60%)`);
-  t.ok(rc.yawTopCCW > 0 && Math.abs(rc.yawTopCCW + rc.yawTopCW) < 1e-6, `CCW 로터는 반대(오른쪽) (${rc.yawTopCCW})`);
+  t.ok(rc.upCW === -3 && rc.dnCW === 3 && rc.still === 0 && rc.cap === -7.5,
+    `COLLECTIVE TO YAW — 레버를 움직일 때만: CW 는 올리면 왼쪽 · 내리면 오른쪽, 최대 7.5°/s (${rc.upCW} / ${rc.dnCW} / ${rc.cap})`);
+  t.ok(rc.yawTopCCW === 3, `CCW 로터는 반대(오른쪽) (${rc.yawTopCCW})`);
   t.ok(rc.pedOppCW === 2 && rc.pedWithCW === -2 && rc.pedOppCCW === 2, 'YAW TO PITCH — 로터 반대 페달 2° 들림 · 로터 방향 페달 2° 숙임');
   t.ok(rc.btn, 'CW/CCW 버튼이 토글된다');
 

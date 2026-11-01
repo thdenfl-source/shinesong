@@ -633,6 +633,7 @@ function stopTrimHold() {
   if (_trimGuard)    { clearTimeout(_trimGuard);    _trimGuard    = null; }
   _trimNonGspdDir = null;
   _trimDir = null;
+  try { if (typeof simTrimRelease === 'function') simTrimRelease(); } catch (e) { _swallow(e); }
 }
 
 function forceTrim() {
