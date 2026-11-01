@@ -2301,9 +2301,9 @@ export async function run(page, t) {
     joyAxes = { roll: { i: 0, inv: false }, pitch: { i: 1, inv: false } };
     S.alt = 2000; _simGndFt = 0; S.spd = 100; S.bnk = 0; simTrimReset();
     for (let i = 0; i < 10; i++) simTrimNudge('L');
-    const o = { pend: simTrim.roll };
-    fly(1); o.after1 = simTrim.roll;
-    fly(2); o.after3 = simTrim.roll;
+    const o = { pend: simTrimAct.roll };
+    fly(1); o.after1 = simTrimAct.roll;
+    fly(2); o.after3 = simTrimAct.roll;
     simTrimReset(); _ax(0, 0); fly(3);
     // 조종간 왼쪽 10° 로 쥐고 → 트림 왼쪽 10°
     _ax(0, stick(-10 / SIM_BANK_MAX)); fly(3); o.stickOnly = S.bnk;

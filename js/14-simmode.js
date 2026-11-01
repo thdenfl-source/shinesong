@@ -305,27 +305,28 @@ let simTrim = { roll: 0, pitch: 0 };   // roll: 오른쪽 + · pitch: 기수 내
 function simTrimNudge(dir) {
   // IAS 가 걸려 있으면 전후 트림은 기준 속도를 1kt 씩 옮긴다(앞 = 빠르게)
   if ((dir === 'F' || dir === 'A') && simAfcsPitch()) { simIasStep(dir === 'F' ? 1 : -1); return; }
-  // 곧바로 옮기지 않고 남은 몫에 쌓는다(simTrimSlew 가 5°/s 로 옮긴다)
-  if (dir === 'R') simTrimPend.roll += SIM_TRIM_STEP_ROLL;
-  else if (dir === 'L') simTrimPend.roll -= SIM_TRIM_STEP_ROLL;
-  else if (dir === 'F') simTrimPend.pitch += SIM_TRIM_STEP_PITCH;      // 앞으로 = 기수 내림
-  else if (dir === 'A') simTrimPend.pitch -= SIM_TRIM_STEP_PITCH;
-  const cR = SIM_TRIM_MAX_ROLL, cP = SIM_TRIM_MAX_PITCH;
-  simTrimPend.roll = Math.max(-cR - simTrim.roll, Math.min(cR - simTrim.roll, simTrimPend.roll));
-  simTrimPend.pitch = Math.max(-cP - simTrim.pitch, Math.min(cP - simTrim.pitch, simTrimPend.pitch));
+  if (dir === 'R') simTrim.roll += SIM_TRIM_STEP_ROLL;
+  else if (dir === 'L') simTrim.roll -= SIM_TRIM_STEP_ROLL;
+  else if (dir === 'F') simTrim.pitch += SIM_TRIM_STEP_PITCH;      // 앞으로 = 기수 내림
+  else if (dir === 'A') simTrim.pitch -= SIM_TRIM_STEP_PITCH;
+  simTrim.roll = Math.max(-SIM_TRIM_MAX_ROLL, Math.min(SIM_TRIM_MAX_ROLL, simTrim.roll));
+  simTrim.pitch = Math.max(-SIM_TRIM_MAX_PITCH, Math.min(SIM_TRIM_MAX_PITCH, simTrim.pitch));
+  // 자세는 3초에 15° 로 따라간다(simTrimSlew)
+  if (dir === 'R' || dir === 'L') _simTrimSlewing.roll = true; else _simTrimSlewing.pitch = true;
 }
-function simTrimReset() { simTrim = { roll: 0, pitch: 0 }; simTrimPend = { roll: 0, pitch: 0 }; simTrimHeld = { roll: null, pitch: null }; }
-// 4방향 트림은 한 번에 튀지 않고 3초에 15°(5°/s)로 옮겨 간다 — 누른 만큼은 '남은 몫'(simTrimPend)에 쌓인다
+function simTrimReset() { simTrim = { roll: 0, pitch: 0 }; simTrimHeld = { roll: null, pitch: null }; _simTrimSlewing = { roll: false, pitch: false }; simTrimAct = { roll: 0, pitch: 0 }; }
+// 4방향 트림은 한 번에 튀지 않고 3초에 15°(5°/s)로 옮겨 간다 — simTrim 은 기준(누른 만큼 곧바로),
+// 자세에 쓰는 몫(simTrimAct)이 그 기준을 따라간다. 트림 버튼이 아닌 곳(GSPD·IAS 풀기 등)이
+// 기준을 바꾸면 곧바로 맞춘다(자세가 튀지 않게 이미 맞춰 넣는 값이다).
 const SIM_TRIM_RATE = 5;
-let simTrimPend = { roll: 0, pitch: 0 };
+let simTrimAct = { roll: 0, pitch: 0 };
+let _simTrimSlewing = { roll: false, pitch: false };
 function simTrimSlew(dt) {
   for (const k of ['roll', 'pitch']) {
-    const p = simTrimPend[k]; if (!p) continue;
-    const d = Math.sign(p) * Math.min(Math.abs(p), SIM_TRIM_RATE * dt);
-    const max = k === 'roll' ? SIM_TRIM_MAX_ROLL : SIM_TRIM_MAX_PITCH;
-    const nv = Math.max(-max, Math.min(max, simTrim[k] + d));
-    simTrimPend[k] = (nv === simTrim[k]) ? 0 : p - d;
-    simTrim[k] = nv;
+    const d = simTrim[k] - simTrimAct[k];
+    if (!_simTrimSlewing[k] || !d) { simTrimAct[k] = simTrim[k]; _simTrimSlewing[k] = false; continue; }
+    simTrimAct[k] += Math.sign(d) * Math.min(Math.abs(d), SIM_TRIM_RATE * dt);
+    if (simTrimAct[k] === simTrim[k]) _simTrimSlewing[k] = false;
   }
 }
 // Against trim — 조종간을 중립 밖으로 쥐고 있는 동안은 그 순간의 트림을 붙잡아 둔다.
@@ -334,11 +335,13 @@ const SIM_TRIM_HOLD_DEAD = 0.03;
 let simTrimHeld = { roll: null, pitch: null };
 function simTrimEff(k, stick) {
   if (Math.abs(stick) > SIM_TRIM_HOLD_DEAD) {
-    if (simTrimHeld[k] === null) simTrimHeld[k] = simTrim[k];
+    if (simTrimHeld[k] === null) simTrimHeld[k] = simTrimAct[k];
+    // 쥐고 있는 동안 넣은 트림은 다 따라간 것으로 둔다 — 놓으면 그 자세로 조종간 빠르기대로 간다
+    simTrimAct[k] = simTrim[k]; _simTrimSlewing[k] = false;
     return simTrimHeld[k];
   }
   simTrimHeld[k] = null;
-  return simTrim[k];
+  return simTrimAct[k];
 }
 
 // ── IAS 상위모드 ──
@@ -381,7 +384,7 @@ function simIasPitch() {
 function simTrimHoldSpeed() {
   const p = -pitchFromSpd(S.spd);
   simTrim = { roll: 0, pitch: Math.max(-SIM_TRIM_MAX_PITCH, Math.min(SIM_TRIM_MAX_PITCH, p)) };
-  simTrimPend = { roll: 0, pitch: 0 }; simTrimHeld = { roll: null, pitch: null };
+  simTrimHeld = { roll: null, pitch: null };
 }
 
 // ── GSPD 중의 조종간(fly-through) ──
