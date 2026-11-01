@@ -70,7 +70,7 @@ export async function run(page, t) {
   const vsi = await page.evaluate(() => {
     const f = v => +vsiFrac(v).toFixed(3);
     const keep = S.vs, texts = [], orig = ctx.fillText;
-    S.vs = -4000;
+    S.vs = -4000; _vsiDisp = null;      // 지시 지연을 비우고 그 값부터
     ctx.fillText = function (s, ...a) { texts.push(String(s)); return orig.call(this, s, ...a); };
     try { drawPFD(); } finally { ctx.fillText = orig; S.vs = keep; }
     return { up: f(3000), dn: f(-4000), k1: f(1000), k2: f(-1000), over: f(-6000), half: f(2000),
@@ -81,6 +81,18 @@ export async function run(page, t) {
   t.eq(vsi.half, 0.75, '+2,000fpm 은 위 칸의 3/4 자리다');
   t.eq(vsi.over, -1, '끝을 넘으면 끝에 붙는다');
   t.ok(vsi.box && vsi.labels, '값 칸에 −4000 이 그대로 나오고 눈금에 3·4 가 적힌다');
+
+  // ── 승강계 지시는 천천히 따라간다(널뛰지 않게) ──
+  const lag = await page.evaluate(async () => {
+    const keep = S.vs;
+    S.vs = 0; _vsiDisp = null; vsiSmoothed();
+    S.vs = 2000; const now0 = vsiSmoothed();
+    await new Promise(r => setTimeout(r, 1500)); const t15 = vsiSmoothed();
+    S.vs = keep; _vsiDisp = null;
+    return { now0, t15 };
+  });
+  t.ok(lag.now0 < 100 && lag.t15 > 1000 && lag.t15 < 1600,
+    `승강계는 바로 튀지 않고 1.5초에 약 2/3 따라간다 (0 → 2000fpm: 곧바로 ${lag.now0.toFixed(0)} · 1.5초 ${lag.t15.toFixed(0)})`);
 
   // ── SIM — 토크를 100% 넘게 당기면 3,000fpm 까지 오른다 ──
   const climb = await page.evaluate(() => {
