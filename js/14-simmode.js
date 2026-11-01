@@ -58,6 +58,8 @@ function simSpaceUp() { simWheelBrake = false; }
 //  COLLECTIVE TO PITCH: 레버와 비례해 기수가 최대 ±5° (올리면 들리고 내리면 숙여진다)
 //  YAW TO PITCH       : 로터 반대 방향 페달 → 최대 2° 들림 · 로터 방향 페달 → 최대 2° 숙임
 const RC_YAW_HOV_BELOW = 10;   // COLLECTIVE TO YAW 가 붙기 시작하는 레버(호버 토크 − 10%)
+const RC_YAW_AT_HOV = 0.6;      // 호버 파워에서 이미 최대의 60%(≈2.25°/s)
+const RC_DRIFT_BANK = 3;        // 전이성향 — 호버 편류를 막는 데 드는 뱅크(°)
 const RC_YAW_FRAC = 0.15, RC_COLL_PIT = 5, RC_YAW_PIT = 2;
 let rotorChar = false, rotorDir = 'CW';
 function rotorSign() { return rotorDir === 'CW' ? 1 : -1; }   // 로터가 도는 쪽(요 + = 오른쪽)
@@ -71,7 +73,9 @@ function rcYawRate(a) {
   const hov = hoverPowerTq();
   const lev = hov + a.coll * (a.coll > 0 ? SIM_LEVER_TOP - hov : TQ_SPAN);
   const lo = hov - RC_YAW_HOV_BELOW;
-  const f = Math.max(0, Math.min(1, (lev - lo) / Math.max(1, SIM_LEVER_TOP - lo)));
+  // 호버 −10% → 호버에서 60% 까지 빠르게(호버에서 뚜렷이 돈다) → 레버 최상단에서 100%
+  const f = lev <= lo ? 0 : lev <= hov ? RC_YAW_AT_HOV * (lev - lo) / RC_YAW_HOV_BELOW
+          : Math.min(1, RC_YAW_AT_HOV + (1 - RC_YAW_AT_HOV) * (lev - hov) / Math.max(1, SIM_LEVER_TOP - hov));
   return -rotorSign() * RC_YAW_FRAC * SIM_YAW_RATE * f;
 }
 function toggleRotorChar() { rotorChar = !rotorChar; updateRotorBtns(); }
@@ -811,7 +815,10 @@ function simFly(dt) {
     // 제자리에서 오른쪽으로 기울이면 기수는 그대로 둔 채 오른쪽으로 간다.
     // 속도가 붙으면 그 몫이 선회로 넘어간다(선회 자체는 07-sim.js 가 한다).
     const side = (1 - simTurnFrac()) * Math.sin(S.bnk * D2R) / Math.sin(SIM_BANK_MAX * D2R);
-    const latTgt = onGnd ? 0 : Math.max(-SIDE_MAX_KT, Math.min(SIDE_MAX_KT, side * SIDE_MAX_KT));
+    // 회전익 특성 — 전이성향(translating tendency): 호버에서 CW 로터는 왼쪽, CCW 는 오른쪽으로 흐른다.
+    // 그 몫은 뱅크 3° 가 내는 옆걸음과 같다 — 로터 반대 쪽으로 3° 기울여야 제자리를 지킨다.
+    const drift = rotorChar ? -rotorSign() * (1 - simTurnFrac()) * Math.sin(RC_DRIFT_BANK * D2R) / Math.sin(SIM_BANK_MAX * D2R) : 0;
+    const latTgt = onGnd ? 0 : Math.max(-SIDE_MAX_KT, Math.min(SIDE_MAX_KT, (side + drift) * SIDE_MAX_KT));
     simLat += (latTgt - simLat) * Math.min(1, (onGnd ? 1.2 : SIDE_K) * dt);
   }
 
