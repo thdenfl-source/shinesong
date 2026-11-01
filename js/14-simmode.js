@@ -391,6 +391,24 @@ function simIasPitch() {
 }
 // 지금 속도를 지키는 트림으로 맞춘다 — GSPD 를 풀었을 때 자세가 튀지 않게
 // (조종간을 가운데 두면 그 속도로 계속 난다).
+// FORCE TRIM 을 놓을 때 — 누르고 있는 동안 조종간으로 옮겨 놓은 지금 자세(피치·롤)를 새 트림으로 잡는다.
+// 놓는 순간 조종간이 아직 밀려 있으면 그 축은 종전 트림을 붙잡아 두었다가(against trim 과 같다)
+// 조종간이 가운데로 돌아오면 새 트림 — 곧 놓을 때의 자세 — 만 남는다.
+function simFtrRelease() {
+  if (!simModeOn || gspdOn || simAfcsPitch()) return;
+  const a = simModeAxes();
+  const out = { roll: S.bnk - a.roll * SIM_BANK_MAX,
+                pitch: -(S.pit - rcPitchOff(a)) - a.pitch * SIM_PITCH_MAX };
+  for (const k of ['roll', 'pitch']) {
+    const max = k === 'roll' ? SIM_TRIM_MAX_ROLL : SIM_TRIM_MAX_PITCH;
+    const stick = k === 'roll' ? a.roll : a.pitch;
+    if (k === 'roll' && simAfcsLat()) continue;
+    const old = simTrimAct[k];
+    simTrim[k] = Math.max(-max, Math.min(max, Math.round(out[k] * 10) / 10));
+    simTrimAct[k] = simTrim[k]; _simTrimSlewing[k] = false;
+    simTrimHeld[k] = Math.abs(stick) > SIM_TRIM_HOLD_DEAD ? old : null;
+  }
+}
 function simTrimHoldSpeed() {
   const p = -pitchFromSpd(S.spd);
   simTrim = { roll: 0, pitch: Math.max(-SIM_TRIM_MAX_PITCH, Math.min(SIM_TRIM_MAX_PITCH, p)) };
@@ -802,11 +820,14 @@ function simFly(dt) {
     simTrimSlew(dt);
     const roll = cl(a.roll + simTrimEff('roll', a.roll) / SIM_BANK_MAX);
     const pitch = cl(a.pitch + simTrimEff('pitch', a.pitch) / SIM_PITCH_MAX);
+    // 3점 접지 — 땅에서 토크가 LIGHT ON WHEELS 아래면 바퀴 셋이 받치고 있다. 트림·회전익 특성은
+    // 자세를 바꾸지 못하고, 조종간으로 기수를 들거나 숙일 때만 움직인다(뱅크는 0).
+    const gnd3 = onGnd && S.tq < hoverPowerTq() + LOW_BAND[0];
 
     // ── 사이클릭 좌우 → 뱅크 ──
     // HDG·NAV 가 걸려 있으면 뱅크는 AFCS 가 잡는다(07-sim.js) — 조종간 좌우는 무시한다.
     if (!simAfcsLat()) {
-      const bTgt = roll * SIM_BANK_MAX;
+      const bTgt = gnd3 ? 0 : roll * SIM_BANK_MAX;
       const dB = bTgt - S.bnk;
       S.bnk += Math.sign(dB) * Math.min(Math.abs(dB), SIM_ROLL_RATE * dt);
       bankTarget = S.bnk;           // 모드를 빠져나가도 자세가 튀지 않게
@@ -822,6 +843,7 @@ function simFly(dt) {
       if (!a.pitch) pRate = SIM_IAS_RATE;
     }
     pTgt += rcPitchOff(a);              // 회전익 특성 — 컬렉티브·페달이 피치로 옮겨 간다
+    if (gnd3) pTgt = -a.pitch * SIM_PITCH_MAX;
     // 땅 위에서는 바퀴가 받치므로 위아래 10° 까지만 기운다
     if (onGnd) pTgt = Math.max(-GND_PITCH_MAX, Math.min(GND_PITCH_MAX, pTgt));
     const dP = pTgt - S.pit;

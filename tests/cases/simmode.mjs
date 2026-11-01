@@ -2361,6 +2361,40 @@ export async function run(page, t) {
   t.ok(rcFast.yaw === 0 && rcFast.ped === 0 && rcFast.coll === 5,
     `20kt 이상에서는 컬렉티브→요·요→피치가 없고 컬렉티브→피치만 남는다 (요 ${rcFast.yaw} · 페달 ${rcFast.ped} · 레버 ${rcFast.coll})`);
 
+  // FORCE TRIM — 누르고 자세를 바꾼 뒤 놓으면 그 자세로 잡힌다 · 3점 접지
+  const ftr = await page.evaluate(`(() => {
+    (${SETUP.toString()})();
+    const fly = ${FLY};
+    const DEAD = 0.08;
+    const stick = (k) => (k === 0 ? 0 : Math.sign(k) * (Math.abs(k) * (1 - DEAD) + DEAD));
+    joyAxes = { roll: { i: 0, inv: false }, pitch: { i: 1, inv: false } };
+    S.alt = 2000; _simGndFt = 0; S.spd = 100; S.bnk = 0; S.pit = 0; simTrimReset();
+    const o = {};
+    forceTrim();                                            // 누른다
+    _ax(0, stick(12 / SIM_BANK_MAX)); _ax(1, stick(-3 / SIM_PITCH_MAX)); fly(4);
+    o.during = { bnk: S.bnk, pit: S.pit };
+    forceTrimRelease();                                     // 조종간을 민 채로 놓는다
+    fly(1); o.afterRel = { bnk: S.bnk, pit: S.pit };
+    _ax(0, 0); _ax(1, 0); fly(4);                           // 조종간을 놓는다
+    o.centered = { bnk: S.bnk, pit: S.pit };
+    simTrimReset(); fly(4);
+    // 3점 접지 — 땅에서 토크가 LIGHT ON WHEELS 아래면 트림으로는 자세가 바뀌지 않는다
+    S.alt = 0; _simGndFt = 0; S.spd = 0; S.vs = 0; S.tq = 10; S.pit = 0; S.bnk = 0;
+    joyAxes.coll = { i: 3, inv: false }; _ax(3, -1);
+    simTrim.pitch = 6; simTrim.roll = 8; fly(2);
+    o.gnd = { pit: S.pit, bnk: S.bnk };
+    _ax(1, stick(-5 / SIM_PITCH_MAX)); fly(2); o.gndStick = S.pit;
+    _ax(1, 0); _ax(3, 0); simTrimReset(); delete joyAxes.coll;
+    return o;
+  })()`);
+  t.ok(Math.abs(ftr.during.bnk - 12) < 1 && Math.abs(ftr.afterRel.bnk - 12) < 1 && Math.abs(ftr.centered.bnk - 12) < 1,
+    `FORCE TRIM 을 누르고 롤 12° 로 옮긴 뒤 놓으면 조종간을 놓아도 12° 다 (${ftr.during.bnk.toFixed(1)} → ${ftr.afterRel.bnk.toFixed(1)} → ${ftr.centered.bnk.toFixed(1)}°)`);
+  t.ok(Math.abs(ftr.centered.pit - ftr.during.pit) < 0.6,
+    `피치도 놓을 때의 자세가 남는다 (${ftr.during.pit.toFixed(1)} → ${ftr.centered.pit.toFixed(1)}°)`);
+  t.ok(Math.abs(ftr.gnd.pit) < 0.1 && Math.abs(ftr.gnd.bnk) < 0.1,
+    `땅에서 LIGHT ON WHEELS 전까지는 트림을 넣어도 3점 접지 그대로다 (피치 ${ftr.gnd.pit.toFixed(1)} · 뱅크 ${ftr.gnd.bnk.toFixed(1)}°)`);
+  t.ok(ftr.gndStick > 3, `조종간으로 당기면 기수가 들린다 (${ftr.gndStick.toFixed(1)}°)`);
+
   // G/S — SIM 에서도 강하선을 잡으면 강하각에 맞춰 고도가 내려간다(출력으로)
   const gsSim = await page.evaluate(() => {
     const keep = gsDeviation;
