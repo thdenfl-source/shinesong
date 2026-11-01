@@ -1618,8 +1618,8 @@ export async function run(page, t) {
   const ac = accel.acc;
   t.ok(ac[1] < ac[3] && ac[3] <= ac[6] && ac[6] <= ac[10],
     `가속이 점점 세진다 (1·3·6·10초 ${[1, 3, 6, 10].map(k => ac[k].toFixed(1)).join(' · ')}kt/s)`);
-  t.ok(accel.spd[10] > 30 && accel.spd[20] > 78,
-    `제자리에서 10초 ${accel.spd[10].toFixed(0)}kt · 20초 ${accel.spd[20].toFixed(0)}kt (종전 일정한 3.5kt/s 보다 빠르다)`);
+  t.ok(accel.spd[10] > 18 && accel.spd[20] > 50,   // 증감속 ×2/3
+    `제자리에서 10초 ${accel.spd[10].toFixed(0)}kt · 20초 ${accel.spd[20].toFixed(0)}kt (가속이 점점 붙는다)`);
 
   // ── 상위모드가 잡은 축은 조종간을 무시한다 ──
   // HDG SEL·NAV 는 좌우(뱅크)·페달을, ALT(선택 고도로 가는 것 포함)·CRHT 는 컬렉티브를 가져간다.
@@ -1803,7 +1803,7 @@ export async function run(page, t) {
     const lvl = { tq: S.tq, dAlt: S.alt - c0 };
     simTrim.pitch = 0;                             // 기수를 수평으로 → 120kt 로 가속
     let minA = 0, maxA = 0, maxTq = 0;
-    step(30, () => { minA = Math.min(minA, S.alt - c0); maxA = Math.max(maxA, S.alt - c0); maxTq = Math.max(maxTq, S.tq); });
+    step(45, () => { minA = Math.min(minA, S.alt - c0); maxA = Math.max(maxA, S.alt - c0); maxTq = Math.max(maxTq, S.tq); });   // 증감속 ×2/3 — 가속이 길어졌다
     const acc = { minA, maxA, maxTq, end: S.alt - c0, spd: S.spd };
     const tq0 = S.tq; let minB = 0;
     _ax(0, (30 / 45) * 0.92 + 0.08);               // 오른쪽 30° 뱅크(조종간 데드존 몫을 얹는다)
@@ -1826,7 +1826,7 @@ export async function run(page, t) {
     `CRHT 가 토크를 더 써서 (${hold.lvl.tq.toFixed(0)} → 최대 ${hold.acc.maxTq.toFixed(0)}%)`);
   // (가속이 점점 커졌다가 목표 가까이에서 짧게 풀리므로, 풀리는 순간 남는 출력만큼 조금 넘친다)
   t.ok(Math.abs(hold.acc.end) < 3 && hold.acc.maxA < 15,
-    `고도를 되찾는다 — 크게 넘치지 않는다 (30초 뒤 ${hold.acc.end.toFixed(1)}ft · 최고 +${hold.acc.maxA.toFixed(1)}ft)`);
+    `고도를 되찾는다 — 크게 넘치지 않는다 (45초 뒤 ${hold.acc.end.toFixed(1)}ft · 최고 +${hold.acc.maxA.toFixed(1)}ft)`);
   t.ok(hold.bank.bnk > 25 && hold.bank.tq > hold.bank.tq0 + 2.5 && hold.bank.minB > -5 && Math.abs(hold.bank.end) < 2,
     `30° 뱅크 — 필요한 만큼 토크를 더 써서 고도를 지킨다 (${hold.bank.tq0.toFixed(0)} → ${hold.bank.tq.toFixed(0)}% · 최저 ${hold.bank.minB.toFixed(1)}ft)`);
   t.ok(hold.alt.maxAlt < 3302 && Math.abs(hold.alt.end - 3300) < 2,
@@ -2261,7 +2261,7 @@ export async function run(page, t) {
         const agl = S.alt - simGroundFt();
         if (!flared && agl <= flareAt) { flared = true; simTrim.pitch = -pit; o.flare = agl; }
         if (flared && cush && !cushed && agl <= cush) {
-          cushed = true; simTrim.pitch = -5; _ax(3, ((hoverPowerTq() - 4) / SIM_LEVER_TOP) * 2 - 1);
+          cushed = true; simTrim.pitch = -5; _ax(3, ((hoverPowerTq() - 8) / SIM_LEVER_TOP) * 2 - 1);
         }
         if (flared && !cushed && agl > 1) {                // 땅에 닿은 뒤(0fpm)는 빼고 본다
           if (S.vs > o.best) { o.best = S.vs; o.bestAgl = agl; }
