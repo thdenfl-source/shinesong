@@ -1,7 +1,7 @@
 // ── 승강계(VSI) 지시 지연 ──
 // 실제 상승률(S.vs)은 매 순간 출렁일 수 있다 — 계기 바늘·숫자는 시간상수 VSI_TAU 로
 // 천천히 따라가 널뛰지 않게 한다(실제 VSI 의 지연과 같다). 고도·비행은 그대로다.
-const VSI_TAU = 1.5;
+const VSI_TAU = 3.0;   // 종전 1.5초의 반 빠르기
 let _vsiDisp = null, _vsiT = 0;
 function vsiSmoothed() {
   const now = performance.now();

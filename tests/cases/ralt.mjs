@@ -91,8 +91,8 @@ export async function run(page, t) {
     S.vs = keep; _vsiDisp = null;
     return { now0, t15 };
   });
-  t.ok(lag.now0 < 100 && lag.t15 > 1000 && lag.t15 < 1600,
-    `승강계는 바로 튀지 않고 1.5초에 약 2/3 따라간다 (0 → 2000fpm: 곧바로 ${lag.now0.toFixed(0)} · 1.5초 ${lag.t15.toFixed(0)})`);
+  t.ok(lag.now0 < 100 && lag.t15 > 600 && lag.t15 < 1000,
+    `승강계는 바로 튀지 않고 1.5초에 약 40% 따라간다(시간상수 3초) (0 → 2000fpm: 곧바로 ${lag.now0.toFixed(0)} · 1.5초 ${lag.t15.toFixed(0)})`);
 
   // ── SIM — 토크를 100% 넘게 당기면 3,000fpm 까지 오른다 ──
   const climb = await page.evaluate(() => {
