@@ -558,6 +558,7 @@ function toggleExtView(on) {
   simExtView = (typeof on === 'boolean') ? on : !simExtView;
   try { if (typeof simLookReset === 'function') simLookReset(); } catch (e) { _swallow(e); }
   try { syncChinView(); } catch (e) { _swallow(e); }
+  try { if (typeof pfdOverlaySync === 'function') pfdOverlaySync(); } catch (e) { _swallow(e); }
   try { if (_ml3d) _ml3d.triggerRepaint(); } catch (e) { _swallow(e); }
   requestAnimationFrame(() => { try { if (_ml3d) _applyFollow(); } catch (e) { _swallow(e); } });
 }

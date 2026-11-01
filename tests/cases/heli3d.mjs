@@ -202,8 +202,10 @@ export async function run(page, t) {
     S.alt = 1000; S.hdg = 40;
     await w(300);
     out.fp = { model: heli3dShown(), btn: getComputedStyle(btn).display, ext: simExtView };
+    if (!pfdOvOn) togglePfdOverlay();
     btn.click();
     await w(300);
+    out.ov = getComputedStyle(document.getElementById('pfd-ov')).display;
     out.on = { ext: simExtView, cls: btn.classList.contains('on'), model: heli3dShown(), chin: _chinMaps.length,
                chinOn: document.getElementById('map3d').classList.contains('chin-on') };
     // 카메라 자리 — 헬기 뒤(기수 방향의 반대)에서 내려다본다
@@ -235,6 +237,7 @@ export async function run(page, t) {
   t.eq(ext.off.shown, 'none', 'SIM 이 아닐 때는 EXT 버튼이 없다');
   t.ok(ext.fp.btn !== 'none' && !ext.fp.ext && !ext.fp.model, 'SIM 1인칭 — EXT 버튼이 보이고, 눈이 기체 안이라 모형은 그리지 않는다');
   t.ok(ext.on.ext && ext.on.cls && ext.on.model, 'EXT 를 누르면 외부 시점 — 모형을 그린다');
+  t.eq(ext.ov, 'none', '외부 시점에서는 계기(PFD 겹침)를 띄우지 않는다 — 모형을 가리지 않게');
   t.ok(ext.on.chin === 0 && !ext.on.chinOn, '외부 시점에서는 CHIN 창을 닫는다');
   t.ok(ext.cam.horiz > 25 && ext.cam.horiz < 200 && Math.abs(((ext.cam.brg - 40 + 540) % 360) - 180) < 3,
     `카메라는 헬기 뒤에 있다 (${ext.cam.horiz.toFixed(0)}m · 헬기 쪽 방위 ${ext.cam.brg.toFixed(0)}°)`);

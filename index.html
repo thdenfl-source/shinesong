@@ -1124,7 +1124,7 @@ body.solo-mode .solo-panel-visible {
    메뉴·설정창은 이 창으로 옮겨 와 열린다(shipUiHome). */
 #ship3d-btn { display: none; position: absolute; top: 8px; left: 8px; z-index: 900; padding: 5px 10px; }
 #map3d.panel-3d #ship3d-btn { display: block; }
-#map3d #ship-menu { top: 40px; bottom: auto; left: 8px; }
+#map3d #ship-menu { top: 40px; bottom: auto; left: auto; right: 112px; }   /* SHIP 버튼이 오른쪽 버튼 묶음에 있으므로 그 왼쪽에 연다 */
 #map3d #ship-panel { top: 8px; right: 8px; bottom: auto; }
 #ship-menu button {
   background: rgba(20,20,20,0.9); border: 1px solid #444; border-radius: 4px;
@@ -2686,8 +2686,6 @@ body.gate-open #gate-overlay { display: none; }
       <!-- 3D 화면에 겹쳐 띄우는 계기(PFD 일부 · FCP 없이) — 3D 가 떠 있는 창의 왼쪽 위(07-sim.js pfdOverlayDraw) -->
       <div id="pfd-ov"><canvas id="pfd-ov-cvs" data-no-fcp="1"></canvas></div>
       <div id="map3d">
-        <!-- 3D 가 제 창(탭의 '3D')을 쓸 때의 SHIP — 메뉴·설정창을 이 창 안에서 연다 -->
-        <button class="sim-btn" id="ship3d-btn" data-act="toggleShip3d">⛵ SHIP</button>
         <!-- SIM 1인칭에서만 — 화면 아래 가운데로 보이는 내 헬기의 기수(nose) · 15-heli3d.js -->
         <div id="sim-nose" aria-hidden="true">
           <svg viewBox="0 0 400 100" preserveAspectRatio="xMidYMax meet">
@@ -2713,6 +2711,8 @@ body.gate-open #gate-overlay { display: none; }
         <div id="ctl3d">
           <button class="sim-btn" id="ctl3d-tog" data-act="toggleCtl3d" title="버튼 접기/펴기">▲ 접기</button>
           <div id="ctl3d-body">
+            <!-- 3D 가 제 창(탭의 '3D')을 쓸 때의 SHIP — 메뉴·설정창을 이 창 안에서 연다 -->
+            <button class="sim-btn" id="ship3d-btn" data-act="toggleShip3d">⛵ SHIP</button>
           <!-- 3D 화질 — 상 → 중 → 하(낮출수록 부드럽다 · 04-map.js) -->
           <button class="sim-btn" id="q3d-btn" data-act="cycleMap3dQuality" title="3D 화질 — 누를 때마다 상 → 중 → 하. 낮출수록 저고도에서도 부드럽습니다">화질 중</button>
           <!-- SIM 1인칭에서만 보인다 — 아래 좌·우 CHIN 창을 끄고 켠다 -->
