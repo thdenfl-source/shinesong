@@ -139,7 +139,7 @@ export async function run(page, t) {
     fly(6);
     const r = { bnk: S.bnk, hdg: S.hdg, turned: normAS(S.hdg - hdg0),
                 lat: S.lat, lon: S.lon };
-    _ax(0, 0); fly(3);              // 가운데로 되돌리면 수평
+    _ax(0, 0); fly(6);              // 가운데로 되돌리면 수평(자세는 10°/s 로 따라간다)
     r.level = S.bnk;
     return r;
   })()`);
@@ -166,7 +166,7 @@ export async function run(page, t) {
     S.spd = 80;
     _ax(1, 1); fly(5);              // 앞으로(+) = 기수 내림
     const fwd = { pit: S.pit, spd: S.spd };
-    _ax(1, -1); fly(8);             // 뒤로 = 기수 올림 → 감속
+    _ax(1, -1); fly(12);            // 뒤로 = 기수 올림 → 감속
     return { fwd, aft: { pit: S.pit, spd: S.spd } };
   })()`);
   t.ok(pitch.fwd.pit < -10, `앞으로 밀면 기수가 내려간다 (${pitch.fwd.pit.toFixed(1)}°)`);
@@ -1175,17 +1175,17 @@ export async function run(page, t) {
     return { one, oneP, t1, rolled, back, level, nose, held, heldR, maxR, maxP,
              holdMs: SIM_TRIM_HOLD_MS, repMs: SIM_TRIM_REP_MS };
   })()`);
-  t.ok(trim.one.roll === 1 && trim.one.pitch === 0, `한 번 누르면 뱅크가 1° 옮겨 간다 (${trim.one.roll}°)`);
+  t.ok(trim.one.roll === 0.5 && trim.one.pitch === 0, `한 번 누르면 뱅크가 0.5° 옮겨 간다 (${trim.one.roll}°)`);
   t.ok(trim.oneP.pitch === 0.5 && trim.oneP.roll === 0, `피치는 한 번에 0.5° 다 (${trim.oneP.pitch}°)`);
   t.eq(trim.rolled.axis, 0, '조종간은 가운데 그대로다');
-  t.ok(Math.abs(trim.rolled.bnk - 10) < 0.6, `우 트림 10번이면 10° 기운 채 난다 (${trim.rolled.bnk.toFixed(1)}°)`);
-  t.ok(Math.abs(trim.back + 10) < 0.6, `반대로 20번 넘기면 왼쪽 10° (${trim.back.toFixed(1)}°)`);
+  t.ok(Math.abs(trim.rolled.bnk - 5) < 0.6, `우 트림 10번이면 5° 기운 채 난다 (${trim.rolled.bnk.toFixed(1)}°)`);
+  t.ok(Math.abs(trim.back + 5) < 0.6, `반대로 20번 넘기면 왼쪽 5° (${trim.back.toFixed(1)}°)`);
   t.ok(Math.abs(trim.level) < 0.6, `트림을 풀면 수평으로 돌아온다 (${trim.level.toFixed(1)}°)`);
   t.ok(Math.abs(trim.nose.pit + 10) < 0.6, `앞 트림 20번이면 기수가 10° 내려간다 (${trim.nose.pit.toFixed(1)}°)`);
   t.ok(trim.holdMs === 500 && trim.repMs === 100,
     `0.5초 넘게 누르면 홀드다 — 그 전에 떼면 딸깍 한 번(1°) (${trim.holdMs}ms · ${trim.repMs}ms 마다)`);
   t.eq(trim.held, -4, `피치 햇을 누르고 있으면 계속 옮겨 간다 (${trim.held}° — 첫 0.5° + 0.1초마다 0.5° × 7)`);
-  t.eq(trim.heldR.roll, 8, `뱅크도 똑같이 이어 간다 (${trim.heldR.roll}° — 1° 씩)`);
+  t.eq(trim.heldR.roll, 4, `뱅크도 똑같이 이어 간다 (${trim.heldR.roll}° — 0.5° 씩)`);
   t.ok(trim.maxR === 30 && trim.maxP === -20,
     `한없이 쌓이지는 않는다 (뱅크 ±${trim.maxR}° · 피치 ${trim.maxP}°)`);
 
@@ -1282,16 +1282,16 @@ export async function run(page, t) {
     return { btnArmed, btnClick, btnThree, btnPitch, btnHeld, btnStop,
              hatClick, hatThree, hatRoll, hatHeld, dupKeyFirst, dupHeld, dupPadFirst, boundKey };
   })()`);
-  t.eq(joyTrim.btnClick.roll, 1, `4방향 트림 딸깍 한 번이면 1° 다 (${joyTrim.btnClick.roll}°)`);
+  t.eq(joyTrim.btnClick.roll, 0.5, `4방향 트림 딸깍 한 번이면 0.5° 다 (${joyTrim.btnClick.roll}°)`);
   t.ok(joyTrim.btnArmed && joyTrim.btnClick.timer === null && joyTrim.btnClick.int === null,
     '누르는 동안 홀드가 걸려 있다가 떼면 풀린다');
-  t.eq(joyTrim.btnThree, 3, `세 번 딸깍이면 3° 다 (${joyTrim.btnThree}°)`);
+  t.eq(joyTrim.btnThree, 1.5, `세 번 딸깍이면 1.5° 다 (${joyTrim.btnThree}°)`);
   t.eq(joyTrim.btnPitch, 0.5, `▲ 는 한 번에 피치 0.5° 다 (${joyTrim.btnPitch}°)`);
-  t.eq(joyTrim.btnHeld, 8, `4방향 트림을 누르고 있으면 이어 간다 (${joyTrim.btnHeld}° — 첫 1° + 7번)`);
+  t.eq(joyTrim.btnHeld, 4, `4방향 트림을 누르고 있으면 이어 간다 (${joyTrim.btnHeld}° — 첫 0.5° + 7번)`);
   t.ok(joyTrim.btnStop.timer === null && joyTrim.btnStop.int === null, '떼면 반복이 멈춘다');
   t.eq(joyTrim.hatClick, -0.5, `축 9 햇 ▼ 딸깍 한 번이면 피치 0.5° 다 (${joyTrim.hatClick}°)`);
   t.eq(joyTrim.hatThree, -1.5, `햇 세 번 딸깍이면 1.5° 다 (${joyTrim.hatThree}°)`);
-  t.eq(joyTrim.hatRoll, -1, `햇 ◀ 도 한 번에 1° 다 (${joyTrim.hatRoll}°)`);
+  t.eq(joyTrim.hatRoll, -0.5, `햇 ◀ 도 한 번에 0.5° 다 (${joyTrim.hatRoll}°)`);
   t.eq(joyTrim.hatHeld, 4, `햇 ▲ 를 누르고 있으면 이어 간다 (${joyTrim.hatHeld}° — 0.5° × 8)`);
   t.eq(joyTrim.dupKeyFirst.pitch, 0.5,
     `햇과 방향키가 함께 들어와도 한 칸(0.5°)이다 (${joyTrim.dupKeyFirst.pitch}°)`);
@@ -1654,7 +1654,7 @@ export async function run(page, t) {
     out.rel = { on: hdgSelOn || rollApOn, b0, lat: simAfcsLat() };
     fly(1); out.rel.b1 = S.bnk;
     // 풀린 뒤에는 조종간이 다시 뱅크를 잡는다
-    simTrimReset(); _ax(0, -0.5); fly(2); out.manual = S.bnk;
+    simTrimReset(); _ax(0, -0.5); fly(4); out.manual = S.bnk;
     _ax(0, 0); fly(3);
     // ALT — 선택 고도 3,300ft · 500fpm. 레버를 끝까지 내려도 오르고, 닿으면 선다
     S.alt = 3000; S.vs = 0; simVsAcc = 0;   // 선회하며 가라앉은 만큼 되돌려 놓고 시작한다
@@ -1972,7 +1972,7 @@ export async function run(page, t) {
   t.eq(look.trimDuring, look.trimBefore, '둘러보는 동안에는 트림이 바뀌지 않는다');
   t.ok(Math.abs(normAS0(look.back.bearing - 90)) < 3 && Math.abs(look.back.pitch - 90) < 3,
     `B0 을 놓으면 정면으로 돌아온다 (방위 ${look.back.bearing}° · ${look.back.pitch.toFixed(0)}°)`);
-  t.eq(look.trimAfter, look.trimBefore + 1, 'B0 없이 누른 햇은 종전대로 트림(1°)이다');
+  t.eq(look.trimAfter, look.trimBefore + 0.5, 'B0 없이 누른 햇은 종전대로 트림(0.5°)이다');
   t.ok(Math.abs(look.comp.pitch + 30) < 0.5 && Math.abs(look.comp.yaw - 180) < 0.5,
     `오른쪽 30° 뱅크에서 오른쪽을 보면 30° 내려다본다 (${look.comp.pitch.toFixed(1)}° · 방위 ${look.comp.yaw.toFixed(0)}°)`);
 
