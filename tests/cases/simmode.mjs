@@ -2320,10 +2320,18 @@ export async function run(page, t) {
   t.ok(Math.abs(trimT.released + 10) < 1,
     `놓으면 트림으로 넣은 경사만 남는다 (${trimT.released.toFixed(1)}°)`);
 
+  // FPV(예상 항적) 버튼
+  const fpv = await page.evaluate(() => {
+    const b = document.getElementById('fpv-btn'); const o = { a: fpvOn };
+    toggleFpv(); o.b = fpvOn; o.txt = b.textContent; toggleFpv(); o.c = fpvOn;
+    return o;
+  });
+  t.ok(fpv.a && !fpv.b && fpv.txt === 'FPV OFF' && fpv.c, 'FPV 버튼으로 ADI 예상 항적을 끄고 켠다');
+
   // 회전익 특성 — 20kt 이상이면 컬렉티브 투 피치만 남는다
   const rcFast = await page.evaluate(() => {
     rotorChar = true; rotorDir = 'CW'; S.spd = 25;
-    const o = { yaw: rcYawRate({ coll: 1 }), ped: rcPitchOff({ coll: 0, yaw: 1 }), coll: rcPitchOff({ coll: 1, yaw: 0 }) };
+    const o = { yaw: rcYawRate(10), ped: rcPitchOff({ coll: 0, yaw: 1 }), coll: rcPitchOff({ coll: 1, yaw: 0 }) };
     rotorChar = false; S.spd = 0;
     return o;
   });
@@ -2370,26 +2378,22 @@ export async function run(page, t) {
   const rc = await page.evaluate(() => {
     const o = {};
     rotorChar = false; rotorDir = 'CW';
-    o.off = rcPitchOff({ coll: 1, yaw: 1 }) === 0 && rcYawRate({ coll: 1 }) === 0;
+    o.off = rcPitchOff({ coll: 1, yaw: 1 }) === 0 && rcYawRate(20) === 0;
     toggleRotorChar();
     o.top = rcPitchOff({ coll: 1, yaw: 0 }); o.bot = rcPitchOff({ coll: -1, yaw: 0 });
-    o.yawTopCW = rcYawRate({ coll: 1 }); o.yawBotCW = rcYawRate({ coll: -1 });
-    { const h = hoverPowerTq(); const c = -10 / TQ_SPAN; o.yawHov10 = rcYawRate({ coll: c });
-      o.yawHov = rcYawRate({ coll: 0 }); o.yawHovExp = -0.15 * 25 * 0.6; }
+    o.upCW = rcYawRate(10); o.dnCW = rcYawRate(-10); o.still = rcYawRate(0); o.cap = rcYawRate(1000);
     o.pedOppCW = rcPitchOff({ coll: 0, yaw: -1 }); o.pedWithCW = rcPitchOff({ coll: 0, yaw: 1 });
     setRotorDir('CCW');
-    o.yawTopCCW = rcYawRate({ coll: 1 }); o.pedOppCCW = rcPitchOff({ coll: 0, yaw: 1 });
+    o.yawTopCCW = rcYawRate(10); o.pedOppCCW = rcPitchOff({ coll: 0, yaw: 1 });
     o.btn = document.querySelector('#rotor-3d [data-rdir=CCW]').classList.contains('on');
     rotorChar = false; rotorDir = 'CW'; updateRotorBtns();
     return o;
   });
   t.ok(rc.off, '회전익 특성을 끄면 커플링이 없다');
   t.ok(Math.abs(rc.top - 5) < 1e-6 && Math.abs(rc.bot + 5) < 1e-6, `COLLECTIVE TO PITCH ±5° (${rc.top} / ${rc.bot})`);
-  t.ok(Math.abs(rc.yawTopCW + 0.15 * 25) < 1e-6 && Math.abs(rc.yawBotCW) < 1e-9,
-    `COLLECTIVE TO YAW — CW 로터는 최상단에서 왼쪽으로 최대 요율의 15% (${rc.yawTopCW})`);
-  t.ok(Math.abs(rc.yawHov10) < 1e-6 && Math.abs(rc.yawHov - rc.yawHovExp) < 1e-6,
-    `COLLECTIVE TO YAW 는 호버 −10% 에서 시작한다 (호버−10%: ${rc.yawHov10} · 호버: ${rc.yawHov.toFixed(2)}°/s — 최대의 60%)`);
-  t.ok(rc.yawTopCCW > 0 && Math.abs(rc.yawTopCCW + rc.yawTopCW) < 1e-6, `CCW 로터는 반대(오른쪽) (${rc.yawTopCCW})`);
+  t.ok(rc.upCW === -3 && rc.dnCW === 3 && rc.still === 0 && rc.cap === -7.5,
+    `COLLECTIVE TO YAW — 레버를 움직일 때만: CW 는 올리면 왼쪽 · 내리면 오른쪽, 최대 7.5°/s (${rc.upCW} / ${rc.dnCW} / ${rc.cap})`);
+  t.ok(rc.yawTopCCW === 3, `CCW 로터는 반대(오른쪽) (${rc.yawTopCCW})`);
   t.ok(rc.pedOppCW === 2 && rc.pedWithCW === -2 && rc.pedOppCCW === 2, 'YAW TO PITCH — 로터 반대 페달 2° 들림 · 로터 방향 페달 2° 숙임');
   t.ok(rc.btn, 'CW/CCW 버튼이 토글된다');
 

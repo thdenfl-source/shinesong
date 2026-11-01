@@ -2210,6 +2210,7 @@ appRegister({
   toggleSim,
   toggleHdgRef,
   togglePfdOverlay,
+  toggleFpv,
   dgAdjust,
   setSimSpeed,
   toggleHoldEntry,

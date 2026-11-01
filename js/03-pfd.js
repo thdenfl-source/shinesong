@@ -421,8 +421,8 @@ function drawAI(x, y, w, h) {
   ctx.restore();
 
 
-  // ── Flight Path Vector (FPV) ──
-  {
+  // ── Flight Path Vector (FPV) ── — 3D 창의 FPV 버튼으로 켜고 끈다(07-sim.js toggleFpv)
+  if (typeof fpvOn === 'undefined' || fpvOn) {
     const driftDeg = normAS(computeTrack() - S.hdg);
     const fpaDeg = Math.atan2(-S.vs / 60, Math.max(5, S.spd) * 1.6878) / D2R;
     const fpvX = cx + driftDeg * ppd;

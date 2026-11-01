@@ -20,7 +20,7 @@
 // ─────────────────────────────────────────────────────────────
 
 const SIM_BANK_MAX  = 45;      // 사이클릭 최대 뱅크(°)
-const SIM_ROLL_RATE = 60;      // 뱅크가 따라가는 속도(°/s)
+const SIM_ROLL_RATE = 10;   // 사이클릭에 자세가 따라가는 빠르기 — 4WAY 트림(5°/s)의 2배로 완만하게 · 종전 60      // 뱅크가 따라가는 속도(°/s)
 // 기수 자세의 한계 — 위아래 60° 까지. 속도는 제 한계에서 멎는다
 // (들면 16° 에 뒤로 40kt, 숙이면 −20° 에 160kt).
 const SIM_PITCH_MAX = 60;      // 사이클릭 최대 피치(°)
@@ -54,11 +54,9 @@ function simSpaceDown(now) {
 function simSpaceUp() { simWheelBrake = false; }
 // ── 회전익 특성(3D 창 '회전익 특성') ──
 // 로터 회전 방향(위에서 볼 때): CW 시계 · CCW 반시계. 켜면 세 가지 커플링이 붙는다.
-//  COLLECTIVE TO YAW  : 레버 호버−10%→최상단에 따라 페달 최대 요율의 0→15% 로 로터 반대 방향으로 돈다(공중)
+//  COLLECTIVE TO YAW  : 레버를 움직이는 동안 — 올리면 로터 반대, 내리면 로터 방향으로 돈다(공중)
 //  COLLECTIVE TO PITCH: 레버와 비례해 기수가 최대 ±5° (올리면 들리고 내리면 숙여진다)
 //  YAW TO PITCH       : 로터 반대 방향 페달 → 최대 2° 들림 · 로터 방향 페달 → 최대 2° 숙임
-const RC_YAW_HOV_BELOW = 10;   // COLLECTIVE TO YAW 가 붙기 시작하는 레버(호버 토크 − 10%)
-const RC_YAW_AT_HOV = 0.6;      // 호버 파워에서 이미 최대의 60%(≈2.25°/s)
 const RC_DRIFT_BANK = 3;        // 전이성향 — 호버 편류를 막는 데 드는 뱅크(°)
 const RC_YAW_FRAC = 0.15, RC_COLL_PIT = 5, RC_YAW_PIT = 2;
 let rotorChar = false, rotorDir = 'CW';
@@ -71,16 +69,19 @@ function rcPitchOff(a) {
   if (!rotorChar) return 0;
   return RC_COLL_PIT * a.coll - RC_YAW_PIT * rotorSign() * a.yaw * rcLowK();
 }
-function rcYawRate(a) {
-  if (!rotorChar || !rcLowK()) return 0;
-  // 레버 자리의 토크로 본다 — 호버 −10% 에서 0, 레버 최상단에서 최대(15%)
+// COLLECTIVE TO YAW — 레버를 움직이는 동안만 돈다(토크가 바뀌는 만큼 반작용이 바뀐다).
+// 올리면 로터 반대 방향, 내리면 로터 방향으로 — 레버 1%/s 당 RC_YAW_K °/s, 최대 RC_YAW_MAX °/s.
+// 레버를 멈추면 회전도 멈춘다(페달로 받아 둔 만큼 그대로다).
+const RC_YAW_K = 0.3, RC_YAW_MAX = 2 * RC_YAW_FRAC * SIM_YAW_RATE;   // 7.5°/s(종전 최대의 2배)
+let _rcLevPrev = null;
+function rcLeverTq(a) {
   const hov = hoverPowerTq();
-  const lev = hov + a.coll * (a.coll > 0 ? SIM_LEVER_TOP - hov : TQ_SPAN);
-  const lo = hov - RC_YAW_HOV_BELOW;
-  // 호버 −10% → 호버에서 60% 까지 빠르게(호버에서 뚜렷이 돈다) → 레버 최상단에서 100%
-  const f = lev <= lo ? 0 : lev <= hov ? RC_YAW_AT_HOV * (lev - lo) / RC_YAW_HOV_BELOW
-          : Math.min(1, RC_YAW_AT_HOV + (1 - RC_YAW_AT_HOV) * (lev - hov) / Math.max(1, SIM_LEVER_TOP - hov));
-  return -rotorSign() * RC_YAW_FRAC * SIM_YAW_RATE * f * rcLowK();
+  return hov + a.coll * (a.coll > 0 ? SIM_LEVER_TOP - hov : TQ_SPAN);
+}
+function rcYawRate(dLev) {
+  if (!rotorChar || !rcLowK() || !dLev) return 0;
+  const r = Math.max(-RC_YAW_MAX, Math.min(RC_YAW_MAX, RC_YAW_K * dLev));
+  return -rotorSign() * r * rcLowK();
 }
 function toggleRotorChar() { rotorChar = !rotorChar; updateRotorBtns(); }
 function setRotorDir(d) { rotorDir = d === 'CCW' ? 'CCW' : 'CW'; updateRotorBtns(); }
@@ -96,7 +97,7 @@ function updateRotorBtns() {
 }
 let simLow = false;            // LIGHT ON WHEELS — 바퀴가 떨어지기 직전(HOV−20%…HOV−10%)
 function simLightOnWheels() { return simModeOn && simLow; }
-const SIM_PITCH_RATE = 30;     // 피치가 따라가는 속도(°/s)
+const SIM_PITCH_RATE = 10;  // 종전 30     // 피치가 따라가는 속도(°/s)
 const SIM_YAW_RATE  = 25;      // 페달 최대 요율(°/s)
 // ── 저속의 옆미끄럼(측방 비행) ──
 // 헬기는 속도가 낮을 때 뱅크를 주면 선회하지 않고 '옆으로 간다'. 속도가
@@ -297,7 +298,7 @@ function simFlareTgt(onGnd) {
 // 화면 버튼·방향키 모두 같다). GSPD 가 걸려 있으면 트림은 GSPD 기준속도를
 // 옮긴다(01-state.js startTrimHold).
 // 값은 '자세 각도(°)' 로 들고 있다가 조종간 몫으로 바꿔 더한다.
-const SIM_TRIM_STEP_ROLL  = 1;     // 한 번에 옮기는 뱅크(°)
+const SIM_TRIM_STEP_ROLL  = 0.5;     // 한 번에 옮기는 뱅크(°)
 const SIM_TRIM_STEP_PITCH = 0.5;   // 한 번에 옮기는 기수 자세(°)
 const SIM_TRIM_MAX_ROLL  = 30;     // 트림만으로 갈 수 있는 뱅크(°)
 const SIM_TRIM_MAX_PITCH = 20;     // 트림만으로 갈 수 있는 기수 자세(°)
@@ -682,8 +683,11 @@ function toggleSimMode(on, opt) {
     selHdg = ((Math.round(hdgInd()) + 359) % 360) + 1;
   }
   // 회전익 특성 — 컬렉티브 토크의 반작용으로 동체가 로터 반대 방향으로 돈다(공중에서만)
+  const lev = rcLeverTq(a);
+  const dLev = (_rcLevPrev === null) ? 0 : (lev - _rcLevPrev) / dt;
+  _rcLevPrev = lev;
   if (rotorChar && !onGnd && !simAfcsLat()) {
-    const yr = rcYawRate(a);
+    const yr = rcYawRate(dLev);
     if (yr) { S.hdg = normA(S.hdg + yr * dt); selHdg = ((Math.round(hdgInd()) + 359) % 360) + 1; }
   }
   updateSimModeBtn();
