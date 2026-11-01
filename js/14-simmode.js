@@ -108,7 +108,9 @@ const SIDE_K       = 0.5;     // 옆방향 속도가 따라가는 빠르기(1/s)
 function simAfcsLat() {
   return simModeOn && !gspdOn && !gspdCoasting && (navApOn || (hdgSelOn && rollApOn));
 }
-function simAfcsVert() { return simModeOn && (altHoldOn || crhtOn); }
+function simAfcsVert() { return simModeOn && (altHoldOn || crhtOn || (gsOn && !!_simGs())); }
+// G/S 를 잡고 있으면 강하선(gsDeviation)이 고도를 정한다 — ALT·CRHT 보다 앞선다
+function _simGs() { try { return gsOn ? gsDeviation() : null; } catch (e) { return null; } }
 // ALT·CRHT 가 원하는 상승률(fpm) — 목표 고도까지 남은 높이에 비례하고, ALT 는 선택
 // 상승률(selVS) · CRHT 는 500fpm 을 넘지 않는다. 고도가 빠지면 그만큼 올리려 한다.
 // 상승률은 출력을 따라 천천히 붙으므로, 지금 상승률로 조금 뒤(SIM_AFCS_LEAD) 닿을
@@ -117,6 +119,15 @@ const SIM_AFCS_ALT_K = 10;     // 1ft 어긋날 때마다 원하는 상승률(fp
 const SIM_AFCS_LEAD  = 2;      // 앞을 내다보는 시간(s)
 function simAfcsVsCmd() {
   // CRHT 는 전파고도(AGL)를 지킨다 — 기압고도로 바꾸면 '발밑 땅 + 선택 높이'
+  const g = _simGs();
+  if (g) {
+    // 강하각과 지상속도가 내는 기본 강하율(3°·120kt ≈ 640fpm)에, 강하선에서 벗어난 만큼을 얹는다
+    const gsKt = Math.max(20, groundSpdKt());
+    const base = gsKt * Math.tan(g.angle * D2R) * FT_PER_NM / 60;
+    const ahead = S.alt + (S.vs || 0) / 60 * SIM_AFCS_LEAD;
+    const corr = Math.max(-400, Math.min(400, (g.path - ahead) * 0.5));
+    return Math.max(-2000, Math.min(500, -base + corr));
+  }
   const tgt = altHoldOn ? selAlt : selCrht + radarGroundFt();
   const rate = altHoldOn ? Math.max(50, Math.abs(selVS)) : 500;
   const ahead = S.alt + (S.vs || 0) / 60 * SIM_AFCS_LEAD;
