@@ -3216,7 +3216,7 @@ function act(name, ...args) {
     function joyAxFlip(role) { joyAxInvert(role); switchMode('JOYSTICK'); }
     function joyAxAbs(role) { joyAxToggleAbs(role); switchMode('JOYSTICK'); }
     function joyResetBinds() {
-      joyBinds = {}; joySave(); joyCancelCapture(); switchMode('JOYSTICK');
+      joyResetToDefault(); joyCancelCapture(); switchMode('JOYSTICK');
     }
     function renderJoystickScreen(container, footer, title) {
       title.innerText = 'Joystick';
@@ -3299,7 +3299,7 @@ function act(name, ...args) {
         `좌우는 롤, 전후는 피치를 조금씩 옮겨 둡니다.</div>`);
       const foot = `<div data-act="joyResetBinds" style="text-align:right;margin:8px 0 4px;">` +
         `<span style="display:inline-block;color:#ff8877;font-size:9px;border:1px solid #5a2a2a;border-radius:3px;` +
-        `padding:3px 9px;cursor:pointer;">전체 배정 해제</span></div>`;
+        `padding:3px 9px;cursor:pointer;">기본 배정으로 되돌리기</span></div>`;
       // 입력 진단 — 지금 들어오는 버튼/축 값을 그대로 보여 준다.
       // 배정이 안 되는 입력이 무엇으로 올라오는지 눈으로 확인할 수 있다.
       const mon = `<div style="color:#556;font-size:9px;letter-spacing:1px;margin:10px 0 4px;">입력 진단</div>` +
