@@ -488,6 +488,23 @@ export async function run(page, t) {
   t.eq(ui.hasHoverPage, true, 'HOVER PAGE 도 배정할 수 있다');
   t.eq(ui.cap, ui.first, '행을 누르면 그 동작이 입력 대기가 된다');
 
+  // 배정을 바꿨다가 '기본 배정으로 되돌리기' 를 누르면 시야 둘러보기(B0)가 돌아온다
+  const rst = await page.evaluate(() => {
+    joySetBind('b0', 'ftr'); joyClearBind('lookMod');
+    joyResetToDefault();
+    const o = { b0: joyBinds.b0, b1: joyBinds.b1 };
+    // B0 를 누르고 햇 ◀ — 트림이 아니라 시선이 된다
+    const sim0 = simModeOn; simModeOn = true; simLookReset();
+    const keep = simTrim.roll;
+    _joyEdge('b0', true, 0); startTrimHold('L');
+    o.dir = simLookDir; o.trim = simTrim.roll === keep;
+    stopTrimHold(); _joyEdge('b0', false, 1);
+    o.held = simLookHeld; simModeOn = sim0;
+    return o;
+  });
+  t.ok(rst.b0 === 'lookMod' && rst.b1 === 'apOff', `되돌리면 B0 = 시야 둘러보기 · B1 = 상위모드 해제 (${rst.b0} · ${rst.b1})`);
+  t.ok(rst.dir === 'L' && rst.trim && !rst.held, '되돌린 뒤 B0 + 햇으로 다시 둘러본다(트림은 그대로)');
+
   // 뒷정리 — 다음 검사가 가짜 패드를 물려받지 않도록
   await page.evaluate(() => {
     navigator.getGamepads = () => [];

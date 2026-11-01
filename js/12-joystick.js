@@ -175,6 +175,35 @@ function joyApOffDefault() {
   joySave();
 }
 
+// 배정 초기화 — 비우지 않고 기본 배치로 되돌린다. 표준 배치 패드면 흔한 배치를 깔고,
+// 어떤 장치든 B0 = 시야 둘러보기 · B1 = 상위모드 모두 해제 를 다시 잡는다(초기화 뒤 둘러보기가
+// 사라지던 문제 — 기본 B0 은 처음 한 번만 잡게 되어 있어 비운 뒤로는 돌아오지 않았다).
+function joyDefaultBinds() {
+  let std = false;
+  try { std = joyPads().some(p => p && p.mapping === 'standard'); } catch (e) { _swallow(e); }
+  const b = std ? Object.assign({}, JOY_STD_BINDS) : {};
+  const put = (code, act) => {
+    const old = b[code];
+    for (const c in b) if (b[c] === act) delete b[c];
+    b[code] = act;
+    if (old && old !== act && !Object.keys(b).some(c => b[c] === old)) {
+      const free = ['b8', 'b10', 'b11'].find(c => !b[c]);
+      if (free) b[free] = old;
+    }
+  };
+  put('b0', 'lookMod');
+  put('b1', 'apOff');
+  return b;
+}
+function joyResetToDefault() {
+  joyReleaseAll();
+  joyBinds = joyDefaultBinds();
+  joySave();
+  joyLookDefaultDone = true; joyApOffDone = true;
+  try { localStorage.setItem('joyLookB0', '1'); localStorage.setItem('joyApOffB1', '1'); } catch (e) { _swallow(e); }
+  try { if (typeof simLookHold === 'function') simLookHold(false); } catch (e) { _swallow(e); }
+}
+
 let joyPadName = '';          // 연결된 장치 이름(설정 화면 표시용)
 let joyActiveIdx = -1;        // 지금 쓰고 있는 패드 번호(여러 대가 올라올 때)
 let joyLastCode = '';         // 마지막으로 눌린 입력(설정 화면 표시용)
