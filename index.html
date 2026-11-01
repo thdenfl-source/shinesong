@@ -575,6 +575,12 @@ html, body {
 #snd-btn { position: absolute; top: 136px; right: 8px; z-index: 900; padding: 5px 10px; }
 #pfdov-btn { position: absolute; top: 168px; right: 8px; z-index: 900; padding: 5px 10px; }
 #hdgref-3d { top: 200px; }
+#rotor-3d { position: absolute; right: 8px; top: 310px; z-index: 900; width: 86px; display: flex; flex-direction: column; gap: 3px; }
+#rotor-3d .sim-btn { flex: none; padding: 4px 2px; font-size: 11px; }
+#rotor-3d .sim-btn.on { color: #00e07a; border-color: #00e07a; }
+#rotor-3d .rotor-dir { display: flex; gap: 3px; }
+#rotor-3d .rotor-dir .sim-btn { flex: 1; }
+#rotor-3d .rotor-dir .sim-btn:disabled { opacity: 0.35; cursor: default; }
 #hdgref-map { top: 48px; }
 /* 출발 공항 고르기(09-cdu.js openStartAirportPicker) */
 .ui-dlg.start-apt { width: min(560px, 94vw); max-width: min(560px, 94vw); }
@@ -594,6 +600,7 @@ html, body {
 #map-wrap #snd-btn { top: 176px; }
 #map-wrap #pfdov-btn { top: 208px; }
 #map-wrap #hdgref-3d { top: 240px; }
+#map-wrap #rotor-3d { top: 350px; }
 /* 3D 를 지도 위에 겹쳐 쓰면 3D 쪽 버튼만 둔다 */
 #map-wrap.map3d-on #hdgref-map { display: none; }
 /* When 3D is on, hide the 2D Leaflet map so its panes never paint through */
@@ -2700,6 +2707,14 @@ body.gate-open #gate-overlay { display: none; }
             <button class="sim-btn" data-act="dgAdjust" data-arg='[1]' title="DG — HSI 를 오른쪽으로 1°" disabled>+</button>
           </div>
           <div class="hdgref-comp" title="자기 나침반(스탠바이) — DG 를 맞출 때 견준다"></div>
+        </div>
+        <!-- 회전익 특성 — COLLECTIVE TO YAW · COLLECTIVE TO PITCH · YAW TO PITCH (14-simmode.js) -->
+        <div id="rotor-3d">
+          <button class="sim-btn rotor-main" data-act="toggleRotorChar" title="회전익 특성 — 컬렉티브→요(로터 반대 방향, 최대 요율의 15%) · 컬렉티브→피치(±5°) · 페달→피치(±2°)">회전익 특성</button>
+          <div class="rotor-dir">
+            <button class="sim-btn on" data-rdir="CW" data-act="setRotorDir" data-arg='["CW"]' title="시계방향 로터(위에서 볼 때)" disabled>CW ↻</button>
+            <button class="sim-btn" data-rdir="CCW" data-act="setRotorDir" data-arg='["CCW"]' title="반시계방향 로터(위에서 볼 때)" disabled>CCW ↺</button>
+          </div>
         </div>
         <div id="tilt-ctrl">
           <button data-act="tiltAdj" data-arg='[-5]' title="Tilt up">▲</button>

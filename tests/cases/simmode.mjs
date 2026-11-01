@@ -2292,6 +2292,29 @@ export async function run(page, t) {
     `레버로 받친 뒤 상승률이 치솟지 않는다 (최대 ${auto.good.maxVs.toFixed(0)}fpm — 땅 가까이의 빠른 몫을 넘겨 받지 않는다)`);
   t.ok(auto.pow === 0, '출력을 걸고 나는 동안(수평 비행 토크)은 기수를 들어도 플레어 몫이 붙지 않는다');
 
+  // 회전익 특성 — COLLECTIVE TO YAW / PITCH · YAW TO PITCH
+  const rc = await page.evaluate(() => {
+    const o = {};
+    rotorChar = false; rotorDir = 'CW';
+    o.off = rcPitchOff({ coll: 1, yaw: 1 }) === 0 && rcYawRate({ coll: 1 }) === 0;
+    toggleRotorChar();
+    o.top = rcPitchOff({ coll: 1, yaw: 0 }); o.bot = rcPitchOff({ coll: -1, yaw: 0 });
+    o.yawTopCW = rcYawRate({ coll: 1 }); o.yawBotCW = rcYawRate({ coll: -1 });
+    o.pedOppCW = rcPitchOff({ coll: 0, yaw: -1 }); o.pedWithCW = rcPitchOff({ coll: 0, yaw: 1 });
+    setRotorDir('CCW');
+    o.yawTopCCW = rcYawRate({ coll: 1 }); o.pedOppCCW = rcPitchOff({ coll: 0, yaw: 1 });
+    o.btn = document.querySelector('#rotor-3d [data-rdir=CCW]').classList.contains('on');
+    rotorChar = false; rotorDir = 'CW'; updateRotorBtns();
+    return o;
+  });
+  t.ok(rc.off, '회전익 특성을 끄면 커플링이 없다');
+  t.ok(Math.abs(rc.top - 5) < 1e-6 && Math.abs(rc.bot + 5) < 1e-6, `COLLECTIVE TO PITCH ±5° (${rc.top} / ${rc.bot})`);
+  t.ok(Math.abs(rc.yawTopCW + 0.15 * 25) < 1e-6 && Math.abs(rc.yawBotCW) < 1e-9,
+    `COLLECTIVE TO YAW — CW 로터는 최상단에서 왼쪽으로 최대 요율의 15% (${rc.yawTopCW})`);
+  t.ok(rc.yawTopCCW > 0 && Math.abs(rc.yawTopCCW + rc.yawTopCW) < 1e-6, `CCW 로터는 반대(오른쪽) (${rc.yawTopCCW})`);
+  t.ok(rc.pedOppCW === 2 && rc.pedWithCW === -2 && rc.pedOppCCW === 2, 'YAW TO PITCH — 로터 반대 페달 2° 들림 · 로터 방향 페달 2° 숙임');
+  t.ok(rc.btn, 'CW/CCW 버튼이 토글된다');
+
   // 뒷정리 — 다음 검사가 SIM 모드·가짜 패드를 물려받지 않도록
   await page.evaluate(() => {
     if (simModeOn) toggleSimMode(false);

@@ -52,6 +52,34 @@ function simSpaceDown(now) {
   } else _simSpaceAt = now;
 }
 function simSpaceUp() { simWheelBrake = false; }
+// ── 회전익 특성(3D 창 '회전익 특성') ──
+// 로터 회전 방향(위에서 볼 때): CW 시계 · CCW 반시계. 켜면 세 가지 커플링이 붙는다.
+//  COLLECTIVE TO YAW  : 레버 최하단→최상단에 따라 페달 최대 요율의 0→15% 로 로터 반대 방향으로 돈다(공중)
+//  COLLECTIVE TO PITCH: 레버와 비례해 기수가 최대 ±5° (올리면 들리고 내리면 숙여진다)
+//  YAW TO PITCH       : 로터 반대 방향 페달 → 최대 2° 들림 · 로터 방향 페달 → 최대 2° 숙임
+const RC_YAW_FRAC = 0.15, RC_COLL_PIT = 5, RC_YAW_PIT = 2;
+let rotorChar = false, rotorDir = 'CW';
+function rotorSign() { return rotorDir === 'CW' ? 1 : -1; }   // 로터가 도는 쪽(요 + = 오른쪽)
+function rcPitchOff(a) {
+  if (!rotorChar) return 0;
+  return RC_COLL_PIT * a.coll - RC_YAW_PIT * rotorSign() * a.yaw;
+}
+function rcYawRate(a) {
+  if (!rotorChar) return 0;
+  return -rotorSign() * RC_YAW_FRAC * SIM_YAW_RATE * Math.max(0, Math.min(1, (a.coll + 1) / 2));
+}
+function toggleRotorChar() { rotorChar = !rotorChar; updateRotorBtns(); }
+function setRotorDir(d) { rotorDir = d === 'CCW' ? 'CCW' : 'CW'; updateRotorBtns(); }
+function updateRotorBtns() {
+  try {
+    const box = document.getElementById('rotor-3d'); if (!box) return;
+    box.classList.toggle('on', rotorChar);
+    const m = box.querySelector('.rotor-main'); if (m) m.classList.toggle('on', rotorChar);
+    box.querySelectorAll('[data-rdir]').forEach(b => {
+      b.classList.toggle('on', b.dataset.rdir === rotorDir); b.disabled = !rotorChar;
+    });
+  } catch (e) { _swallow(e); }
+}
 let simLow = false;            // LIGHT ON WHEELS — 바퀴가 떨어지기 직전(HOV−20%…HOV−10%)
 function simLightOnWheels() { return simModeOn && simLow; }
 const SIM_PITCH_RATE = 30;     // 피치가 따라가는 속도(°/s)
@@ -595,6 +623,11 @@ function toggleSimMode(on, opt) {
     simLookReset();
     selHdg = ((Math.round(hdgInd()) + 359) % 360) + 1;
   }
+  // 회전익 특성 — 컬렉티브 토크의 반작용으로 동체가 로터 반대 방향으로 돈다(공중에서만)
+  if (rotorChar && !onGnd && !simAfcsLat()) {
+    const yr = rcYawRate(a);
+    if (yr) { S.hdg = normA(S.hdg + yr * dt); selHdg = ((Math.round(hdgInd()) + 359) % 360) + 1; }
+  }
   updateSimModeBtn();
   try { updateApInhibit(); } catch (e) { _swallow(e); }
 }
@@ -724,6 +757,7 @@ function simFly(dt) {
       pTgt = Math.max(-SIM_PITCH_MAX, Math.min(SIM_PITCH_MAX, simIasPitch() - a.pitch * SIM_PITCH_MAX));
       if (!a.pitch) pRate = SIM_IAS_RATE;
     }
+    pTgt += rcPitchOff(a);              // 회전익 특성 — 컬렉티브·페달이 피치로 옮겨 간다
     // 땅 위에서는 바퀴가 받치므로 위아래 10° 까지만 기운다
     if (onGnd) pTgt = Math.max(-GND_PITCH_MAX, Math.min(GND_PITCH_MAX, pTgt));
     const dP = pTgt - S.pit;
@@ -860,5 +894,5 @@ function simFly(dt) {
 
 // 화면 버튼(data-act) 연결 — 이 파일이 11-charts.js 보다 나중에 로드되므로
 // 거기 목록에 넣으면 아직 정의되지 않은 이름이 된다. 여기서 직접 등록한다.
-try { appRegister({ toggleSimMode, simModeBtnPress }); } catch (e) { _swallow(e); }
+try { appRegister({ toggleSimMode, simModeBtnPress, toggleRotorChar, setRotorDir }); } catch (e) { _swallow(e); }
 try { updateSimModeBtn(); } catch (e) { _swallow(e); }
