@@ -72,7 +72,7 @@ function rcPitchOff(a) {
 // COLLECTIVE TO YAW — 레버를 움직이는 동안만 돈다(토크가 바뀌는 만큼 반작용이 바뀐다).
 // 올리면 로터 반대 방향, 내리면 로터 방향으로 — 레버 1%/s 당 RC_YAW_K °/s, 최대 RC_YAW_MAX °/s.
 // 레버를 멈추면 회전도 멈춘다(페달로 받아 둔 만큼 그대로다).
-const RC_YAW_K = 0.3, RC_YAW_MAX = 2 * RC_YAW_FRAC * SIM_YAW_RATE;   // 7.5°/s(종전 최대의 2배)
+const RC_YAW_K = 0.3, RC_YAW_MAX = 7.5;     // 7.5°/s(종전 최대의 2배)
 let _rcLevPrev = null;
 function rcLeverTq(a) {
   const hov = hoverPowerTq();
