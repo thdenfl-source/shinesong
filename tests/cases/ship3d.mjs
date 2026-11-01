@@ -339,8 +339,8 @@ export async function run(page, t) {
     `레버를 내리면 함미 갑판에 내려앉는다 (${land.landed.alt.toFixed(1)}ft · 갑판 ${DECK_FT.toFixed(1)}ft)`);
   {
     const drawn = Number.isFinite(land.view.rend) ? land.view.rend : 0;   // 그려진 수면
-    t.ok(land.view.sim && Math.abs(land.view.alt - drawn - 15) < 0.5 && land.view.off < 0.5,
-      `갑판에서는 눈이 갑판 위 8m 다 (수면 위 ${(land.view.alt - drawn).toFixed(1)}m · 헬기 자리에서 ${land.view.off.toFixed(2)}m)`);
+    t.ok(land.view.sim && Math.abs(land.view.alt - drawn - 10) < 0.5 && land.view.off < 0.5,
+      `갑판에서는 눈이 갑판(7m) 위 3m 다 (수면 위 ${(land.view.alt - drawn).toFixed(1)}m · 헬기 자리에서 ${land.view.off.toFixed(2)}m)`);
     t.ok(land.view.near < 6,
       `가까운 클립면이 ${land.view.near.toFixed(1)}m 라 발밑 갑판과 함교가 잘리지 않는다 (종전 133m)`);
   }
@@ -385,8 +385,8 @@ export async function run(page, t) {
   });
   t.ok(steady.terrMin === 0 && steady.terrMax === 0,
     `그려진 바다는 늘 0m 다 (${steady.terrMin.toFixed(1)} … ${steady.terrMax.toFixed(1)}m)`);
-  t.ok(steady.camMax - steady.camMin < 0.5 && Math.abs(steady.camMin - 8) < 0.5,
-    `20ft 로 떠 있는 동안 카메라 높이가 뛰지 않는다 (${steady.camMin.toFixed(1)} … ${steady.camMax.toFixed(1)}m)`);
+  t.ok(steady.camMax - steady.camMin < 0.5 && Math.abs(steady.camMin - (20 * 0.3048 + 3)) < 0.5,
+    `20ft 로 떠 있는 동안 카메라 높이(기체 + 3m)가 뛰지 않는다 (${steady.camMin.toFixed(1)} … ${steady.camMax.toFixed(1)}m)`);
   t.ok(steady.shipY > 0 && steady.shipY < steady.H,
     `300m 앞 수면의 함정이 화면 안에 있다 (y ${steady.shipY.toFixed(0)} / ${steady.H})`);
 

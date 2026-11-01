@@ -63,12 +63,16 @@ const RC_DRIFT_BANK = 3;        // 전이성향 — 호버 편류를 막는 데 
 const RC_YAW_FRAC = 0.15, RC_COLL_PIT = 5, RC_YAW_PIT = 2;
 let rotorChar = false, rotorDir = 'CW';
 function rotorSign() { return rotorDir === 'CW' ? 1 : -1; }   // 로터가 도는 쪽(요 + = 오른쪽)
+// 컬렉티브 투 피치를 뺀 나머지(컬렉티브→요 · 요→피치 · 전이성향)는 저속 현상이다 —
+// 15kt 부터 줄어 20kt 이상이면 없다
+const RC_LOW_KT0 = 15, RC_LOW_KT1 = 20;
+function rcLowK() { return Math.max(0, Math.min(1, (RC_LOW_KT1 - Math.abs(S.spd)) / (RC_LOW_KT1 - RC_LOW_KT0))); }
 function rcPitchOff(a) {
   if (!rotorChar) return 0;
-  return RC_COLL_PIT * a.coll - RC_YAW_PIT * rotorSign() * a.yaw;
+  return RC_COLL_PIT * a.coll - RC_YAW_PIT * rotorSign() * a.yaw * rcLowK();
 }
 function rcYawRate(a) {
-  if (!rotorChar) return 0;
+  if (!rotorChar || !rcLowK()) return 0;
   // 레버 자리의 토크로 본다 — 호버 −10% 에서 0, 레버 최상단에서 최대(15%)
   const hov = hoverPowerTq();
   const lev = hov + a.coll * (a.coll > 0 ? SIM_LEVER_TOP - hov : TQ_SPAN);
@@ -76,7 +80,7 @@ function rcYawRate(a) {
   // 호버 −10% → 호버에서 60% 까지 빠르게(호버에서 뚜렷이 돈다) → 레버 최상단에서 100%
   const f = lev <= lo ? 0 : lev <= hov ? RC_YAW_AT_HOV * (lev - lo) / RC_YAW_HOV_BELOW
           : Math.min(1, RC_YAW_AT_HOV + (1 - RC_YAW_AT_HOV) * (lev - hov) / Math.max(1, SIM_LEVER_TOP - hov));
-  return -rotorSign() * RC_YAW_FRAC * SIM_YAW_RATE * f;
+  return -rotorSign() * RC_YAW_FRAC * SIM_YAW_RATE * f * rcLowK();
 }
 function toggleRotorChar() { rotorChar = !rotorChar; updateRotorBtns(); }
 function setRotorDir(d) { rotorDir = d === 'CCW' ? 'CCW' : 'CW'; updateRotorBtns(); }
@@ -162,17 +166,17 @@ const SIM_SPD_BACK  = -40;     // 후방 비행 한계(kt) — 헬기는 뒤로�
 //         감속은 가속보다 빨리 붙고 세다(1초에 6kt/s 씩 · 최대 15kt/s).
 //         가속은 속도가 붙을수록(전이양력으로 출력이 남을수록) 세진다.
 //   고도: 상승률도 같은 식이다 — 레버를 움직이면 오르내림이 점점 빨라지며 붙는다.
-const SPD_JERK     = 8.0;     // 가감속이 커지는 빠르기(kt/s²)
-const SPD_ACC_UP0  = 5.0;     // 제자리 언저리에서 낼 수 있는 가속(kt/s)
-const SPD_ACC_UP   = 10.0;     // 전이양력을 다 받은 뒤의 최대 가속(kt/s)
+const SPD_JERK     = 4.0;   // 속도·상승률 변화 빠르기를 종전의 반으로     // 가감속이 커지는 빠르기(kt/s²)
+const SPD_ACC_UP0  = 2.5;   // 속도·상승률 변화 빠르기를 종전의 반으로     // 제자리 언저리에서 낼 수 있는 가속(kt/s)
+const SPD_ACC_UP   = 5.0;   // 속도·상승률 변화 빠르기를 종전의 반으로     // 전이양력을 다 받은 뒤의 최대 가속(kt/s)
 const SPD_ETL_KT   = 40;      // 가속이 다 세지는 속도(kt)
-const SPD_DEC_JERK = 24.0;     // 감속이 커지는 빠르기(kt/s²)
-const SPD_DEC_MAX  = 15.0;    // 최대 감속(kt/s) — 원판을 젖히면 항력까지 같이 받는다
+const SPD_DEC_JERK = 12.0;   // 속도·상승률 변화 빠르기를 종전의 반으로     // 감속이 커지는 빠르기(kt/s²)
+const SPD_DEC_MAX  = 7.5;   // 속도·상승률 변화 빠르기를 종전의 반으로    // 최대 감속(kt/s) — 원판을 젖히면 항력까지 같이 받는다
 // 상승·강하율이 바뀌는 빠르기 — 변화의 빠르기가 일정하게 커져(저크) 바뀐 양이 시간의 제곱으로 는다.
 // 종전보다 저크 4배 · 한계 5배(레버에 상승률이 훨씬 빨리 붙는다). 차차 맞춰 간다
 // 피치로 바뀌는 상승·강하(감속·가속이 돌려주는 운동에너지 몫)는 가감속 저크를 4배(가속 8 · 감속 24kt/s²)로 해 4배 빨리 붙는다
-const VS_JERK      = 1000;     // 상승률의 변화가 커지는 빠르기(fpm/s²)
-const VS_ACC_MAX   = 2500;     // 상승률이 바뀌는 최대 빠르기(fpm/s)
+const VS_JERK      = 500;   // 속도·상승률 변화 빠르기를 종전의 반으로     // 상승률의 변화가 커지는 빠르기(fpm/s²)
+const VS_ACC_MAX   = 1250;   // 속도·상승률 변화 빠르기를 종전의 반으로     // 상승률이 바뀌는 최대 빠르기(fpm/s)
 const VS_IGE_TAU   = 0.3;     // 지면효과 안(땅 가까이)에서 상승률이 토크를 따라가는 시간(s)
 const TQ_TAU       = 0.02;    // 토크가 레버를 따라가는 시간(s) — 엔진·로터 관성(종전 0.5 의 반 = 2배 빠르게)
 // ── 남는 토크 → 상승률 ──
@@ -237,7 +241,7 @@ let simVsAcc = 0;             // 지금 상승률이 바뀌는 빠르기(fpm/s)
 // 감속·가속을 되풀이해도 고도가 저절로 쌓이지 않는다.
 // (감속이 빨라진 만큼 줄여, 동고도 감속에서 떠오르는 높이가 지나치지 않게 한다)
 const CLIMB_PIT_OFF = 1;   // 상승 중 같은 속도에 드는 기수 들림(°) — 상승 80kt = 5°
-const DESC_DEC_K = 0.5;     // 강하 파워 감속: 남은 속도(kt)당 감속(kt/s) — 정비례
+const DESC_DEC_K = 0.25;   // 속도·상승률 변화 빠르기를 종전의 반으로     // 강하 파워 감속: 남은 속도(kt)당 감속(kt/s) — 정비례
 const DESC_KE_K = 0.5;
 const HOV_TO_MARGIN = 7;    // 호버 토크보다 이만큼(%) 더 쓰면 이륙 가속 중 침하가 없다
 const TQ_FPM = 50;          // 토크 10% = 500fpm
@@ -301,14 +305,41 @@ let simTrim = { roll: 0, pitch: 0 };   // roll: 오른쪽 + · pitch: 기수 내
 function simTrimNudge(dir) {
   // IAS 가 걸려 있으면 전후 트림은 기준 속도를 1kt 씩 옮긴다(앞 = 빠르게)
   if ((dir === 'F' || dir === 'A') && simAfcsPitch()) { simIasStep(dir === 'F' ? 1 : -1); return; }
-  if (dir === 'R') simTrim.roll += SIM_TRIM_STEP_ROLL;
-  else if (dir === 'L') simTrim.roll -= SIM_TRIM_STEP_ROLL;
-  else if (dir === 'F') simTrim.pitch += SIM_TRIM_STEP_PITCH;      // 앞으로 = 기수 내림
-  else if (dir === 'A') simTrim.pitch -= SIM_TRIM_STEP_PITCH;
-  simTrim.roll = Math.max(-SIM_TRIM_MAX_ROLL, Math.min(SIM_TRIM_MAX_ROLL, simTrim.roll));
-  simTrim.pitch = Math.max(-SIM_TRIM_MAX_PITCH, Math.min(SIM_TRIM_MAX_PITCH, simTrim.pitch));
+  // 곧바로 옮기지 않고 남은 몫에 쌓는다(simTrimSlew 가 5°/s 로 옮긴다)
+  if (dir === 'R') simTrimPend.roll += SIM_TRIM_STEP_ROLL;
+  else if (dir === 'L') simTrimPend.roll -= SIM_TRIM_STEP_ROLL;
+  else if (dir === 'F') simTrimPend.pitch += SIM_TRIM_STEP_PITCH;      // 앞으로 = 기수 내림
+  else if (dir === 'A') simTrimPend.pitch -= SIM_TRIM_STEP_PITCH;
+  const cR = SIM_TRIM_MAX_ROLL, cP = SIM_TRIM_MAX_PITCH;
+  simTrimPend.roll = Math.max(-cR - simTrim.roll, Math.min(cR - simTrim.roll, simTrimPend.roll));
+  simTrimPend.pitch = Math.max(-cP - simTrim.pitch, Math.min(cP - simTrim.pitch, simTrimPend.pitch));
 }
-function simTrimReset() { simTrim = { roll: 0, pitch: 0 }; }
+function simTrimReset() { simTrim = { roll: 0, pitch: 0 }; simTrimPend = { roll: 0, pitch: 0 }; simTrimHeld = { roll: null, pitch: null }; }
+// 4방향 트림은 한 번에 튀지 않고 3초에 15°(5°/s)로 옮겨 간다 — 누른 만큼은 '남은 몫'(simTrimPend)에 쌓인다
+const SIM_TRIM_RATE = 5;
+let simTrimPend = { roll: 0, pitch: 0 };
+function simTrimSlew(dt) {
+  for (const k of ['roll', 'pitch']) {
+    const p = simTrimPend[k]; if (!p) continue;
+    const d = Math.sign(p) * Math.min(Math.abs(p), SIM_TRIM_RATE * dt);
+    const max = k === 'roll' ? SIM_TRIM_MAX_ROLL : SIM_TRIM_MAX_PITCH;
+    const nv = Math.max(-max, Math.min(max, simTrim[k] + d));
+    simTrimPend[k] = (nv === simTrim[k]) ? 0 : p - d;
+    simTrim[k] = nv;
+  }
+}
+// Against trim — 조종간을 중립 밖으로 쥐고 있는 동안은 그 순간의 트림을 붙잡아 둔다.
+// 쥔 채로 트림을 넣으면 기준(트림)만 옮겨 가고 자세는 조종간이 정한다 — 놓으면 넣은 트림 자세만 남는다.
+const SIM_TRIM_HOLD_DEAD = 0.03;
+let simTrimHeld = { roll: null, pitch: null };
+function simTrimEff(k, stick) {
+  if (Math.abs(stick) > SIM_TRIM_HOLD_DEAD) {
+    if (simTrimHeld[k] === null) simTrimHeld[k] = simTrim[k];
+    return simTrimHeld[k];
+  }
+  simTrimHeld[k] = null;
+  return simTrim[k];
+}
 
 // ── IAS 상위모드 ──
 // 걸면 기수 자세를 '선택 속도(selSpd)를 내는 자세' 로 잡는다 — 자세 하나가 곧 속도이므로
@@ -350,6 +381,7 @@ function simIasPitch() {
 function simTrimHoldSpeed() {
   const p = -pitchFromSpd(S.spd);
   simTrim = { roll: 0, pitch: Math.max(-SIM_TRIM_MAX_PITCH, Math.min(SIM_TRIM_MAX_PITCH, p)) };
+  simTrimPend = { roll: 0, pitch: 0 }; simTrimHeld = { roll: null, pitch: null };
 }
 
 // ── GSPD 중의 조종간(fly-through) ──
@@ -566,6 +598,8 @@ function simDeckHandoff(toDeck) {
   else {
     S.spd = Math.max(SIM_SPD_BACK, Math.min(SIM_SPD_MAX, S.spd + f));
     simLat += l;
+    // 뜨는 순간 함정 속도를 지키는 자세로 — 곧장 제자리 속도로 줄어들지 않게
+    if (!toDeck) { S.pit = pitchFromSpd(S.spd); simTrimHoldSpeed(); simTrimHeld.pitch = null; }
   }
 }
 
@@ -757,8 +791,9 @@ function simFly(dt) {
   if (!gspdOn) {
     // 조종간 값에 트림을 더한다 — 가운데 두어도 트림 자세를 지킨다
     const cl = v => Math.max(-1, Math.min(1, v));
-    const roll = cl(a.roll + simTrim.roll / SIM_BANK_MAX);
-    const pitch = cl(a.pitch + simTrim.pitch / SIM_PITCH_MAX);
+    simTrimSlew(dt);
+    const roll = cl(a.roll + simTrimEff('roll', a.roll) / SIM_BANK_MAX);
+    const pitch = cl(a.pitch + simTrimEff('pitch', a.pitch) / SIM_PITCH_MAX);
 
     // ── 사이클릭 좌우 → 뱅크 ──
     // HDG·NAV 가 걸려 있으면 뱅크는 AFCS 가 잡는다(07-sim.js) — 조종간 좌우는 무시한다.
@@ -828,7 +863,7 @@ function simFly(dt) {
     const side = (1 - simTurnFrac()) * Math.sin(S.bnk * D2R) / Math.sin(SIM_BANK_MAX * D2R);
     // 회전익 특성 — 전이성향(translating tendency): 호버에서 CW 로터는 왼쪽, CCW 는 오른쪽으로 흐른다.
     // 그 몫은 뱅크 3° 가 내는 옆걸음과 같다 — 로터 반대 쪽으로 3° 기울여야 제자리를 지킨다.
-    const drift = rotorChar ? -rotorSign() * (1 - simTurnFrac()) * Math.sin(RC_DRIFT_BANK * D2R) / Math.sin(SIM_BANK_MAX * D2R) : 0;
+    const drift = rotorChar ? -rcLowK() * rotorSign() * (1 - simTurnFrac()) * Math.sin(RC_DRIFT_BANK * D2R) / Math.sin(SIM_BANK_MAX * D2R) : 0;
     const latTgt = onGnd ? 0 : Math.max(-SIDE_MAX_KT, Math.min(SIDE_MAX_KT, (side + drift) * SIDE_MAX_KT));
     simLat += (latTgt - simLat) * Math.min(1, (onGnd ? 1.2 : SIDE_K) * dt);
   }
