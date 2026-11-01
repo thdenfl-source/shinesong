@@ -259,28 +259,22 @@ const TQ_KT  = 1;           // 남는(모자란) 토크 1% 당 같은 자세의 
 const TQ_KT_MAX = 10;
 const TQ_KT_VS0 = 500, TQ_KT_VS1 = 700;   // 오르내림이 500fpm 을 넘어야 속도차가 생기기 시작해 700fpm 에서 다 붙는다
 const DESC_TQ = 5;          // 수평 비행 토크보다 이만큼(%) 모자라야 강하 파워로 본다(고도 유지 중 미세한 차는 빼고)      // 강하 파워에서 감속이 돌려주는 상승률 몫(반)
-const SIM_KE_EFF = 0.5;        // 운동에너지 중 고도로 옮겨 가는 몫(나머지는 항력으로 잃는다)
+const SIM_KE_EFF = 0.14;       // 감속할 때 운동에너지 중 고도로 옮겨 가는 몫(10kt → 약 350fpm) · 종전 0.5
+const SIM_KE_EFF_ACC = 0.17;   // 가속할 때 고도로 치르는 몫(10kt → 약 330fpm)
 const SIM_KE_FPM = 0.514444 * 0.514444 / 9.80665 * 196.8504;   // kt × kt/s → fpm (≈5.31)
 // 지금의 속도·가감속이 만드는 상승률(fpm). 땅 위에서는 미끄럼이 멈춰 세울 뿐이다.
 let _simKePowered = false;     // 지금 가감속이 남는 출력의 속도차 몫인가(simFly 가 채운다)
-// ── 자세(피치) 변화 ↔ 고도 ──
-// 조종사가 직접 몰 때는 '자세가 정한 속도' 와 지금 속도의 차이가 곧 오르내림이 된다 —
-// 기수를 들어 10kt 줄이면 약 350fpm 오르고, 숙여 10kt 늘리면 약 350fpm 내려간다(최대치 · KE_FPM_PER_KT).
-// 속도가 맞춰지면 그 몫은 사라진다. 낮은 속도에서는 운동에너지가 작으므로 그만큼 줄인다(KE_FULL_KT).
-const KE_FPM_PER_KT = 45, KE_FPM_PER_KT_ACC = 40, KE_DEV_MAX = 30, KE_FULL_KT = 60, KE_TAU = 0.3;
-// (가속은 감속보다 천천히 붙어 속도차가 오래 남으므로 조금 작게 — 둘 다 10kt 에 약 350fpm)
-let _simKeVsF = 0;             // 그 몫(fpm) — simFly 가 매 구간 채운다
+// ── 자세(피치) 변화 ↔ 고도 ── 기수를 들어 10kt 줄이면 약 350fpm 오르고, 숙여 10kt 늘리면 약 350fpm 내려간다
+// (100kt 언저리 · 최대치). 운동에너지 법칙 그대로라 줄였다 늘리면 고도가 제자리로 돌아온다.
+// 가속은 감속보다 천천히 붙으므로 같은 상승·강하율이 나오게 몫을 조금 크게 둔다(SIM_KE_EFF_ACC).
 function simKeVs(onGnd, spd = S.spd, acc = simAcc) {
-  if (onGnd) return 0;
-  if (!gspdOn) return _simKeVsF;
-  // GSPD(상위모드) — AFCS 가 가감속을 몰 때는 가감속 그대로의 운동에너지 교환
-  if (_simKePowered) return 0;
+  if (onGnd || _simKePowered) return 0;
   // 호버에서 기수를 숙여(5°) 이륙 가속할 때 — 호버 토크 + 7% 넘게 쓰면 가라앉지 않는다
   // (호버 이륙 가속에만 — 전이양력을 다 받기 전(SPD_ETL_KT) 까지. 순항에서 가속할 때는 운동에너지 법칙 그대로)
   if (acc > 0 && Math.abs(spd) < SPD_ETL_KT && S.tq >= hoverPowerTq() + HOV_TO_MARGIN) return 0;
   // 강하 파워에서 기수를 들어 줄어드는 강하율은 반만(DESC_KE_K)
   const k = (acc < 0 && !simAfcsVert() && S.tq < tqRequired() - DESC_TQ) ? DESC_KE_K : 1;
-  return -SIM_KE_EFF * k * SIM_KE_FPM * spd * acc;
+  return -(acc < 0 ? SIM_KE_EFF : SIM_KE_EFF_ACC) * k * SIM_KE_FPM * spd * acc;
 }
 // ── 오토로테이션 플레어 ──
 // 레버를 내리고(출력 없이) 내려오는 중에 기수를 들면 원판이 뒤로 젖혀져, 앞에서 오던 바람이
@@ -707,7 +701,7 @@ function toggleSimMode(on, opt) {
     // (타력 비행과 SIM 조종이 같은 속도를 함께 쓰지 않게)
     if (gspdCoasting) { S.spd = gspdActFwd; simLat = gspdActLat; gspdCoasting = false; }
     try { if (gsOn) toggleGs(); } catch (e) { _swallow(e); }
-    hdgSelOn = false; rollApOn = false; altHoldOn = false; crhtOn = false; simIasOn = false; _rcLevPrev = null; simYawRate = 0; _simKePowered = false; _simKeVsF = 0;
+    hdgSelOn = false; rollApOn = false; altHoldOn = false; crhtOn = false; simIasOn = false; _rcLevPrev = null; simYawRate = 0; _simKePowered = false;
     _simOnDeck = false;
     try { updateHoverBtns(); } catch (e) { _swallow(e); }
     // 손을 떼면 그 자리에서 날던 대로 — 지금 자세를 그대로 이어받는다
@@ -836,7 +830,7 @@ function simFly(dt) {
   // GSPD 가 걸려 있으면 자세·속도는 GSPD 가 맡는다 — 조종간 좌우·전후는
   // 07-sim.js 의 GSPD 수렴에서 fly-through 로 쓰인다(simGspdStick).
   // 페달·컬렉티브는 그대로 조종사 몫이다.
-  if (gspdOn) { _simKePowered = false; _simKeVsF = 0; }
+  if (gspdOn) _simKePowered = false;
   if (!gspdOn) {
     // 조종간 값에 트림을 더한다 — 가운데 두어도 트림 자세를 지킨다
     const cl = v => Math.max(-1, Math.min(1, v));
@@ -914,16 +908,6 @@ function simFly(dt) {
       }
     }
     S.spd = Math.max(SIM_SPD_BACK, Math.min(SIM_SPD_MAX, S.spd + simAcc * dt));
-    // 자세가 정한 속도와의 차이 → 오르내림(simKeVs) — 들어 줄이는 중이면 오르고, 숙여 늘리는 중이면 내려간다
-    if (onGnd) _simKeVsF = 0;
-    else {
-      const dev = Math.max(-KE_DEV_MAX, Math.min(KE_DEV_MAX, S.spd - sTgt));
-      let ke = (dev > 0 ? KE_FPM_PER_KT : KE_FPM_PER_KT_ACC) * dev * Math.min(1, Math.abs(S.spd) / KE_FULL_KT);
-      if (_simKePowered) ke = 0;                                   // 남는 출력이 낸 속도차는 엔진 몫
-      if (dev < 0 && Math.abs(S.spd) < SPD_ETL_KT && S.tq >= hoverPowerTq() + HOV_TO_MARGIN) ke = 0;   // 호버 이륙 가속
-      if (dev > 0 && !simAfcsVert() && S.tq < tqRequired() - DESC_TQ) ke *= DESC_KE_K;               // 강하 파워에서는 반만
-      _simKeVsF += (ke - _simKeVsF) * Math.min(1, dt / KE_TAU);
-    }
 
     // ── 저속에서는 뱅크가 옆걸음이 된다 ──
     // 제자리에서 오른쪽으로 기울이면 기수는 그대로 둔 채 오른쪽으로 간다.

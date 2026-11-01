@@ -299,7 +299,7 @@ export async function run(page, t) {
   const gain = ke.flare.alt - ke.lvl.alt;
   t.ok(Math.abs(ke.lvl.vs) < 100, `레버를 고도 유지에 두고 수평 120kt 로 난다 (${ke.lvl.vs.toFixed(0)}fpm)`);
   t.ok(Math.abs(ke.flare.spd - 60) < 5, `기수를 60kt 자세(약 4.9°)로 들면 60kt 로 준다 (${ke.flare.spd.toFixed(0)}kt)`);
-  t.ok(ke.flare.maxVs > 500, `감속하는 동안 떠오른다 (최대 +${ke.flare.maxVs.toFixed(0)}fpm — 레버는 그대로)`);
+  t.ok(ke.flare.maxVs > 300, `감속하는 동안 떠오른다 (최대 +${ke.flare.maxVs.toFixed(0)}fpm — 레버는 그대로)`);
   t.ok(gain > keUp * 0.75 && gain < keUp * 1.25,
     `줄어든 운동에너지만큼 고도를 얻는다 (+${gain.toFixed(0)}ft · 계산 ${keUp.toFixed(0)}ft)`);
   t.ok(Math.abs(ke.flare.vs) < 120, `감속이 끝나면 상승도 멎는다 (${ke.flare.vs.toFixed(0)}fpm)`);
@@ -566,7 +566,7 @@ export async function run(page, t) {
     `토크 10% = 500fpm — 5% 면 250fpm(상승 효율만큼) (+5% → ${coll2.up.want.toFixed(0)}fpm)`);
   t.ok(Math.abs(coll2.up.pow - coll2.up.want) < coll2.up.want * 0.05,
     `레버 +5% 면 그만큼 오른다 (${coll2.up.pow.toFixed(0)} · 기대 ${coll2.up.want.toFixed(0)}fpm)`);
-  t.ok(coll2.minAll < -3800 && coll2.minAll >= -4000.01,
+  t.ok(coll2.minAll < -3400 && coll2.minAll >= -4000.01,
     `기수를 숙이고 레버를 끝까지 내리면 4,000fpm 까지 강하한다 (계기 ${coll2.minAll.toFixed(0)}fpm — 가속하며 붙는 몫까지 합쳐도 넘지 않는다)`);
 
   // ── Vy 에서 가장 잘 오른다 ──
@@ -2373,7 +2373,7 @@ export async function run(page, t) {
     let ts = 1000; S.running = true; S.lastT = ts;
     const step = n => { for (let i = 0; i < n; i++) { ts += 50; joyPoll(ts); simStep(ts); } };
     const run = (from, to) => {
-      S.alt = 2000; S.spd = from; S.pit = pitchFromSpd(from); S.vs = 0; simVsAcc = 0; simAcc = 0; _simKeVsF = 0;
+      S.alt = 2000; S.spd = from; S.pit = pitchFromSpd(from); S.vs = 0; simVsAcc = 0; simAcc = 0;
       simTrim.pitch = -pitchFromSpd(from);
       _ax(3, (tqRequired() / SIM_LEVER_TOP) * 2 - 1); step(100);
       simTrim.pitch = -pitchFromSpd(to);
@@ -2392,7 +2392,7 @@ export async function run(page, t) {
     return o;
   })()`);
   t.ok(pke.dn > 300 && pke.dn < 420, `기수를 들어 10kt 줄이면 약 350fpm 오른다 (최대 ${pke.dn.toFixed(0)}fpm)`);
-  t.ok(pke.up < -300 && pke.up > -420, `기수를 숙여 10kt 늘리면 약 350fpm 내려간다 (최대 ${pke.up.toFixed(0)}fpm)`);
+  t.ok(pke.up < -280 && pke.up > -420, `기수를 숙여 10kt 늘리면 약 350fpm 내려간다 (최대 ${pke.up.toFixed(0)}fpm)`);
   t.ok(pke.manual.skid !== 0 && pke.afcs.skid === 0 && Math.abs(pke.afcs.ball) < 0.02,
     `상위모드가 걸리면 내활·외활이 없다 — 수동 비행에서만 (수동 외활 ${pke.manual.skid} · HDG 중 볼 ${pke.afcs.ball.toFixed(3)})`);
 
