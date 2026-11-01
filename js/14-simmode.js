@@ -54,9 +54,10 @@ function simSpaceDown(now) {
 function simSpaceUp() { simWheelBrake = false; }
 // ── 회전익 특성(3D 창 '회전익 특성') ──
 // 로터 회전 방향(위에서 볼 때): CW 시계 · CCW 반시계. 켜면 세 가지 커플링이 붙는다.
-//  COLLECTIVE TO YAW  : 레버 최하단→최상단에 따라 페달 최대 요율의 0→15% 로 로터 반대 방향으로 돈다(공중)
+//  COLLECTIVE TO YAW  : 레버 호버−10%→최상단에 따라 페달 최대 요율의 0→15% 로 로터 반대 방향으로 돈다(공중)
 //  COLLECTIVE TO PITCH: 레버와 비례해 기수가 최대 ±5° (올리면 들리고 내리면 숙여진다)
 //  YAW TO PITCH       : 로터 반대 방향 페달 → 최대 2° 들림 · 로터 방향 페달 → 최대 2° 숙임
+const RC_YAW_HOV_BELOW = 10;   // COLLECTIVE TO YAW 가 붙기 시작하는 레버(호버 토크 − 10%)
 const RC_YAW_FRAC = 0.15, RC_COLL_PIT = 5, RC_YAW_PIT = 2;
 let rotorChar = false, rotorDir = 'CW';
 function rotorSign() { return rotorDir === 'CW' ? 1 : -1; }   // 로터가 도는 쪽(요 + = 오른쪽)
@@ -66,7 +67,12 @@ function rcPitchOff(a) {
 }
 function rcYawRate(a) {
   if (!rotorChar) return 0;
-  return -rotorSign() * RC_YAW_FRAC * SIM_YAW_RATE * Math.max(0, Math.min(1, (a.coll + 1) / 2));
+  // 레버 자리의 토크로 본다 — 호버 −10% 에서 0, 레버 최상단에서 최대(15%)
+  const hov = hoverPowerTq();
+  const lev = hov + a.coll * (a.coll > 0 ? SIM_LEVER_TOP - hov : TQ_SPAN);
+  const lo = hov - RC_YAW_HOV_BELOW;
+  const f = Math.max(0, Math.min(1, (lev - lo) / Math.max(1, SIM_LEVER_TOP - lo)));
+  return -rotorSign() * RC_YAW_FRAC * SIM_YAW_RATE * f;
 }
 function toggleRotorChar() { rotorChar = !rotorChar; updateRotorBtns(); }
 function setRotorDir(d) { rotorDir = d === 'CCW' ? 'CCW' : 'CW'; updateRotorBtns(); }
