@@ -397,8 +397,8 @@ function simIasPitch() {
 function simFtrRelease() {
   if (!simModeOn || gspdOn || simAfcsPitch()) return;
   const a = simModeAxes();
-  const out = { roll: S.bnk - a.roll * SIM_BANK_MAX,
-                pitch: -(S.pit - rcPitchOff(a)) - a.pitch * SIM_PITCH_MAX };
+  // 새 트림 = 놓는 순간의 자세 전체(조종간이 밀려 있는 동안은 종전 트림을 붙잡아 두므로 자세가 튀지 않는다)
+  const out = { roll: S.bnk, pitch: -(S.pit - rcPitchOff(a)) };
   for (const k of ['roll', 'pitch']) {
     const max = k === 'roll' ? SIM_TRIM_MAX_ROLL : SIM_TRIM_MAX_PITCH;
     const stick = k === 'roll' ? a.roll : a.pitch;
