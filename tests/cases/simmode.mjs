@@ -2366,6 +2366,36 @@ export async function run(page, t) {
   t.ok(skid.yaw03 > 3 && skid.yaw03 < 12 && skid.yaw3 > 23 && Math.abs(skid.yawOff) < 2,
     `페달 요율은 곧바로 붙지 않는다 (0.3초 ${skid.yaw03.toFixed(1)} · 3초 ${skid.yaw3.toFixed(1)} · 놓고 3초 ${skid.yawOff.toFixed(1)}°/s)`);
 
+  // 자세(피치)로 10kt 바꾸면 약 350fpm 오르내린다 · 상위모드가 걸리면 볼은 가운데
+  const pke = await page.evaluate(`(() => {
+    (${SETUP.toString()})();
+    joyAxes = { roll: { i: 0, inv: false }, coll: { i: 3, inv: false, abs: true } };
+    let ts = 1000; S.running = true; S.lastT = ts;
+    const step = n => { for (let i = 0; i < n; i++) { ts += 50; joyPoll(ts); simStep(ts); } };
+    const run = (from, to) => {
+      S.alt = 2000; S.spd = from; S.pit = pitchFromSpd(from); S.vs = 0; simVsAcc = 0; simAcc = 0; _simKeVsF = 0;
+      simTrim.pitch = -pitchFromSpd(from);
+      _ax(3, (tqRequired() / SIM_LEVER_TOP) * 2 - 1); step(100);
+      simTrim.pitch = -pitchFromSpd(to);
+      let pk = 0;
+      for (let i = 0; i < 200; i++) { step(1); if (Math.abs(S.vs) > Math.abs(pk)) pk = S.vs; }
+      return pk;
+    };
+    const o = { dn: run(100, 90), up: run(100, 110) };
+    // 상위모드(HDG) 중 선회 — 볼이 가운데 · 회전익 특성 외활도 없다
+    rotorChar = true; simTrim.roll = 20; step(60);
+    o.manual = { ball: slipBall, skid: simSkidHalf };
+    hdgSelOn = true; rollApOn = true; step(40);
+    o.afcs = { ball: slipBall, skid: simSkidHalf };
+    hdgSelOn = false; rollApOn = false; rotorChar = false; simTrimReset();
+    S.running = false;
+    return o;
+  })()`);
+  t.ok(pke.dn > 300 && pke.dn < 420, `기수를 들어 10kt 줄이면 약 350fpm 오른다 (최대 ${pke.dn.toFixed(0)}fpm)`);
+  t.ok(pke.up < -300 && pke.up > -420, `기수를 숙여 10kt 늘리면 약 350fpm 내려간다 (최대 ${pke.up.toFixed(0)}fpm)`);
+  t.ok(pke.manual.skid !== 0 && pke.afcs.skid === 0 && Math.abs(pke.afcs.ball) < 0.02,
+    `상위모드가 걸리면 내활·외활이 없다 — 수동 비행에서만 (수동 외활 ${pke.manual.skid} · HDG 중 볼 ${pke.afcs.ball.toFixed(3)})`);
+
   // FPV(예상 항적) 버튼
   const fpv = await page.evaluate(() => {
     const b = document.getElementById('fpv-btn'); const o = { a: fpvOn };
