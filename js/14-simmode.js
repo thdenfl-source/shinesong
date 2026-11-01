@@ -658,7 +658,7 @@ function toggleSimMode(on, opt) {
     // (타력 비행과 SIM 조종이 같은 속도를 함께 쓰지 않게)
     if (gspdCoasting) { S.spd = gspdActFwd; simLat = gspdActLat; gspdCoasting = false; }
     try { if (gsOn) toggleGs(); } catch (e) { _swallow(e); }
-    hdgSelOn = false; rollApOn = false; altHoldOn = false; crhtOn = false; simIasOn = false;
+    hdgSelOn = false; rollApOn = false; altHoldOn = false; crhtOn = false; simIasOn = false; _rcLevPrev = null;
     _simOnDeck = false;
     try { updateHoverBtns(); } catch (e) { _swallow(e); }
     // 손을 떼면 그 자리에서 날던 대로 — 지금 자세를 그대로 이어받는다
@@ -681,14 +681,6 @@ function toggleSimMode(on, opt) {
     bankTarget = 0; S.vs = 0; simLat = 0; simAcc = 0; simVsAcc = 0; simFlareVs = 0; simNr = 100;
     simLookReset();
     selHdg = ((Math.round(hdgInd()) + 359) % 360) + 1;
-  }
-  // 회전익 특성 — 컬렉티브 토크의 반작용으로 동체가 로터 반대 방향으로 돈다(공중에서만)
-  const lev = rcLeverTq(a);
-  const dLev = (_rcLevPrev === null) ? 0 : (lev - _rcLevPrev) / dt;
-  _rcLevPrev = lev;
-  if (rotorChar && !onGnd && !simAfcsLat()) {
-    const yr = rcYawRate(dLev);
-    if (yr) { S.hdg = normA(S.hdg + yr * dt); selHdg = ((Math.round(hdgInd()) + 359) % 360) + 1; }
   }
   updateSimModeBtn();
   try { updateApInhibit(); } catch (e) { _swallow(e); }
@@ -880,6 +872,14 @@ function simFly(dt) {
   if (a.yaw && !simAfcsLat()) {
     S.hdg = normA(S.hdg + a.yaw * SIM_YAW_RATE * dt);
     selHdg = ((Math.round(hdgInd()) + 359) % 360) + 1;
+  }
+  // 회전익 특성 — 컬렉티브 토크의 반작용으로 동체가 로터 반대 방향으로 돈다(공중에서만)
+  const lev = rcLeverTq(a);
+  const dLev = (_rcLevPrev === null) ? 0 : (lev - _rcLevPrev) / dt;
+  _rcLevPrev = lev;
+  if (rotorChar && !onGnd && !simAfcsLat()) {
+    const yr = rcYawRate(dLev);
+    if (yr) { S.hdg = normA(S.hdg + yr * dt); selHdg = ((Math.round(hdgInd()) + 359) % 360) + 1; }
   }
 
   // ── 컬렉티브 → 토크 ──

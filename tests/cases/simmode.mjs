@@ -2320,6 +2320,24 @@ export async function run(page, t) {
   t.ok(Math.abs(trimT.released + 10) < 1,
     `놓으면 트림으로 넣은 경사만 남는다 (${trimT.released.toFixed(1)}°)`);
 
+  // COLLECTIVE TO YAW — 실제 비행에서 레버를 움직이는 동안만 돈다
+  const cy = await page.evaluate(`(() => {
+    (${SETUP.toString()})();
+    const fly = ${FLY};
+    S.alt = 1000; _simGndFt = 0; S.spd = 0; S.hdg = 90; rotorChar = true; rotorDir = 'CW';
+    _ax(3, 0); fly(1);
+    const h0 = S.hdg;
+    for (let i = 1; i <= 10; i++) { _ax(3, 0.05 * i); fly(0.1); }    // 1초에 걸쳐 레버를 올린다
+    const up = normAS(S.hdg - h0), h1 = S.hdg;
+    fly(1); const hold = normAS(S.hdg - h1), h2 = S.hdg;
+    for (let i = 1; i <= 10; i++) { _ax(3, 0.5 - 0.05 * i); fly(0.1); }  // 내린다
+    const dn = normAS(S.hdg - h2);
+    rotorChar = false; _ax(3, 0);
+    return { up, hold, dn };
+  })()`);
+  t.ok(cy.up < -1 && Math.abs(cy.hold) < 0.2 && cy.dn > 1,
+    `레버를 올리면 왼쪽 · 멈추면 그대로 · 내리면 오른쪽(CW) (${cy.up.toFixed(1)}° · ${cy.hold.toFixed(1)}° · ${cy.dn.toFixed(1)}°)`);
+
   // FPV(예상 항적) 버튼
   const fpv = await page.evaluate(() => {
     const b = document.getElementById('fpv-btn'); const o = { a: fpvOn };
