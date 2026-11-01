@@ -2292,6 +2292,44 @@ export async function run(page, t) {
     `레버로 받친 뒤 상승률이 치솟지 않는다 (최대 ${auto.good.maxVs.toFixed(0)}fpm — 땅 가까이의 빠른 몫을 넘겨 받지 않는다)`);
   t.ok(auto.pow === 0, '출력을 걸고 나는 동안(수평 비행 토크)은 기수를 들어도 플레어 몫이 붙지 않는다');
 
+  // 4방향 트림 — 3초에 15°(5°/s)로 부드럽게 · against trim(조종간을 쥔 채 넣으면 기준만 옮겨 간다)
+  const trimT = await page.evaluate(`(() => {
+    (${SETUP.toString()})();
+    const fly = ${FLY};
+    const DEAD = 0.08;
+    const stick = (k) => (k === 0 ? 0 : Math.sign(k) * (Math.abs(k) * (1 - DEAD) + DEAD));
+    joyAxes = { roll: { i: 0, inv: false }, pitch: { i: 1, inv: false } };
+    S.alt = 2000; _simGndFt = 0; S.spd = 100; S.bnk = 0; simTrimReset();
+    for (let i = 0; i < 10; i++) simTrimNudge('L');
+    const o = { pend: simTrimAct.roll };
+    fly(1); o.after1 = simTrimAct.roll;
+    fly(2); o.after3 = simTrimAct.roll;
+    simTrimReset(); _ax(0, 0); fly(3);
+    // 조종간 왼쪽 10° 로 쥐고 → 트림 왼쪽 10°
+    _ax(0, stick(-10 / SIM_BANK_MAX)); fly(3); o.stickOnly = S.bnk;
+    for (let i = 0; i < 10; i++) simTrimNudge('L');
+    fly(4); o.held = S.bnk; o.trim = simTrim.roll;
+    _ax(0, 0); fly(4); o.released = S.bnk;
+    simTrimReset();
+    return o;
+  })()`);
+  t.ok(trimT.pend === 0 && trimT.after1 < -4 && trimT.after1 > -6 && Math.abs(trimT.after3 + 10) < 0.01,
+    `트림 10° 는 한 번에 튀지 않고 5°/s 로 옮겨 간다 (곧바로 ${trimT.pend}° · 1초 ${trimT.after1.toFixed(1)}° · 3초 ${trimT.after3.toFixed(1)}°)`);
+  t.ok(Math.abs(trimT.held - trimT.stickOnly) < 1 && Math.abs(trimT.trim + 10) < 0.01,
+    `조종간을 쥔 채 트림을 넣으면 자세는 그대로다 (조종간 ${trimT.stickOnly.toFixed(1)}° → 트림 뒤 ${trimT.held.toFixed(1)}°)`);
+  t.ok(Math.abs(trimT.released + 10) < 1,
+    `놓으면 트림으로 넣은 경사만 남는다 (${trimT.released.toFixed(1)}°)`);
+
+  // 회전익 특성 — 20kt 이상이면 컬렉티브 투 피치만 남는다
+  const rcFast = await page.evaluate(() => {
+    rotorChar = true; rotorDir = 'CW'; S.spd = 25;
+    const o = { yaw: rcYawRate({ coll: 1 }), ped: rcPitchOff({ coll: 0, yaw: 1 }), coll: rcPitchOff({ coll: 1, yaw: 0 }) };
+    rotorChar = false; S.spd = 0;
+    return o;
+  });
+  t.ok(rcFast.yaw === 0 && rcFast.ped === 0 && rcFast.coll === 5,
+    `20kt 이상에서는 컬렉티브→요·요→피치가 없고 컬렉티브→피치만 남는다 (요 ${rcFast.yaw} · 페달 ${rcFast.ped} · 레버 ${rcFast.coll})`);
+
   // G/S — SIM 에서도 강하선을 잡으면 강하각에 맞춰 고도가 내려간다(출력으로)
   const gsSim = await page.evaluate(() => {
     const keep = gsDeviation;
