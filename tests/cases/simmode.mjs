@@ -2292,6 +2292,28 @@ export async function run(page, t) {
     `레버로 받친 뒤 상승률이 치솟지 않는다 (최대 ${auto.good.maxVs.toFixed(0)}fpm — 땅 가까이의 빠른 몫을 넘겨 받지 않는다)`);
   t.ok(auto.pow === 0, '출력을 걸고 나는 동안(수평 비행 토크)은 기수를 들어도 플레어 몫이 붙지 않는다');
 
+  // 회전익 특성 — 전이성향: 호버에서 CW 는 왼쪽으로 흐르고, 오른쪽 3° 뱅크로 막는다
+  const drift = await page.evaluate(`(() => {
+    (${SETUP.toString()})();
+    const fly = ${FLY};
+    const DEAD = 0.08;
+    const stick = (k) => (k === 0 ? 0 : Math.sign(k) * (Math.abs(k) * (1 - DEAD) + DEAD));
+    joyAxes = { roll: { i: 0, inv: false }, pitch: { i: 1, inv: false } };
+    S.alt = 1000; _simGndFt = 0; rotorChar = true; rotorDir = 'CW';
+    const go = (bank) => {
+      S.hdg = 90; S.spd = 0; simLat = 0; S.bnk = 0;
+      _ax(1, stick(-pitchFromSpd(0) / 60)); _ax(0, stick(bank / SIM_BANK_MAX));
+      fly(10); return { lat: simLat, bnk: S.bnk };
+    };
+    const o = { none: go(0), right: go(3) };
+    rotorDir = 'CCW'; o.ccw = go(0);
+    rotorChar = false; rotorDir = 'CW'; _ax(0, 0); _ax(1, 0);
+    return o;
+  })()`);
+  t.ok(drift.none.lat < -0.5, `전이성향 — CW 로터는 호버에서 왼쪽으로 흐른다 (${drift.none.lat.toFixed(2)}kt)`);
+  t.ok(Math.abs(drift.right.lat) < 0.3, `오른쪽 3° 뱅크면 제자리를 지킨다 (${drift.right.lat.toFixed(2)}kt · 뱅크 ${drift.right.bnk.toFixed(1)}°)`);
+  t.ok(drift.ccw.lat > 0.5, `CCW 로터는 오른쪽으로 흐른다 (${drift.ccw.lat.toFixed(2)}kt)`);
+
   // 회전익 특성 — COLLECTIVE TO YAW / PITCH · YAW TO PITCH
   const rc = await page.evaluate(() => {
     const o = {};
@@ -2301,7 +2323,7 @@ export async function run(page, t) {
     o.top = rcPitchOff({ coll: 1, yaw: 0 }); o.bot = rcPitchOff({ coll: -1, yaw: 0 });
     o.yawTopCW = rcYawRate({ coll: 1 }); o.yawBotCW = rcYawRate({ coll: -1 });
     { const h = hoverPowerTq(); const c = -10 / TQ_SPAN; o.yawHov10 = rcYawRate({ coll: c });
-      o.yawHov = rcYawRate({ coll: 0 }); o.yawHovExp = -0.15 * 25 * 10 / (SIM_LEVER_TOP - (h - 10)); }
+      o.yawHov = rcYawRate({ coll: 0 }); o.yawHovExp = -0.15 * 25 * 0.6; }
     o.pedOppCW = rcPitchOff({ coll: 0, yaw: -1 }); o.pedWithCW = rcPitchOff({ coll: 0, yaw: 1 });
     setRotorDir('CCW');
     o.yawTopCCW = rcYawRate({ coll: 1 }); o.pedOppCCW = rcPitchOff({ coll: 0, yaw: 1 });
@@ -2314,7 +2336,7 @@ export async function run(page, t) {
   t.ok(Math.abs(rc.yawTopCW + 0.15 * 25) < 1e-6 && Math.abs(rc.yawBotCW) < 1e-9,
     `COLLECTIVE TO YAW — CW 로터는 최상단에서 왼쪽으로 최대 요율의 15% (${rc.yawTopCW})`);
   t.ok(Math.abs(rc.yawHov10) < 1e-6 && Math.abs(rc.yawHov - rc.yawHovExp) < 1e-6,
-    `COLLECTIVE TO YAW 는 호버 −10% 에서 시작한다 (호버−10%: ${rc.yawHov10} · 호버: ${rc.yawHov.toFixed(2)}°/s)`);
+    `COLLECTIVE TO YAW 는 호버 −10% 에서 시작한다 (호버−10%: ${rc.yawHov10} · 호버: ${rc.yawHov.toFixed(2)}°/s — 최대의 60%)`);
   t.ok(rc.yawTopCCW > 0 && Math.abs(rc.yawTopCCW + rc.yawTopCW) < 1e-6, `CCW 로터는 반대(오른쪽) (${rc.yawTopCCW})`);
   t.ok(rc.pedOppCW === 2 && rc.pedWithCW === -2 && rc.pedOppCCW === 2, 'YAW TO PITCH — 로터 반대 페달 2° 들림 · 로터 방향 페달 2° 숙임');
   t.ok(rc.btn, 'CW/CCW 버튼이 토글된다');
