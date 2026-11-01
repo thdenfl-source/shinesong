@@ -257,8 +257,9 @@ const DESC_TQ = 5;          // 수평 비행 토크보다 이만큼(%) 모자라
 const SIM_KE_EFF = 0.5;        // 운동에너지 중 고도로 옮겨 가는 몫(나머지는 항력으로 잃는다)
 const SIM_KE_FPM = 0.514444 * 0.514444 / 9.80665 * 196.8504;   // kt × kt/s → fpm (≈5.31)
 // 지금의 속도·가감속이 만드는 상승률(fpm). 땅 위에서는 미끄럼이 멈춰 세울 뿐이다.
+let _simKePowered = false;     // 지금 가감속이 남는 출력의 속도차 몫인가(simFly 가 채운다)
 function simKeVs(onGnd, spd = S.spd, acc = simAcc) {
-  if (onGnd) return 0;
+  if (onGnd || _simKePowered) return 0;
   // 호버에서 기수를 숙여(5°) 이륙 가속할 때 — 호버 토크 + 7% 넘게 쓰면 가라앉지 않는다
   // (호버 이륙 가속에만 — 전이양력을 다 받기 전(SPD_ETL_KT) 까지. 순항에서 가속할 때는 운동에너지 법칙 그대로)
   if (acc > 0 && Math.abs(spd) < SPD_ETL_KT && S.tq >= hoverPowerTq() + HOV_TO_MARGIN) return 0;
@@ -691,7 +692,7 @@ function toggleSimMode(on, opt) {
     // (타력 비행과 SIM 조종이 같은 속도를 함께 쓰지 않게)
     if (gspdCoasting) { S.spd = gspdActFwd; simLat = gspdActLat; gspdCoasting = false; }
     try { if (gsOn) toggleGs(); } catch (e) { _swallow(e); }
-    hdgSelOn = false; rollApOn = false; altHoldOn = false; crhtOn = false; simIasOn = false; _rcLevPrev = null; simYawRate = 0;
+    hdgSelOn = false; rollApOn = false; altHoldOn = false; crhtOn = false; simIasOn = false; _rcLevPrev = null; simYawRate = 0; _simKePowered = false;
     _simOnDeck = false;
     try { updateHoverBtns(); } catch (e) { _swallow(e); }
     // 손을 떼면 그 자리에서 날던 대로 — 지금 자세를 그대로 이어받는다
@@ -820,6 +821,7 @@ function simFly(dt) {
   // GSPD 가 걸려 있으면 자세·속도는 GSPD 가 맡는다 — 조종간 좌우·전후는
   // 07-sim.js 의 GSPD 수렴에서 fly-through 로 쓰인다(simGspdStick).
   // 페달·컬렉티브는 그대로 조종사 몫이다.
+  if (gspdOn) _simKePowered = false;
   if (!gspdOn) {
     // 조종간 값에 트림을 더한다 — 가운데 두어도 트림 자세를 지킨다
     const cl = v => Math.max(-1, Math.min(1, v));
@@ -863,9 +865,12 @@ function simFly(dt) {
     // 상승 파워에서는 기수 5° 가 80kt(수평 비행에서는 4°) — 남는 토크만큼(10% 에서 다) 1° 를 덜 들어 본다
     // (상승률로 가르면 감속 → 상승 → 감속 으로 되먹임이 생긴다)
     const manual = !simAfcsPitch() && !simAfcsVert() && S.spd > 40;   // 조종사가 직접 몰 때(40kt 위)만
-    // 상승·강하 중 자세에 따른 속도 차 — 남는 토크면 빠르고 모자라면 느리다. 오르내림이 500fpm 아래면 없다
+    // 상승 중 자세에 따른 속도 차 — 남는 토크만큼 같은 자세에서 빠르다. 오르내림이 500fpm 아래면 없다
+    // (강하 쪽은 '자세가 곧 속도' 그대로 — 강하 파워에서 기수를 들면 남은 속도에 정비례해 준다)
     const vsK = Math.max(0, Math.min(1, (Math.abs(S.vs) - TQ_KT_VS0) / (TQ_KT_VS1 - TQ_KT_VS0)));
-    const tqKt = manual ? vsK * Math.max(-TQ_KT_MAX, Math.min(TQ_KT_MAX, TQ_KT * (S.tq - tqRequired()))) : 0;
+    const tqKt = manual ? vsK * Math.max(0, Math.min(TQ_KT_MAX, TQ_KT * (S.tq - tqRequired()))) : 0;
+    // 남는 출력이 낸 속도차(자세가 정한 속도보다 빠른 몫)는 엔진이 치른다 — 고도와 맞바꾸지 않는다(simKeVs)
+    _simKePowered = tqKt > 0 && S.spd >= spdFromPitch(S.pit) - 0.5;
     const sTgt = Math.max(SIM_SPD_BACK, Math.min(SIM_SPD_MAX, spdFromPitch(S.pit) + tqKt));
     if (onGnd) {
       // 바퀴로 구른다 — 토크 20% 를 넘기면 천천히 앞으로, 사이클릭을 민 만큼 더 빨리
