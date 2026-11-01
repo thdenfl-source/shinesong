@@ -1,3 +1,16 @@
+// ── 승강계(VSI) 지시 지연 ──
+// 실제 상승률(S.vs)은 매 순간 출렁일 수 있다 — 계기 바늘·숫자는 시간상수 VSI_TAU 로
+// 천천히 따라가 널뛰지 않게 한다(실제 VSI 의 지연과 같다). 고도·비행은 그대로다.
+const VSI_TAU = 1.5;
+let _vsiDisp = null, _vsiT = 0;
+function vsiSmoothed() {
+  const now = performance.now();
+  if (_vsiDisp === null || !Number.isFinite(_vsiDisp)) { _vsiDisp = S.vs || 0; _vsiT = now; return _vsiDisp; }
+  const dt = Math.min(1, Math.max(0, (now - _vsiT) / 1000));
+  _vsiT = now;
+  _vsiDisp += ((S.vs || 0) - _vsiDisp) * (1 - Math.exp(-dt / VSI_TAU));
+  return _vsiDisp;
+}
 // ─────────────────────────────────────────────────────────────
 // 03-pfd.js — PFD 캔버스(자세·속도·고도·HSI)
 // index.html 에서 분리한 조각. 클래식 스크립트라 전역 스코프를 공유하므로
@@ -768,13 +781,13 @@ function drawAltTape(x, y, w, h) {
   ctx.fillText(vsStr, x + w - 4, y + 22);
 
   // Altitude trend vector (magenta, 6-second VS extrapolation)
-  if (Math.abs(S.vs) > 10) {
-    const altTrend6s = S.vs * 0.1;  // ft change in 6 seconds
+  if (Math.abs(vsiSmoothed()) > 10) {
+    const altTrend6s = vsiSmoothed() * 0.1;  // ft change in 6 seconds
     const trendY = cy - altTrend6s * pp100 / 100;
     const clampedY = Math.max(tapeY + 2, Math.min(tapeY + tapeH - 2, trendY));
     ctx.strokeStyle = '#ff44ff'; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.moveTo(x + 2, cy); ctx.lineTo(x + 2, clampedY); ctx.stroke();
-    const arrowDir = S.vs > 0 ? -1 : 1;
+    const arrowDir = vsiSmoothed() > 0 ? -1 : 1;
     ctx.fillStyle = '#ff44ff';
     ctx.beginPath();
     ctx.moveTo(x + 2, clampedY);
@@ -830,9 +843,10 @@ function drawVSI(x, y, w, h) {
   ctx.beginPath(); ctx.moveTo(x,cy); ctx.lineTo(x+w*0.65,cy); ctx.stroke();
 
   // pointer triangle — 값 칸에는 실제 값을, 지시침은 눈금 끝까지만
-  const vs=vsD(S.vs);
+  const vsS=vsiSmoothed();
+  const vs=vsD(vsS);
   const py=Math.max(y+8,Math.min(y+h-24,vY(vs)));
-  const pc=S.vs>50?'#00cc44':S.vs<-50?'#ff6644':'#aaa';
+  const pc=vsS>50?'#00cc44':vsS<-50?'#ff6644':'#aaa';
   ctx.fillStyle=pc;
   ctx.beginPath(); ctx.moveTo(x+w,py); ctx.lineTo(x+w-9,py-5); ctx.lineTo(x+w-9,py+5); ctx.closePath(); ctx.fill();
 
