@@ -2343,6 +2343,27 @@ export async function run(page, t) {
   t.ok(cy.up < -1 && Math.abs(cy.hold) < 0.2 && cy.dn > 1,
     `레버를 올리면 왼쪽 · 멈추면 그대로 · 내리면 오른쪽(CW) (${cy.up.toFixed(1)}° · ${cy.hold.toFixed(1)}° · ${cy.dn.toFixed(1)}°)`);
 
+  // 회전익 특성 — 선회 중 1/2 볼 외활 · 페달 요율은 지연되어 붙는다
+  const skid = await page.evaluate(`(() => {
+    (${SETUP.toString()})();
+    const fly = ${FLY};
+    const DEAD = 0.08;
+    const stick = (k) => (k === 0 ? 0 : Math.sign(k) * (Math.abs(k) * (1 - DEAD) + DEAD));
+    joyAxes = { roll: { i: 0, inv: false }, pitch: { i: 1, inv: false }, yaw: { i: 2, inv: false } };
+    S.alt = 2000; S.spd = 100; rotorChar = true;
+    _ax(0, stick(20 / SIM_BANK_MAX)); fly(4);
+    const o = { right: simSkidHalf, bnk: S.bnk };
+    rotorChar = false; fly(0.1); o.off = simSkidHalf;
+    _ax(0, 0); fly(4);
+    simYawRate = 0; _ax(2, 1); fly(0.3); o.yaw03 = simYawRate; fly(3); o.yaw3 = simYawRate;
+    _ax(2, 0); fly(3); o.yawOff = simYawRate;
+    return o;
+  })()`);
+  t.ok(skid.right === -1 && skid.off === 0,
+    `오른쪽 선회(${skid.bnk.toFixed(0)}°)에서 볼이 바깥(왼쪽)으로 반 볼 비킨다 · 끄면 없다 (${skid.right} / ${skid.off})`);
+  t.ok(skid.yaw03 > 3 && skid.yaw03 < 12 && skid.yaw3 > 23 && Math.abs(skid.yawOff) < 2,
+    `페달 요율은 곧바로 붙지 않는다 (0.3초 ${skid.yaw03.toFixed(1)} · 3초 ${skid.yaw3.toFixed(1)} · 놓고 3초 ${skid.yawOff.toFixed(1)}°/s)`);
+
   // FPV(예상 항적) 버튼
   const fpv = await page.evaluate(() => {
     const b = document.getElementById('fpv-btn'); const o = { a: fpvOn };

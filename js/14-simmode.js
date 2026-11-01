@@ -97,8 +97,11 @@ function updateRotorBtns() {
 }
 let simLow = false;            // LIGHT ON WHEELS — 바퀴가 떨어지기 직전(HOV−20%…HOV−10%)
 function simLightOnWheels() { return simModeOn && simLow; }
-const SIM_PITCH_RATE = 10;  // 종전 30     // 피치가 따라가는 속도(°/s)
+const SIM_PITCH_RATE = 5;   // 롤처럼 지연시킨다(실비행 감) · 종전 10  // 종전 30     // 피치가 따라가는 속도(°/s)
 const SIM_YAW_RATE  = 25;      // 페달 최대 요율(°/s)
+const SIM_YAW_TAU = 1.0;       // 페달에 요율이 따라붙는 시간(s) — 롤처럼 지연
+let simYawRate = 0;
+let simSkidHalf = 0;           // 볼을 선회 바깥쪽으로 비키는 몫(1 = 반 볼) — 03-pfd.js drawSlipBall
 // ── 저속의 옆미끄럼(측방 비행) ──
 // 헬기는 속도가 낮을 때 뱅크를 주면 선회하지 않고 '옆으로 간다'. 속도가
 // 붙을수록 그 성분은 사라지고 보통의 선회가 된다.
@@ -167,12 +170,12 @@ const SIM_SPD_BACK  = -40;     // 후방 비행 한계(kt) — 헬기는 뒤로�
 //         감속은 가속보다 빨리 붙고 세다(1초에 6kt/s 씩 · 최대 15kt/s).
 //         가속은 속도가 붙을수록(전이양력으로 출력이 남을수록) 세진다.
 //   고도: 상승률도 같은 식이다 — 레버를 움직이면 오르내림이 점점 빨라지며 붙는다.
-const SPD_JERK     = 4.0;   // 속도·상승률 변화 빠르기를 종전의 반으로     // 가감속이 커지는 빠르기(kt/s²)
-const SPD_ACC_UP0  = 2.5;   // 속도·상승률 변화 빠르기를 종전의 반으로     // 제자리 언저리에서 낼 수 있는 가속(kt/s)
-const SPD_ACC_UP   = 5.0;   // 속도·상승률 변화 빠르기를 종전의 반으로     // 전이양력을 다 받은 뒤의 최대 가속(kt/s)
+const SPD_JERK = 2.667;   // ×2/3   // 속도·상승률 변화 빠르기를 종전의 반으로     // 가감속이 커지는 빠르기(kt/s²)
+const SPD_ACC_UP0 = 1.667;   // ×2/3   // 속도·상승률 변화 빠르기를 종전의 반으로     // 제자리 언저리에서 낼 수 있는 가속(kt/s)
+const SPD_ACC_UP = 3.333;   // ×2/3   // 속도·상승률 변화 빠르기를 종전의 반으로     // 전이양력을 다 받은 뒤의 최대 가속(kt/s)
 const SPD_ETL_KT   = 40;      // 가속이 다 세지는 속도(kt)
-const SPD_DEC_JERK = 12.0;   // 속도·상승률 변화 빠르기를 종전의 반으로     // 감속이 커지는 빠르기(kt/s²)
-const SPD_DEC_MAX  = 7.5;   // 속도·상승률 변화 빠르기를 종전의 반으로    // 최대 감속(kt/s) — 원판을 젖히면 항력까지 같이 받는다
+const SPD_DEC_JERK = 8.0;   // ×2/3   // 속도·상승률 변화 빠르기를 종전의 반으로     // 감속이 커지는 빠르기(kt/s²)
+const SPD_DEC_MAX = 5.0;   // ×2/3   // 속도·상승률 변화 빠르기를 종전의 반으로    // 최대 감속(kt/s) — 원판을 젖히면 항력까지 같이 받는다
 // 상승·강하율이 바뀌는 빠르기 — 변화의 빠르기가 일정하게 커져(저크) 바뀐 양이 시간의 제곱으로 는다.
 // 종전보다 저크 4배 · 한계 5배(레버에 상승률이 훨씬 빨리 붙는다). 차차 맞춰 간다
 // 피치로 바뀌는 상승·강하(감속·가속이 돌려주는 운동에너지 몫)는 가감속 저크를 4배(가속 8 · 감속 24kt/s²)로 해 4배 빨리 붙는다
@@ -242,7 +245,7 @@ let simVsAcc = 0;             // 지금 상승률이 바뀌는 빠르기(fpm/s)
 // 감속·가속을 되풀이해도 고도가 저절로 쌓이지 않는다.
 // (감속이 빨라진 만큼 줄여, 동고도 감속에서 떠오르는 높이가 지나치지 않게 한다)
 const CLIMB_PIT_OFF = 1;   // 상승 중 같은 속도에 드는 기수 들림(°) — 상승 80kt = 5°
-const DESC_DEC_K = 0.25;   // 속도·상승률 변화 빠르기를 종전의 반으로     // 강하 파워 감속: 남은 속도(kt)당 감속(kt/s) — 정비례
+const DESC_DEC_K = 0.1667;   // ×2/3   // 속도·상승률 변화 빠르기를 종전의 반으로     // 강하 파워 감속: 남은 속도(kt)당 감속(kt/s) — 정비례
 const DESC_KE_K = 0.5;
 const HOV_TO_MARGIN = 7;    // 호버 토크보다 이만큼(%) 더 쓰면 이륙 가속 중 침하가 없다
 const TQ_FPM = 50;          // 토크 10% = 500fpm
@@ -685,7 +688,7 @@ function toggleSimMode(on, opt) {
     // (타력 비행과 SIM 조종이 같은 속도를 함께 쓰지 않게)
     if (gspdCoasting) { S.spd = gspdActFwd; simLat = gspdActLat; gspdCoasting = false; }
     try { if (gsOn) toggleGs(); } catch (e) { _swallow(e); }
-    hdgSelOn = false; rollApOn = false; altHoldOn = false; crhtOn = false; simIasOn = false; _rcLevPrev = null;
+    hdgSelOn = false; rollApOn = false; altHoldOn = false; crhtOn = false; simIasOn = false; _rcLevPrev = null; simYawRate = 0;
     _simOnDeck = false;
     try { updateHoverBtns(); } catch (e) { _swallow(e); }
     // 손을 떼면 그 자리에서 날던 대로 — 지금 자세를 그대로 이어받는다
@@ -900,10 +903,17 @@ function simFly(dt) {
 
   // ── 페달 → 기수 ──
   // HDG·NAV 가 기수를 잡고 있으면 페달은 무시한다(선택 헤딩으로 되돌리며 싸운다)
-  if (a.yaw && !simAfcsLat()) {
-    S.hdg = normA(S.hdg + a.yaw * SIM_YAW_RATE * dt);
-    selHdg = ((Math.round(hdgInd()) + 359) % 360) + 1;
-  }
+  // 페달 요율은 곧바로 붙지 않고 SIM_YAW_TAU 로 따라붙고, 놓으면 같은 빠르기로 멎는다
+  if (!simAfcsLat()) {
+    simYawRate += (a.yaw * SIM_YAW_RATE - simYawRate) * Math.min(1, dt / SIM_YAW_TAU);
+    if (Math.abs(simYawRate) < 0.01 && !a.yaw) simYawRate = 0;
+    if (simYawRate) {
+      S.hdg = normA(S.hdg + simYawRate * dt);
+      selHdg = ((Math.round(hdgInd()) + 359) % 360) + 1;
+    }
+  } else simYawRate = 0;
+  // 회전익 특성 — 선회 중 1/2 볼 외활(skid): 볼이 선회 바깥쪽으로 반 볼 비킨다(20kt 위 · 뱅크 10° 에서 다)
+  simSkidHalf = (rotorChar && !onGnd) ? -Math.sign(S.bnk) * Math.min(1, Math.abs(S.bnk) / 10) * (1 - rcLowK()) : 0;
   // 회전익 특성 — 컬렉티브 토크의 반작용으로 동체가 로터 반대 방향으로 돈다(공중에서만)
   const lev = rcLeverTq(a);
   const dLev = (_rcLevPrev === null) ? 0 : (lev - _rcLevPrev) / dt;
