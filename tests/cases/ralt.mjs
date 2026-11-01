@@ -98,13 +98,13 @@ export async function run(page, t) {
   const climb = await page.evaluate(() => {
     if (!simModeOn) toggleSimMode(true);
     S.alt = 3000; S.spd = perfVy();
-    const out = { at100: simVsForTq(CLIMB_REF_TQ - tqRequired()), max: simVsForTq(200),
+    const out = { at100: simVsForTq(CLIMB_REF_TQ - tqRequired()), max: simVsForTq(200), lin10: simVsForTq(10) / simClimbEff(),
                   hover: null, cap: SIM_VS_UP_MAX };
     S.spd = 0; out.hover = simVsForTq(CLIMB_REF_TQ - tqRequired());
     toggleSimMode(false);
     return out;
   });
-  t.ok(Math.abs(climb.at100 - 2300) < 5, `Vy 에서 100% 토크면 2,300fpm (${climb.at100.toFixed(0)}fpm)`);
+  t.ok(Math.abs(climb.lin10 - 500) < 1 && climb.at100 > 1000, `토크 10% = 500fpm 으로 오른다 (Vy · 100% 토크면 ${climb.at100.toFixed(0)}fpm)`);
   t.ok(climb.cap === 3000 && Math.abs(climb.max - 3000) < 1, `더 당기면 3,000fpm 까지 오른다 (${climb.max.toFixed(0)}fpm)`);
-  t.ok(Math.abs(climb.hover - 1000) < 5, `제자리에서 100% 는 그대로 1,000fpm (${climb.hover.toFixed(0)}fpm)`);
+  t.ok(climb.hover > 0 && climb.hover < climb.at100, `제자리에서는 같은 토크로 덜 오른다(상승 효율) (100% 토크 ${climb.hover.toFixed(0)}fpm)`);
 }
