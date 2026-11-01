@@ -178,7 +178,9 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Enter') { e.preventDefault(); forceTrim(); return; }
   if (e.key === ' ' || e.code === 'Space') {
     e.preventDefault();                        // 페이지 스크롤 방지
-    if (!e.repeat) toggleSim();                // FLY ⇄ PAUSE
+    if (typeof simModeOn !== 'undefined' && simModeOn) {   // SIM: 휠 브레이크 · 두 번이면 파킹 브레이크
+      if (!e.repeat) simSpaceDown(performance.now());
+    } else if (!e.repeat) toggleSim();         // FLY ⇄ PAUSE
     return;
   }
   if (e.key === 'Shift' && e.location === KeyboardEvent.DOM_KEY_LOCATION_RIGHT && !e.repeat) {
@@ -193,6 +195,7 @@ document.addEventListener('keydown', e => {
 document.addEventListener('keyup', e => {
   // HDG 키(3/4)를 떼면 버튼과 동일하게 뱅크 목표 해제(수평 복귀)
   if (_keyTrimMap[e.key]) stopTrimHold();
+  if ((e.key === ' ' || e.code === 'Space') && typeof simSpaceUp === 'function') simSpaceUp();
 });
 
 const btnMap={

@@ -35,6 +35,23 @@ const GND_CREEP     = 0.02;    // 20% 를 넘긴 토크 1% 당 가속(kt/s) — 
 const GND_CYC_ACC   = 0.3;     // 기수를 1° 숙일 때마다 더하는 가속(kt/s) — 10° 면 3kt/s
 const GND_DRAG      = 0.04;    // 구름·공기 저항(1/s) — 사이클릭 가운데 · 토크 40% 면 10kt 쯤에서 선다
 const GND_BRAKE     = 2;       // 토크를 내렸을 때 서는 감속(kt/s)
+const GND_AERO_K    = 2;       // 기수 10° 들고 레버를 내리면 원판이 받는 바람으로 자연 감속의 3배(1+2)
+const GND_WHEEL_BRK = 6;       // 스페이스(휠 브레이크)를 누르고 있는 동안의 감속(kt/s)
+const GND_PARK_BRK  = 12;      // 파킹 브레이크가 걸린 채 구를 때 끌리며 서는 감속(kt/s)
+let simWheelBrake = false;     // 스페이스를 누르고 있다
+let simParkBrake = false;      // PARKING BRAKE SET — 1초 안에 스페이스 두 번
+let simParkWarn = 0;           // 파킹 브레이크를 건 채 굴러 내려앉았다 — PFD 경고 남은 시간(s)
+function simParkBrakeOn() { return simModeOn && simParkBrake; }
+function simParkWarnOn() { return simModeOn && simParkWarn > 0; }
+let _simSpaceAt = -1e9;
+function simSpaceDown(now) {
+  simWheelBrake = true;
+  if (now - _simSpaceAt <= 1000) {
+    simParkBrake = !simParkBrake; _simSpaceAt = -1e9;
+    try { uiToast(simParkBrake ? 'PARKING BRAKE SET' : 'PARKING BRAKE RELEASE', simParkBrake ? 'warn' : '', 2000); } catch (e) { _swallow(e); }
+  } else _simSpaceAt = now;
+}
+function simSpaceUp() { simWheelBrake = false; }
 let simLow = false;            // LIGHT ON WHEELS — 바퀴가 떨어지기 직전(HOV−20%…HOV−10%)
 function simLightOnWheels() { return simModeOn && simLow; }
 const SIM_PITCH_RATE = 30;     // 피치가 따라가는 속도(°/s)
@@ -173,12 +190,18 @@ let simVsAcc = 0;             // 지금 상승률이 바뀌는 빠르기(fpm/s)
 const CLIMB_PIT_OFF = 1;   // 상승 중 같은 속도에 드는 기수 들림(°) — 상승 80kt = 5°
 const DESC_DEC_K = 0.5;     // 강하 파워 감속: 남은 속도(kt)당 감속(kt/s) — 정비례
 const DESC_KE_K = 0.5;
+const HOV_TO_MARGIN = 7;    // 호버 토크보다 이만큼(%) 더 쓰면 이륙 가속 중 침하가 없다
+const TQ_FPM = 50;          // 토크 10% = 500fpm
+const TQ_KT  = 2;           // 토크 5% = 10kt (남는 토크만큼 같은 자세에서 더 빠르다)
+const TQ_KT_MAX = 20;
 const DESC_TQ = 5;          // 수평 비행 토크보다 이만큼(%) 모자라야 강하 파워로 본다(고도 유지 중 미세한 차는 빼고)      // 강하 파워에서 감속이 돌려주는 상승률 몫(반)
 const SIM_KE_EFF = 0.5;        // 운동에너지 중 고도로 옮겨 가는 몫(나머지는 항력으로 잃는다)
 const SIM_KE_FPM = 0.514444 * 0.514444 / 9.80665 * 196.8504;   // kt × kt/s → fpm (≈5.31)
 // 지금의 속도·가감속이 만드는 상승률(fpm). 땅 위에서는 미끄럼이 멈춰 세울 뿐이다.
 function simKeVs(onGnd, spd = S.spd, acc = simAcc) {
   if (onGnd) return 0;
+  // 호버에서 기수를 숙여(5°) 이륙 가속할 때 — 호버 토크 + 7% 넘게 쓰면 가라앉지 않는다
+  if (acc > 0 && S.tq >= hoverPowerTq() + HOV_TO_MARGIN) return 0;
   // 강하 파워에서 기수를 들어 줄어드는 강하율은 반만(DESC_KE_K)
   const k = (acc < 0 && !simAfcsVert() && S.tq < tqRequired() - DESC_TQ) ? DESC_KE_K : 1;
   return -SIM_KE_EFF * k * SIM_KE_FPM * spd * acc;
@@ -635,24 +658,14 @@ function simClimbMax() { return CLIMB_VY_MAX * simClimbEff(); }
 function simClimbSpan() { return Math.max(5, CLIMB_REF_TQ - tqRequired()); }
 // 남는 토크(%) → 상승·강하율(fpm)
 function simVsForTq(dTq) {
-  // 100%(CLIMB_REF_TQ) 에서 그 속도의 최대(Vy 2,300fpm), 그 위로 더 당기면 같은 기울기로
-  // 더 올라 Vy 에서 3,000fpm(SIM_VS_UP_MAX) 까지 — 속도가 다르면 상승 효율만큼 줄어든다
-  if (dTq > 0) {
-    const m = simClimbMax(), top = SIM_VS_UP_MAX * simClimbEff();
-    return Math.min(top, m * dTq / simClimbSpan());
-  }
-  let v;
-  try { v = (typeof perfVsForTq === 'function') ? perfVsForTq(dTq) : dTq * TQ_PER_FPM; }
-  catch (e) { v = dTq * TQ_PER_FPM; }
-  return Number.isFinite(v) ? v : dTq * TQ_PER_FPM;
+  // 토크 10% = 500fpm — 오르내림 모두 정비례(상승은 그 속도의 상승 효율만큼)
+  if (dTq > 0) return Math.min(SIM_VS_UP_MAX * simClimbEff(), TQ_FPM * dTq * simClimbEff());
+  return Math.max(-SIM_VS_DN_MAX, TQ_FPM * dTq);
 }
-// 위의 역 — 그 상승·강하율에 드는 남는 토크(%). 그 속도의 최대보다 빨리는 오르지 못한다
+// 위의 역 — 그 상승·강하율에 드는 남는 토크(%)
 function simTqForVs(vs) {
-  if (vs > 0) return Math.min(1, vs / simClimbMax()) * simClimbSpan();
-  let t;
-  try { t = (typeof perfTqForVs === 'function') ? perfTqForVs(vs) : vs / TQ_PER_FPM; }
-  catch (e) { t = vs / TQ_PER_FPM; }
-  return Number.isFinite(t) ? t : vs / TQ_PER_FPM;
+  if (vs > 0) return Math.min(vs, SIM_VS_UP_MAX * simClimbEff()) / (TQ_FPM * simClimbEff());
+  return vs / TQ_FPM;
 }
 
 // 한 적분 구간(dt초)의 조종 입력 적용. simStep 안에서 불린다.
@@ -666,7 +679,14 @@ function simFly(dt) {
   const gnd = (deck == null) ? simGroundFt() : Math.max(simGroundFt(), deck);
   const onGnd = S.alt <= gnd + 0.5;
   // 막 땅에 닿았다 — 그 순간의 강하율·속도를 알린다(오토로테이션 착지 연습)
-  if (onGnd && !_simOnGnd && S.running) simTouchdown(S.vs, S.spd);
+  if (onGnd && !_simOnGnd && S.running) {
+    simTouchdown(S.vs, S.spd);
+    if (simParkBrake && S.spd > 5) {      // 활주 착륙 — 부서지지는 않지만 경고
+      simParkWarn = 6;
+      try { uiToast('PARKING BRAKE SET — 활주 착륙', 'err', 4000); } catch (e) { _swallow(e); }
+    }
+  }
+  if (simParkWarn > 0) simParkWarn = Math.max(0, simParkWarn - dt);
   _simOnGnd = onGnd;
   // 갑판에 내려앉거나 뜨는 순간 — 속도의 기준(함정 ↔ 땅)을 넘겨 준다
   const onDeck = onGnd && deck != null && deck >= simGroundFt();
@@ -717,15 +737,20 @@ function simFly(dt) {
     // 상승 파워에서는 기수 5° 가 80kt(수평 비행에서는 4°) — 남는 토크만큼(10% 에서 다) 1° 를 덜 들어 본다
     // (상승률로 가르면 감속 → 상승 → 감속 으로 되먹임이 생긴다)
     const manual = !simAfcsPitch() && !simAfcsVert() && S.spd > 40;   // 조종사가 직접 몰 때(40kt 위)만
-    const climbK = manual ? Math.max(0, Math.min(1, (S.tq - tqRequired()) / 10)) : 0;
-    const sTgt = Math.max(SIM_SPD_BACK, Math.min(SIM_SPD_MAX, spdFromPitch(S.pit + CLIMB_PIT_OFF * climbK)));
+    const tqKt = manual ? Math.max(0, Math.min(TQ_KT_MAX, TQ_KT * (S.tq - tqRequired()))) : 0;
+    const sTgt = Math.max(SIM_SPD_BACK, Math.min(SIM_SPD_MAX, spdFromPitch(S.pit) + tqKt));
     if (onGnd) {
       // 바퀴로 구른다 — 토크 20% 를 넘기면 천천히 앞으로, 사이클릭을 민 만큼 더 빨리
       let acc;
-      if (S.tq >= GND_TQ_ROLL) {
+      if (simParkBrake) {
+        acc = -Math.min(GND_PARK_BRK, Math.abs(S.spd) / dt) * Math.sign(S.spd);
+      } else if (S.tq >= GND_TQ_ROLL && !simWheelBrake) {
         acc = GND_CREEP * (S.tq - GND_TQ_ROLL) + GND_CYC_ACC * (-S.pit) - GND_DRAG * S.spd;
       } else {
-        acc = -Math.sign(S.spd) * Math.min(GND_BRAKE, Math.abs(S.spd) / dt);
+        // 기수를 들고(10° 에서 다) 레버를 내리면 에어로다이나믹 브레이크 — 자연 감속의 3배
+        const aero = S.tq < GND_TQ_ROLL ? 1 + GND_AERO_K * Math.max(0, Math.min(1, S.pit / GND_PITCH_MAX)) : 1;
+        const brk = Math.max(S.tq < GND_TQ_ROLL ? GND_BRAKE * aero : 0, simWheelBrake ? GND_WHEEL_BRK : 0);
+        acc = -Math.sign(S.spd) * Math.min(brk, Math.abs(S.spd) / dt);
       }
       if (S.spd + acc * dt < 0) acc = -S.spd / dt;          // 뒤로는 구르지 않는다
       simAcc = acc;

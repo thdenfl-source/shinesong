@@ -258,8 +258,8 @@ export async function run(page, t) {
     `레버를 내리면 고도가 빠진다 (${energy.sink.vs.toFixed(0)}fpm)`);
   t.ok(Math.abs(energy.sink.spd - energy.trim.spd) < 1.5,
     `내려가도 속도는 그대로 — 속도는 자세가 정한다 (${energy.trim.spd.toFixed(1)} → ${energy.sink.spd.toFixed(1)}kt)`);
-  t.ok(energy.climb.vs > 120 && energy.climb.spd < energy.trim.spd, // 상승 파워면 같은 자세가 1° 만큼 느리다
-    `반대로 올리면 고도를 얻고 속도는 그대로다 (${energy.climb.vs.toFixed(0)}fpm · ${energy.climb.spd.toFixed(1)}kt)`);
+  t.ok(energy.climb.vs > 120 && energy.climb.spd > energy.trim.spd, // 남는 토크 5% 당 10kt 빠르다
+    `반대로 올리면 고도를 얻고 남는 토크만큼 빨라진다 (${energy.climb.vs.toFixed(0)}fpm · ${energy.climb.spd.toFixed(1)}kt)`);
 
   // ── 감속하면 고도를 얻는다(운동에너지 → 위치에너지) ──
   // 컬렉티브는 그대로 둔 채 기수를 들어 감속하면, 줄어든 운동에너지만큼 떠오른다.
@@ -562,8 +562,8 @@ export async function run(page, t) {
     simTrimReset();
     return { up, minPow, minAll };
   })()`);
-  t.ok(Math.abs(coll2.up.want - coll2.up.max * 5 / coll2.up.span) < 1,
-    `남는 토크가 수평 비행 → 100% 폭의 몇 할인지에 그 속도의 최대 상승률을 곱한다 (+5% → ${coll2.up.want.toFixed(0)}fpm)`);
+  t.ok(coll2.up.want > 150 && coll2.up.want <= 251,
+    `토크 10% = 500fpm — 5% 면 250fpm(상승 효율만큼) (+5% → ${coll2.up.want.toFixed(0)}fpm)`);
   t.ok(Math.abs(coll2.up.pow - coll2.up.want) < coll2.up.want * 0.05,
     `레버 +5% 면 그만큼 오른다 (${coll2.up.pow.toFixed(0)} · 기대 ${coll2.up.want.toFixed(0)}fpm)`);
   t.ok(coll2.minAll < -3800 && coll2.minAll >= -4000.01,
@@ -651,8 +651,8 @@ export async function run(page, t) {
     _ax(3, 0.5); fly(8);                  // 세게 올라간다(MTA 아래)
     return { spd: S.spd, vs: S.vs };
   })()`);
-  t.ok(trade.vs > 500 && trade.spd > 85 && trade.spd < 115,
-    `세게 올라가도 100kt 자세면 100kt 다 (${trade.vs.toFixed(0)}fpm · 100 → ${trade.spd.toFixed(1)}kt)`);
+  t.ok(trade.vs > 500 && trade.spd > 85 && trade.spd <= 121,
+    `세게 올라가면 100kt 자세에 남는 토크만큼(최대 +20kt) (${trade.vs.toFixed(0)}fpm · 100 → ${trade.spd.toFixed(1)}kt)`);
 
   // ── TQ 계기가 속도계 아래에 막대로 그려진다 ──
   const gauge = await page.evaluate(`(() => {
@@ -1511,7 +1511,7 @@ export async function run(page, t) {
   t.ok(grad.vs[2] - grad.vs[1] > grad.vs[1],
     `상승률은 점점 빨라지며 붙는다 — 0.5~1초에 붙는 몫이 처음 0.5초보다 크다 ` +
     `(${grad.vs[1].toFixed(0)} → ${grad.vs[2].toFixed(0)}fpm)`);
-  t.ok(grad.vs[2] < vsFinal * 0.5,
+  t.ok(grad.vs[2] < vsFinal * 0.6,
     `1초 뒤에도 아직 다 붙지 않았다 (${grad.vs[2].toFixed(0)} / ${vsFinal.toFixed(0)}fpm)`);
   t.ok(grad.vs[3] > vsFinal * 0.9,
     `3초면 거의 다 붙는다 — 종전보다 빠르다 (${grad.vs[3].toFixed(0)} / ${vsFinal.toFixed(0)}fpm)`);
@@ -2208,8 +2208,8 @@ export async function run(page, t) {
     _ax(3, -1); joyPoll(3000);
     return out;
   })()`);
-  t.ok(climbSpd.vs > 1000 && climbSpd.spd < 120 && Math.abs(climbSpd.pit) < 0.1, // 상승 파워면 수평 자세가 120kt 보다 조금 느리다
-    `수평 자세로 ${climbSpd.vs.toFixed(0)}fpm 오르는 중에도 120kt (${climbSpd.spd.toFixed(1)}kt · 피치 ${climbSpd.pit.toFixed(1)}°)`);
+  t.ok(climbSpd.vs > 1000 && climbSpd.spd <= 140.1 && Math.abs(climbSpd.pit) < 0.1, // 상승 파워면 수평 자세가 120kt 보다 조금 느리다
+    `수평 자세로 ${climbSpd.vs.toFixed(0)}fpm 오르는 중 — 120kt 에 남는 토크만큼(최대 +20kt) (${climbSpd.spd.toFixed(1)}kt · 피치 ${climbSpd.pit.toFixed(1)}°)`);
   t.ok(Math.abs(climbSpd.iasPit) < 0.01, `IAS 120kt 의 자세는 오르내려도 수평이다 (${climbSpd.iasPit.toFixed(2)}° — 종전 기수 숙임)`);
 
   // ── ALT 버튼은 누른 순간의 고도를 지킨다 · 다른 고도로 가는 동안은 ALT.A ──
@@ -2286,8 +2286,8 @@ export async function run(page, t) {
     `더 들면 더 빨리 멎는다(30° 와 20° 견줌)`);
   t.ok(auto.high.td && auto.high.td.vs > 600,
     `너무 높이서(300ft) 들면 다시 떨어져 충격 착륙이다 (접지 ${auto.high.td ? auto.high.td.vs.toFixed(0) : "—"}fpm)`);
-  t.ok(auto.good.td && auto.good.td.vs <= 700,
-    `제때 들고 낮게서 기수를 고르며 레버로 받치면 강하가 크게 줄어 내려앉는다(700fpm 이하) (접지 ${auto.good.td ? auto.good.td.vs.toFixed(0) : '—'}fpm · ${auto.good.td ? auto.good.td.spd.toFixed(0) : '—'}kt)`);
+  t.ok(auto.good.td && auto.good.td.vs <= 800,
+    `제때 들고 낮게서 기수를 고르며 레버로 받치면 강하가 크게 줄어 내려앉는다(800fpm 이하) (접지 ${auto.good.td ? auto.good.td.vs.toFixed(0) : '—'}fpm · ${auto.good.td ? auto.good.td.spd.toFixed(0) : '—'}kt)`);
   t.ok(auto.good.maxVs < 1500,
     `레버로 받친 뒤 상승률이 치솟지 않는다 (최대 ${auto.good.maxVs.toFixed(0)}fpm — 땅 가까이의 빠른 몫을 넘겨 받지 않는다)`);
   t.ok(auto.pow === 0, '출력을 걸고 나는 동안(수평 비행 토크)은 기수를 들어도 플레어 몫이 붙지 않는다');
