@@ -1372,7 +1372,9 @@ function pfdOvHost() {
 function pfdOverlaySync() {
   const ov = document.getElementById('pfd-ov');
   if (!ov) return false;
-  const host = pfdOvOn ? pfdOvHost() : null;
+  // 외부 시점(EXT)에서는 계기를 띄우지 않는다 — 좁은 3D 창에서는 화면 가운데의 흰수리 모형을 가린다
+  const ext = (typeof simExtView !== 'undefined') && simExtView && (typeof simModeOn !== 'undefined') && simModeOn;
+  const host = (pfdOvOn && !ext) ? pfdOvHost() : null;
   if (host && ov.parentElement !== host) host.appendChild(ov);
   ov.classList.toggle('show', !!host);
   return !!host;
