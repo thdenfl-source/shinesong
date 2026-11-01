@@ -87,7 +87,7 @@ export async function run(page, t) {
     const keep = S.vs;
     S.vs = 0; _vsiDisp = null; vsiSmoothed();
     S.vs = 2000; const now0 = vsiSmoothed();
-    await new Promise(r => setTimeout(r, 1500)); const t15 = vsiSmoothed();
+    _vsiT = performance.now() - 1500; const t15 = vsiSmoothed();   // 1.5초 지난 셈
     S.vs = keep; _vsiDisp = null;
     return { now0, t15 };
   });
