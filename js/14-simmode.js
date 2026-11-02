@@ -966,6 +966,8 @@ function simFly(dt) {
       let ke = (dev > 0 ? KE_FPM_PER_KT : KE_FPM_PER_KT_ACC) * dev * Math.min(1, Math.abs(S.spd) / KE_FULL_KT);
       if (_simKePowered) ke = 0;                                   // 남는 출력이 낸 속도차는 엔진 몫
       if (dev < 0 && Math.abs(S.spd) < SPD_ETL_KT && S.tq >= hoverPowerTq() + HOV_TO_MARGIN) ke = 0;   // 호버 이륙 가속
+      // 전이양력 지대(20kt 언저리)를 지나며 가속할 때의 침하는 회전익 특성 — 끄면 없다
+      if (dev < 0 && Math.abs(S.spd) < SPD_ETL_KT && !rotorChar) ke = 0;
       _simKeVsF += (ke - _simKeVsF) * Math.min(1, dt / KE_TAU);
     }
 
