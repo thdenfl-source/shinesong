@@ -174,6 +174,7 @@ const TQ_RATE    = 2000;        // 토크가 따라가는 최대 빠르기(%/s) 
 const TQ_PER_FPM = 55;         // 남는 토크 1% 당 상승률(fpm)
 const TQ_BANK    = 22;         // 뱅크로 더 드는 토크(1/cosφ−1 에 곱한다)
 const TQ_TLIFT   = 9;          // 전진 양력으로 덜 드는 토크(최대 %)
+const TLIFT_KT0  = 20;         // 이 속도까지는 전진 양력 몫이 없다
 const TLIFT_KT   = 55;         // 그 효과가 다 차는 속도(kt)
 
 // ── 제자리 호버에 필요한 토크 ──
@@ -231,7 +232,11 @@ function tqRequired() { return tqRequiredAt(S.spd, S.bnk); }
 function tqRequiredAt(spd, bnk) {
   const bank = Math.min(60, Math.abs(bnk));
   const lift = (1 / Math.cos(bank * D2R) - 1) * TQ_BANK;      // 선회 중 더 필요
-  const tl   = Math.min(1, Math.abs(spd) / TLIFT_KT) * TQ_TLIFT;       // 전진 양력
+  // 전진 양력 — 20kt 까지는 호버와 같은 출력이 든다(같은 파워·같은 고도). 20kt 를 넘어 Vy 로 갈수록
+  // 드는 토크가 줄어, 같은 레버면 그만큼 상승률로 나타난다
+  let vy = TLIFT_KT;
+  try { const v = (typeof perfVy === 'function') ? perfVy() : null; if (Number.isFinite(v) && v > TLIFT_KT0 + 5) vy = v; } catch (e) { _swallow(e); }
+  const tl   = Math.max(0, Math.min(1, (Math.abs(spd) - TLIFT_KT0) / (vy - TLIFT_KT0))) * TQ_TLIFT;
   return hoverTqRef() + lift - tl;
 }
 // 그날의 MTA(최대 가용 토크, %) — CDU PERF 의 MTA(30)(09-cdu.js perfMta).
