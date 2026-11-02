@@ -1566,7 +1566,7 @@ export async function run(page, t) {
     const run = (dTq) => {
       S.alt = 3000; _simGndFt = 0; S.bnk = 0; S.spd = 120; S.pit = 0;
       S.tq = tqRequired(); simAcc = 0; S.vs = 0; simVsAcc = 0; simTrimReset();
-      simTrim.pitch = -pitchFromSpd(60);     // 기수를 60kt 자세로 들기
+      simTrim.pitch = -12;                   // 퀵스톱 — 기수를 12° 들기
       lever(tqRequired() + dTq);
       const dec = [], spd = [], alt0 = S.alt; let altMax = 0, altMin = 0;
       S.running = true; let ts = 1000; S.lastT = ts;
@@ -2264,7 +2264,7 @@ export async function run(page, t) {
           cushed = true; simTrim.pitch = -5; _ax(3, ((hoverPowerTq() - 8) / SIM_LEVER_TOP) * 2 - 1);
         }
         // 지면효과에 받쳐 뜬 채 머물지 않게, 땅 가까이서 레버를 조금 더 내려 내려앉는다(전진 속도에서는 드는 토크가 작다)
-        if (cushed && !settled && agl <= cush - 8) { settled = true; _ax(3, ((tqRequired() - 20) / SIM_LEVER_TOP) * 2 - 1); }
+        if (cushed && !settled && agl <= cush - 8) { settled = true; _ax(3, ((tqRequired() - 10) / SIM_LEVER_TOP) * 2 - 1); }
         if (flared && !cushed && agl > 1) {                // 땅에 닿은 뒤(0fpm)는 빼고 본다
           if (S.vs > o.best) { o.best = S.vs; o.bestAgl = agl; }
           if (o.arrest === null && S.vs > -300) o.arrest = agl;
@@ -2335,10 +2335,10 @@ export async function run(page, t) {
     _ax(3, 0); fly(1);
     const h0 = S.hdg;
     for (let i = 1; i <= 10; i++) { _ax(3, 0.05 * i); fly(0.1); }    // 1초에 걸쳐 레버를 올린다
-    const up = normAS(S.hdg - h0), h1 = S.hdg;
+    fly(0.6); const up = normAS(S.hdg - h0), h1 = S.hdg;      // 0.5초 늦게 나타나므로 그만큼 더 본다
     fly(1); const hold = normAS(S.hdg - h1), h2 = S.hdg;
     for (let i = 1; i <= 10; i++) { _ax(3, 0.5 - 0.05 * i); fly(0.1); }  // 내린다
-    const dn = normAS(S.hdg - h2);
+    fly(0.6); const dn = normAS(S.hdg - h2);
     rotorChar = false; _ax(3, 0);
     return { up, hold, dn };
   })()`);
