@@ -344,6 +344,23 @@ function renderShipOnOff() {
   });
 }
 
+// SHIP 메뉴의 '항공기 위치' — 헬기를 함정 비행갑판의 착함 원 위에 앉힌 채로 SIM 을 시작한다.
+// 기수는 함정 침로와 같이, 레버는 내려 둔 채(토크 0). 함정이 가고 있으면 갑판에 앉은 채 함께 간다.
+function shipPlaceHeli() {
+  if (!shipVisible) shipToggleOn();
+  if (shipLat === null) return;
+  try { if (typeof simModeOn !== 'undefined' && !simModeOn) toggleSimMode(true); } catch (e) { _swallow(e); }
+  const fwd = SHIP3D_TD.fwd, h = shipHdg * D2R;                   // 착함 원 한가운데(함정 가운데에서 30m 뒤)
+  S.lat = shipLat + fwd * Math.cos(h) / 111320;
+  S.lon = shipLon + fwd * Math.sin(h) / (111320 * Math.cos(shipLat * D2R));
+  S.hdg = shipHdg;
+  try { simStartGround(); } catch (e) { _swallow(e); }           // 갑판 높이에 세운다(simFloorFt 가 갑판을 본다)
+  try { if (typeof _simOnDeck !== 'undefined') _simOnDeck = true; } catch (e) { _swallow(e); }   // 이미 갑판 위 — 함정 속도를 또 얹지 않는다
+  try { selHdg = ((Math.round(hdgInd()) + 359) % 360) + 1; } catch (e) { _swallow(e); }
+  try { updateAcOnMap(); leafMap.setView([S.lat, S.lon]); } catch (e) { _swallow(e); }
+  try { const m = document.getElementById('ship-menu'); if (m) m.classList.remove('open'); } catch (e) { _swallow(e); }
+  try { uiToast('헬기를 함정 갑판(착함 원)에 앉혔습니다', '', 2500); } catch (e) { _swallow(e); }
+}
 function createShipMarker() {
   shipMarker = L.marker([shipLat, shipLon], { icon: shipIcon(), draggable: true, zIndexOffset: 500 }).addTo(leafMap);
   shipMarker.on('drag', e => { shipLat = e.latlng.lat; shipLon = e.latlng.lng; shipDragging = true; updateShip3d(); });

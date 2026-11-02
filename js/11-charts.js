@@ -2160,6 +2160,7 @@ appRegister({
   shipSetMode,
   shipToggleOn,
   shipTogglePanel,
+  shipPlaceHeli,
   sidNewAddFix,
   sidNewSave,
   sidShowOnMap,
