@@ -63,6 +63,7 @@ let rotorChar = false, rotorDir = 'CW';
 function rotorSign() { return rotorDir === 'CW' ? 1 : -1; }   // 로터가 도는 쪽(요 + = 오른쪽)
 // 컬렉티브 투 피치를 뺀 나머지(컬렉티브→요 · 요→피치 · 전이성향)는 저속 현상이다 —
 // 15kt 부터 줄어 20kt 이상이면 없다
+const RC_IGE_FT = 40;           // 전이양력 지대 침하는 지면효과(IGE) 안(이 높이 이내)에서만
 const RC_BLOWBACK = 3;          // 블로우 백 기수 들림(°) — 20kt 에서 최대
 const RC_LOW_KT0 = 15, RC_LOW_KT1 = 20;
 function rcLowK() { return Math.max(0, Math.min(1, (RC_LOW_KT1 - Math.abs(S.spd)) / (RC_LOW_KT1 - RC_LOW_KT0))); }
@@ -967,7 +968,8 @@ function simFly(dt) {
       if (_simKePowered) ke = 0;                                   // 남는 출력이 낸 속도차는 엔진 몫
       if (dev < 0 && Math.abs(S.spd) < SPD_ETL_KT && S.tq >= hoverPowerTq() + HOV_TO_MARGIN) ke = 0;   // 호버 이륙 가속
       // 전이양력 지대(20kt 언저리)를 지나며 가속할 때의 침하는 회전익 특성 — 끄면 없다
-      if (dev < 0 && Math.abs(S.spd) < SPD_ETL_KT && !rotorChar) ke = 0;
+      // (지면효과(IGE)를 받는 40ft 이내에서만 — 그 위에서는 침하가 없다)
+      if (dev < 0 && Math.abs(S.spd) < SPD_ETL_KT && (!rotorChar || S.alt - simGroundFt() > RC_IGE_FT)) ke = 0;
       _simKeVsF += (ke - _simKeVsF) * Math.min(1, dt / KE_TAU);
     }
 
