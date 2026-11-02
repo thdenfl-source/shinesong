@@ -581,6 +581,12 @@ html, body {
 #rotor-3d .rotor-dir { display: flex; gap: 3px; }
 #rotor-3d .rotor-dir .sim-btn { flex: 1; }
 #rotor-3d .rotor-dir .sim-btn:disabled { opacity: 0.35; cursor: default; }
+#ase-3d { display: flex; flex-direction: column; gap: 3px; }
+#ase-3d .sim-btn.on { color: #00e07a; border-color: #00e07a; }
+#ase-3d .ase-hf { padding: 2px 0; border: 1px solid #333; border-radius: 3px; text-align: center;
+                  background: rgba(0,0,0,0.75); color: #555; font: bold 9px 'Helvetica Neue', Arial, sans-serif; }
+#ase-3d .ase-hf.avail { color: #9aa4ae; border-color: #556; }
+#ase-3d .ase-hf.on { color: #00e07a; border-color: #00e07a; }
 #hdgref-map { top: 48px; }
 /* 출발 공항 고르기(09-cdu.js openStartAirportPicker) */
 .ui-dlg.start-apt { width: min(560px, 94vw); max-width: min(560px, 94vw); }
@@ -609,7 +615,7 @@ html, body {
 #ctl3d-body { display: flex; flex-direction: column; gap: 3px; }
 #ctl3d.collapsed #ctl3d-body { display: none; }
 #ctl3d-tog { padding: 3px 4px; font-size: 11px; color: #9aa4ae; }
-#ctl3d .sim-btn, #ctl3d #chin-btn, #ctl3d .hdgref, #ctl3d #rotor-3d {
+#ctl3d .sim-btn, #ctl3d #chin-btn, #ctl3d .hdgref, #ctl3d #rotor-3d, #ctl3d #ase-3d {
   position: static !important; top: auto !important; right: auto !important;
   width: 100%; box-sizing: border-box; margin: 0; }
 #ctl3d > #ctl3d-body > .sim-btn, #ctl3d-tog { padding: 5px 4px; text-align: center; }
@@ -2745,6 +2751,11 @@ body.gate-open #gate-overlay { display: none; }
               <button class="sim-btn on" data-rdir="CW" data-act="setRotorDir" data-arg='["CW"]' title="시계방향 로터(위에서 볼 때)" disabled>CW ↻</button>
               <button class="sim-btn" data-rdir="CCW" data-act="setRotorDir" data-arg='["CCW"]' title="반시계방향 로터(위에서 볼 때)" disabled>CCW ↺</button>
             </div>
+          </div>
+          <!-- ASE — 수리온 계열 자동 안정 장치(14-simmode.js). 기능은 하나씩 더해 간다 -->
+          <div id="ase-3d">
+            <button class="sim-btn ase-main" data-act="toggleAse" title="ASE — 켜면 HOVER FOLLOW: 40kt 이내에서 조종간을 트림에 맞서 쥐고 자세를 초당 2° 이내로 움직이면 트림 기준이 그 자세를 따라온다">ASE</button>
+            <div class="ase-hf" title="HOVER FOLLOW — 트림 기준이 따라오는 중이면 켜진다">HOVER FOLLOW</div>
           </div>
           </div>
         </div>
