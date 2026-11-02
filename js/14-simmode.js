@@ -144,7 +144,7 @@ function aseHoverFollow(a, onGnd, rollRate, pitRate) {
 }
 let simLow = false;            // LIGHT ON WHEELS — 바퀴가 떨어지기 직전(HOV−20%…HOV−10%)
 function simLightOnWheels() { return simModeOn && simLow; }
-const SIM_PITCH_RATE = 6;      // 피치가 따라가는 빠르기(°/s) — 종전 5 에서 20% 빠르게
+const SIM_PITCH_RATE = 12;     // 피치가 따라가는 빠르기(°/s) — 조종간(against trim) 피치 반응 2배(종전 6)
 const SIM_YAW_RATE  = 25;      // 페달 최대 요율(°/s)
 const SIM_YAW_TAU = 0.8;       // 페달에 요율이 따라붙는 시간(s) — 종전 1.0 에서 20% 빠르게
 let simYawRate = 0;
@@ -370,17 +370,19 @@ function simFlareTgt(onGnd) {
 // 옮긴다(01-state.js startTrimHold).
 // 값은 '자세 각도(°)' 로 들고 있다가 조종간 몫으로 바꿔 더한다.
 const SIM_TRIM_STEP_ROLL  = 0.5;     // 한 번에 옮기는 뱅크(°)
-const SIM_TRIM_STEP_PITCH = 0.5;   // 한 번에 옮기는 기수 자세(°)
+const SIM_TRIM_STEP_PITCH = 0.5;
+const SIM_TRIM_CLICK_PITCH = 0.25; // 피치 4WAY 트림 첫 딸깍(°) — 이어 누르면 SIM_TRIM_STEP_PITCH 씩
 const SIM_TRIM_MAX_ROLL  = 30;     // 트림만으로 갈 수 있는 뱅크(°)
 const SIM_TRIM_MAX_PITCH = 20;     // 트림만으로 갈 수 있는 기수 자세(°)
 let simTrim = { roll: 0, pitch: 0 };   // roll: 오른쪽 + · pitch: 기수 내림 +
-function simTrimNudge(dir) {
+function simTrimNudge(dir, rep) {
   // IAS 가 걸려 있으면 전후 트림은 기준 속도를 1kt 씩 옮긴다(앞 = 빠르게)
   if ((dir === 'F' || dir === 'A') && simAfcsPitch()) { simIasStep(dir === 'F' ? 1 : -1); return; }
   if (dir === 'R') simTrim.roll += SIM_TRIM_STEP_ROLL;
   else if (dir === 'L') simTrim.roll -= SIM_TRIM_STEP_ROLL;
-  else if (dir === 'F') simTrim.pitch += SIM_TRIM_STEP_PITCH;      // 앞으로 = 기수 내림
-  else if (dir === 'A') simTrim.pitch -= SIM_TRIM_STEP_PITCH;
+  // 피치 한 번 딸깍은 그 반(SIM_TRIM_CLICK_PITCH) — 누르고 있어 이어 가는 몫(rep)은 종전대로
+  else if (dir === 'F') simTrim.pitch += rep ? SIM_TRIM_STEP_PITCH : SIM_TRIM_CLICK_PITCH;      // 앞으로 = 기수 내림
+  else if (dir === 'A') simTrim.pitch -= rep ? SIM_TRIM_STEP_PITCH : SIM_TRIM_CLICK_PITCH;
   simTrim.roll = Math.max(-SIM_TRIM_MAX_ROLL, Math.min(SIM_TRIM_MAX_ROLL, simTrim.roll));
   simTrim.pitch = Math.max(-SIM_TRIM_MAX_PITCH, Math.min(SIM_TRIM_MAX_PITCH, simTrim.pitch));
   // 자세는 3초에 15° 로 따라간다(simTrimSlew)

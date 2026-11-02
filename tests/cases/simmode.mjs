@@ -1146,7 +1146,7 @@ export async function run(page, t) {
     const back = S.bnk;
     simTrimReset(); fly(4);
     const level = S.bnk;
-    for (let i = 0; i < 20; i++) simTrimNudge('F');     // 전후는 피치 — 한 번에 0.5°, 20번이면 10°
+    for (let i = 0; i < 40; i++) simTrimNudge('F');     // 전후는 피치 — 한 번 딸깍에 0.25°, 40번이면 10°
     fly(4);
     const nose = { pit: S.pit, trim: simTrim.pitch };
     simTrimReset();
@@ -1176,15 +1176,15 @@ export async function run(page, t) {
              holdMs: SIM_TRIM_HOLD_MS, repMs: SIM_TRIM_REP_MS };
   })()`);
   t.ok(trim.one.roll === 0.5 && trim.one.pitch === 0, `한 번 누르면 뱅크가 0.5° 옮겨 간다 (${trim.one.roll}°)`);
-  t.ok(trim.oneP.pitch === 0.5 && trim.oneP.roll === 0, `피치는 한 번에 0.5° 다 (${trim.oneP.pitch}°)`);
+  t.ok(trim.oneP.pitch === 0.25 && trim.oneP.roll === 0, `피치는 한 번 딸깍에 0.25° 다 (${trim.oneP.pitch}°)`);
   t.eq(trim.rolled.axis, 0, '조종간은 가운데 그대로다');
   t.ok(Math.abs(trim.rolled.bnk - 5) < 0.6, `우 트림 10번이면 5° 기운 채 난다 (${trim.rolled.bnk.toFixed(1)}°)`);
   t.ok(Math.abs(trim.back + 5) < 0.6, `반대로 20번 넘기면 왼쪽 5° (${trim.back.toFixed(1)}°)`);
   t.ok(Math.abs(trim.level) < 0.6, `트림을 풀면 수평으로 돌아온다 (${trim.level.toFixed(1)}°)`);
-  t.ok(Math.abs(trim.nose.pit + 10) < 0.6, `앞 트림 20번이면 기수가 10° 내려간다 (${trim.nose.pit.toFixed(1)}°)`);
+  t.ok(Math.abs(trim.nose.pit + 10) < 0.6, `앞 트림 40번이면 기수가 10° 내려간다 (${trim.nose.pit.toFixed(1)}°)`);
   t.ok(trim.holdMs === 500 && trim.repMs === 100,
     `0.5초 넘게 누르면 홀드다 — 그 전에 떼면 딸깍 한 번(1°) (${trim.holdMs}ms · ${trim.repMs}ms 마다)`);
-  t.eq(trim.held, -4, `피치 햇을 누르고 있으면 계속 옮겨 간다 (${trim.held}° — 첫 0.5° + 0.1초마다 0.5° × 7)`);
+  t.eq(trim.held, -3.75, `피치 햇을 누르고 있으면 계속 옮겨 간다 (${trim.held}° — 첫 0.25° + 0.1초마다 0.5° × 7)`);
   t.eq(trim.heldR.roll, 4, `뱅크도 똑같이 이어 간다 (${trim.heldR.roll}° — 0.5° 씩)`);
   t.ok(trim.maxR === 30 && trim.maxP === -20,
     `한없이 쌓이지는 않는다 (뱅크 ±${trim.maxR}° · 피치 ${trim.maxP}°)`);
@@ -1286,18 +1286,18 @@ export async function run(page, t) {
   t.ok(joyTrim.btnArmed && joyTrim.btnClick.timer === null && joyTrim.btnClick.int === null,
     '누르는 동안 홀드가 걸려 있다가 떼면 풀린다');
   t.eq(joyTrim.btnThree, 1.5, `세 번 딸깍이면 1.5° 다 (${joyTrim.btnThree}°)`);
-  t.eq(joyTrim.btnPitch, 0.5, `▲ 는 한 번에 피치 0.5° 다 (${joyTrim.btnPitch}°)`);
+  t.eq(joyTrim.btnPitch, 0.25, `▲ 는 한 번에 피치 0.25° 다 (${joyTrim.btnPitch}°)`);
   t.eq(joyTrim.btnHeld, 4, `4방향 트림을 누르고 있으면 이어 간다 (${joyTrim.btnHeld}° — 첫 0.5° + 7번)`);
   t.ok(joyTrim.btnStop.timer === null && joyTrim.btnStop.int === null, '떼면 반복이 멈춘다');
-  t.eq(joyTrim.hatClick, -0.5, `축 9 햇 ▼ 딸깍 한 번이면 피치 0.5° 다 (${joyTrim.hatClick}°)`);
-  t.eq(joyTrim.hatThree, -1.5, `햇 세 번 딸깍이면 1.5° 다 (${joyTrim.hatThree}°)`);
+  t.eq(joyTrim.hatClick, -0.25, `축 9 햇 ▼ 딸깍 한 번이면 피치 0.25° 다 (${joyTrim.hatClick}°)`);
+  t.eq(joyTrim.hatThree, -0.75, `햇 세 번 딸깍이면 0.75° 다 (${joyTrim.hatThree}°)`);
   t.eq(joyTrim.hatRoll, -0.5, `햇 ◀ 도 한 번에 0.5° 다 (${joyTrim.hatRoll}°)`);
-  t.eq(joyTrim.hatHeld, 4, `햇 ▲ 를 누르고 있으면 이어 간다 (${joyTrim.hatHeld}° — 0.5° × 8)`);
-  t.eq(joyTrim.dupKeyFirst.pitch, 0.5,
-    `햇과 방향키가 함께 들어와도 한 칸(0.5°)이다 (${joyTrim.dupKeyFirst.pitch}°)`);
+  t.eq(joyTrim.hatHeld, 3.75, `햇 ▲ 를 누르고 있으면 이어 간다 (${joyTrim.hatHeld}° — 첫 0.25° + 0.5° × 7)`);
+  t.eq(joyTrim.dupKeyFirst.pitch, 0.25,
+    `햇과 방향키가 함께 들어와도 한 칸(0.25°)이다 (${joyTrim.dupKeyFirst.pitch}°)`);
   t.ok(joyTrim.dupKeyFirst.armed && joyTrim.dupHeld === 2,
     `그때도 누르고 있으면 이어 간다 — 뒤에 들어온 쪽이 홀드를 끊지 않는다 (${joyTrim.dupHeld}°)`);
-  t.eq(joyTrim.dupPadFirst, 0.5, `햇이 먼저 들어와도 한 칸이다 (${joyTrim.dupPadFirst}°)`);
+  t.eq(joyTrim.dupPadFirst, 0.25, `햇이 먼저 들어와도 한 칸이다 (${joyTrim.dupPadFirst}°)`);
   t.ok(joyTrim.boundKey.alt === 100 && joyTrim.boundKey.pitch === 0,
     `조종 장치에 배정한 키는 키보드 단축키가 또 받지 않는다 (ALT +${joyTrim.boundKey.alt} · 트림 ${joyTrim.boundKey.pitch}°)`);
 
