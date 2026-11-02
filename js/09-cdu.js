@@ -350,6 +350,12 @@ function shipPlaceHeli() {
   if (!shipVisible) shipToggleOn();
   if (shipLat === null) return;
   try { if (typeof simModeOn !== 'undefined' && !simModeOn) toggleSimMode(true); } catch (e) { _swallow(e); }
+  // 갑판 위에서 새로 시작한다 — 날던 중의 상위모드(GSPD·CRHT·ALT·HDG 등)는 모두 풀고, 트림·속도·GSPD 몫도 비운다
+  // (풀지 않으면 GSPD 가 갑판 위로 미끄러뜨리고 CRHT·ALT 가 띄워 올린다)
+  try { if (typeof afcsReleaseAll === 'function') afcsReleaseAll(); } catch (e) { _swallow(e); }
+  try { gspdActFwd = 0; gspdActLat = 0; gspdRefFwd = 0; gspdRefLat = 0; gspdCoasting = false; } catch (e) { _swallow(e); }
+  try { if (typeof simTrimReset === 'function') simTrimReset(); } catch (e) { _swallow(e); }
+  try { if (typeof simParkBrake !== 'undefined') simParkBrake = false; } catch (e) { _swallow(e); }
   const fwd = SHIP3D_TD.fwd, h = shipHdg * D2R;                   // 착함 원 한가운데(함정 가운데에서 30m 뒤)
   S.lat = shipLat + fwd * Math.cos(h) / 111320;
   S.lon = shipLon + fwd * Math.sin(h) / (111320 * Math.cos(shipLat * D2R));
