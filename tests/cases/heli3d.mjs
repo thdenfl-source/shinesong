@@ -248,7 +248,7 @@ export async function run(page, t) {
   t.eq(ext.off.shown, 'none', 'SIM 이 아닐 때는 EXT 버튼이 없다');
   t.ok(ext.fp.btn !== 'none' && !ext.fp.ext && !ext.fp.model, 'SIM 1인칭 — EXT 버튼이 보이고, 눈이 기체 안이라 모형은 그리지 않는다');
   t.ok(ext.on.ext && ext.on.cls && ext.on.model, 'EXT 를 누르면 외부 시점 — 모형을 그린다');
-  t.eq(ext.ov, 'none', '외부 시점에서는 계기(PFD 겹침)를 띄우지 않는다 — 모형을 가리지 않게');
+  t.ok(ext.ov !== 'none', '외부 시점에서도 계기 ON 이면 계기(PFD 겹침)가 보인다');
   t.ok(ext.ecShow !== 'none', 'EXT 에서는 카메라 조작 버튼이 보인다');
   t.ok(Math.abs(ext.ec.db - 10) < 0.6 && ext.ec.farther > 1.1 && ext.ec.dp < 0 && ext.ec.back < 0.6,
     `◀▶ 1° 씩 돌고(10번 ${ext.ec.db.toFixed(1)}°) · 거리 + 로 멀어지고(×${ext.ec.farther.toFixed(2)}) · ▲ 로 더 내려다보고 · DEFAULT 로 돌아온다`);
