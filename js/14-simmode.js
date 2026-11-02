@@ -317,6 +317,7 @@ let _simKePowered = false;     // 지금 가감속이 남는 출력의 속도차
 // 기수를 들어 줄일 속도가 10kt 면 약 350fpm 오르고, 숙여 늘릴 속도가 10kt 면 약 350fpm 내려간다.
 // 그래서 퀵스톱(기수를 10~15° 들어 크게 줄이기)에서는 떠오르려는 몫이 커서, 컬렉티브를 크게 내려야
 // 같은 고도로 감속한다. 속도가 맞춰지면 그 몫은 사라진다. 낮은 속도에서는 운동에너지가 작으므로 줄인다.
+const KE_PWR_FREE = 5;   // 남는 토크가 이만큼(%)이면 가속을 고도로 치르지 않는다
 const KE_FPM_PER_KT = 45, KE_FPM_PER_KT_ACC = 40, KE_DEV_MAX = 40, KE_FULL_KT = 60, KE_TAU = 0.3;
 let _simKeVsF = 0;             // 그 몫(fpm) — simFly 가 매 구간 채운다
 function simKeVs(onGnd, spd = S.spd, acc = simAcc) {
@@ -979,6 +980,11 @@ function simFly(dt) {
       const dev = Math.max(-KE_DEV_MAX, Math.min(KE_DEV_MAX, S.spd - sTgt));
       let ke = (dev > 0 ? KE_FPM_PER_KT : KE_FPM_PER_KT_ACC) * dev * Math.min(1, Math.abs(S.spd) / KE_FULL_KT);
       if (_simKePowered) ke = 0;                                   // 남는 출력이 낸 속도차는 엔진 몫
+      // 남는 출력(수평 비행 토크보다 많이)을 걸고 가속할 때는 엔진이 속도를 낸다 — 고도로 치르지 않는다
+      // (남는 토크 0 → 5% 사이에서 서서히). 수평 비행 출력에서 기수를 숙여 가속하면 종전대로 고도로 치른다.
+      // 그래서 같은 토크로 이륙 가속하면 Vy 까지 상승률이 점점 오르고(속도·TQ 효율), Vy 를 넘으면 상승 효율이 떨어져 준다.
+      // (ALT·CRHT 가 출력을 몰 때는 빼고 — 그때는 AFCS 가 가속에 드는 출력을 더 써서 고도를 지킨다)
+      if (dev < 0 && !simAfcsVert()) ke *= 1 - Math.max(0, Math.min(1, (S.tq - tqRequired()) / KE_PWR_FREE));
       if (dev < 0 && Math.abs(S.spd) < SPD_ETL_KT && S.tq >= hoverPowerTq() + HOV_TO_MARGIN) ke = 0;   // 호버 이륙 가속
       // 전이양력 지대(20kt 언저리)를 지나며 가속할 때의 침하는 회전익 특성 — 끄면 없다
       // (지면효과(IGE)를 받는 40ft 이내에서만 — 그 위에서는 침하가 없다)

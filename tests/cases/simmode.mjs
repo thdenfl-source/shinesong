@@ -2445,6 +2445,27 @@ export async function run(page, t) {
   });
   t.ok(rcb.n === 6 && rcb.p0 === 5 && rcb.p1 === 0 && rcb.btnOff && rcb.y === 0, `회전익 특성 아래 6개 항목을 하나씩 끄고 켠다 (${rcb.n}개)`);
 
+  // 같은 토크로 이륙 가속 — Vy 까지 상승률이 오르고, Vy 를 넘으면 준다(가속을 고도로 치르지 않는다)
+  const tko = await page.evaluate(`(() => {
+    (${SETUP.toString()})();
+    joyAxes = { coll: { i: 3, inv: false, abs: true } };
+    let ts = 1000; S.running = true; S.lastT = ts;
+    const step = n => { for (let i = 0; i < n; i++) { ts += 50; joyPoll(ts); simStep(ts); } };
+    S.alt = 1000; S.spd = 0; S.pit = pitchFromSpd(0); S.vs = 0; simVsAcc = 0; simAcc = 0;
+    simTrim.pitch = -pitchFromSpd(0);
+    _ax(3, ((hoverPowerTq() + 15) / SIM_LEVER_TOP) * 2 - 1); step(60);
+    simTrim.pitch = 0;
+    const L = []; let minVs = 1e9;
+    for (let i = 0; i < 25; i++) { step(20); L.push([S.spd, S.vs]); minVs = Math.min(minVs, S.vs); }
+    S.running = false; simTrimReset(); _ax(3, 0);
+    const vy = perfVy();
+    const near = L.reduce((a, b) => (Math.abs(b[0] - vy) < Math.abs(a[0] - vy) ? b : a));
+    const at20 = L.find(q => q[0] >= 20), fast = L[L.length - 1];
+    return { vy, near, at20, fast, minVs };
+  })()`);
+  t.ok(tko.minVs > 0 && tko.near[1] > tko.at20[1] + 300 && tko.near[1] > tko.fast[1] + 200,
+    `같은 토크로 가속하면 Vy 까지 상승률이 오르고 넘으면 준다 (20kt ${tko.at20[1].toFixed(0)} · Vy ${tko.near[1].toFixed(0)} · ${tko.fast[0].toFixed(0)}kt ${tko.fast[1].toFixed(0)}fpm)`);
+
   // FPV(예상 항적) 버튼
   const fpv = await page.evaluate(() => {
     const b = document.getElementById('fpv-btn'); const o = { a: fpvOn };

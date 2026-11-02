@@ -531,13 +531,21 @@ export async function run(page, t) {
     if (simModeOn) toggleSimMode(false);
     if (!shipVisible) shipToggleOn();
     shipLat = 37.0; shipLon = 126.0; shipHdg = 90; shipSpd = 0; updateShipMarker();
+    // 날던 중(SIM · GSPD · CRHT 가 걸린 채)에 눌러도 갑판에 앉아 그대로 있어야 한다
+    toggleSimMode(true); S.alt = 1500; S.spd = 100;
+    try { toggleCrht(); } catch (e) {} try { if (!gspdOn) toggleGspd(); } catch (e) {}
     document.getElementById('ship-menu-heli').click();
     await new Promise(r => setTimeout(r, 200));
+    const modes = { crht: crhtOn, gspd: gspdOn, alt: altHoldOn };
+    S.running = true; S.lastT = null;
+    let ts = performance.now(); S.lastT = ts;
+    for (let i = 0; i < 60; i++) { ts += 50; simStep(ts); }
+    S.running = false;
     const n = (S.lat - shipLat) * 111320, e = (S.lon - shipLon) * 111320 * Math.cos(shipLat * Math.PI / 180);
-    const o = { sim: simModeOn, deck: simOnDeck(), alt: S.alt, floor: simFloorFt(), hdg: S.hdg, e, n, tq: S.tq };
+    const o = { sim: simModeOn, deck: simOnDeck(), alt: S.alt, floor: simFloorFt(), hdg: S.hdg, e, n, tq: S.tq, modes };
     toggleSimMode(false);
     return o;
   });
-  t.ok(ph.sim && Math.abs(ph.alt - 7 / 0.3048) < 0.6 && Math.abs(ph.e + 30) < 1 && Math.abs(ph.n) < 1 && ph.hdg === 90 && ph.tq === 0,
-    `'항공기 위치' — 헬기가 착함 원(30m 뒤)에 앉은 채 SIM 이 켜진다 (갑판 ${ph.alt.toFixed(1)}ft · 함미 쪽 ${(-ph.e).toFixed(1)}m)`);
+  t.ok(ph.sim && Math.abs(ph.alt - 7 / 0.3048) < 0.6 && Math.abs(ph.e + 30) < 1 && Math.abs(ph.n) < 1 && ph.hdg === 90 && ph.deck && !ph.modes.crht && !ph.modes.gspd && !ph.modes.alt,
+    `'항공기 위치' — 날던 중에 눌러도 상위모드를 풀고 착함 원(30m 뒤)에 함정 기수방향으로 앉은 채 있다 (갑판 ${ph.alt.toFixed(1)}ft · 함미 쪽 ${(-ph.e).toFixed(1)}m)`);
 }
