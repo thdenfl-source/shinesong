@@ -548,4 +548,15 @@ export async function run(page, t) {
   });
   t.ok(ph.sim && Math.abs(ph.alt - 7 / 0.3048) < 0.6 && Math.abs(ph.e + 30) < 1 && Math.abs(ph.n) < 1 && ph.hdg === 90 && ph.deck && !ph.modes.crht && !ph.modes.gspd && !ph.modes.alt,
     `'항공기 위치' — 날던 중에 눌러도 상위모드를 풀고 착함 원(30m 뒤)에 함정 기수방향으로 앉은 채 있다 (갑판 ${ph.alt.toFixed(1)}ft · 함미 쪽 ${(-ph.e).toFixed(1)}m)`);
+
+  // SHIP 버튼으로 메뉴를 닫으면 배 설정창도 함께 닫힌다
+  const sc = await page.evaluate(() => {
+    const m = document.getElementById('ship-menu'), p = document.getElementById('ship-panel');
+    m.classList.remove('open'); toggleShip3d(); openShipPanel();
+    const o = { open: m.classList.contains('open'), panel: p.style.display };
+    toggleShip3d();
+    o.after = { open: m.classList.contains('open'), panel: p.style.display };
+    return o;
+  });
+  t.ok(sc.open && sc.panel === 'block' && !sc.after.open && sc.after.panel === 'none', 'SHIP 버튼으로 메뉴를 닫으면 배 설정창도 함께 닫힌다');
 }

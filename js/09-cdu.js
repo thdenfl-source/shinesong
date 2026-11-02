@@ -284,7 +284,15 @@ function toggleShip(force) {
   const m = document.getElementById('ship-menu');
   if (force === false) m.classList.remove('open');
   else m.classList.toggle('open');
+  _shipPanelFollowMenu(m);
   renderShipOnOff();
+}
+// SHIP 메뉴를 닫으면 배 설정창(SHIP CONTROL)도 함께 닫는다
+function _shipPanelFollowMenu(m) {
+  if (m && !m.classList.contains('open')) {
+    const p = document.getElementById('ship-panel');
+    if (p) p.style.display = 'none';
+  }
 }
 
 // 메뉴: 배 표시 ON/OFF (마커 생성/제거)
@@ -789,6 +797,7 @@ function toggleShip3d() {
   shipUiHome(true);
   const m = document.getElementById('ship-menu');
   m.classList.toggle('open');
+  _shipPanelFollowMenu(m);
   renderShipOnOff();
 }
 
