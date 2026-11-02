@@ -370,7 +370,7 @@ function slipUpdate(dt) {
 let _swPrevTs = null;   // 스톱워치에 시간을 흘려 넣기 위한 직전 프레임 시각
 let _simLastTick = 0;   // 렌더 루프 생존 감시용
 let _pfdDrawLast = 0;   // GPS 모드 PFD 10fps 제한용
-function simStep(ts){
+function simStep(ts, noLoop){   // noLoop — 새 창이 대신 한 프레임을 돌릴 때(00-popout.js), 본 창의 rAF 를 또 걸지 않는다
   _simLastTick = performance.now();
   try {
   if(S.running && !gpsMode && !_fdrPlaying && S.lastT!==null){
@@ -716,7 +716,7 @@ function simStep(ts){
     // 한 프레임의 예외로 rAF 체인이 끊겨 PFD가 검게 멈추는 것을 방지
     console.warn('simStep error:', e);
   }
-  requestAnimationFrame(simStep);
+  if (!noLoop) requestAnimationFrame(simStep);
 }
 // 이중 안전장치: 루프가 어떤 이유로든 3초 이상 멈추면 재기동
 // (백그라운드 탭에서는 rAF가 원래 멈추므로 visible일 때만, 중복 기동 방지 포함)

@@ -135,6 +135,21 @@
     reg.win.forEach(([t, f, o]) => win.addEventListener(t, f, o));
     win.addEventListener('pagehide', () => popoutClose(side));
     rec.timer = setInterval(() => { if (win.closed) popoutClose(side); }, 500);
+    // 본 창이 가려지면(새 창을 전체화면으로 키우면 그 아래에 깔린다) 브라우저가 본 창의 그리기 주기(rAF)를
+    // 멈춰 세운다 — 시뮬·3D 지도가 멈춘다. 그때는 새 창의 그리기 주기로 시뮬 한 프레임을 대신 돌리고
+    // 3D 지도를 곧바로 그린다(본 창이 다시 돌기 시작하면 손을 뗀다).
+    const pump = () => {
+      if (win.closed || !wins.includes(rec)) return;
+      try {
+        const now = W.performance.now();
+        if (typeof simStep === 'function' && typeof _simLastTick !== 'undefined' && now - _simLastTick > 120) {
+          simStep(now, true);
+          popoutRedrawMaps(win);
+        }
+      } catch (e) { console.warn('[popout] pump', e); }
+      try { win.requestAnimationFrame(pump); } catch (e) { /* 닫히는 중 */ }
+    };
+    try { win.requestAnimationFrame(pump); } catch (e) { /* 무시 */ }
     syncAppClasses();
     relayout();
     return true;
@@ -156,6 +171,16 @@
     return true;
   }
 
+  // 새 창 안에 있는 3D 지도(본 화면·CHIN 창)를 곧바로 다시 그린다
+  function popoutRedrawMaps(win) {
+    const maps = [];
+    try { if (typeof _ml3d !== 'undefined' && _ml3d) maps.push(_ml3d); } catch (e) { /* 무시 */ }
+    try { if (typeof _chinMaps !== 'undefined') _chinMaps.forEach(c => maps.push(c.map)); } catch (e) { /* 무시 */ }
+    maps.forEach(m => {
+      try { const c = m.getContainer(); if (c && c.ownerDocument === win.document && m.redraw) m.redraw(); }
+      catch (e) { /* 무시 */ }
+    });
+  }
   function popoutToggle(side) {
     return wins.some(w => w.side === side) ? popoutClose(side) : popoutOpen(side);
   }

@@ -55,6 +55,19 @@ export async function run(page, t) {
   t.ok(r0 !== r1, '새 창에서 누른 키(스페이스 FLY/PAUSE)도 앱에 닿는다');
   if (r1) await page.evaluate(() => toggleSim());
 
+  // 본 창의 그리기 주기가 멈춰도(새 창 전체화면으로 가려짐) 새 창이 시뮬을 대신 돌린다
+  const pumped = await page.evaluate(async () => {
+    const raf = window.requestAnimationFrame;
+    window.requestAnimationFrame = () => 0;           // 본 창 rAF 를 멈춘 셈
+    await new Promise(r => setTimeout(r, 400));
+    const t0 = _simLastTick;
+    await new Promise(r => setTimeout(r, 800));
+    const t1 = _simLastTick;
+    window.requestAnimationFrame = raf; requestAnimationFrame(simStep);
+    return t1 - t0;
+  });
+  t.ok(pumped > 300, `본 창이 멈춰도 새 창이 시뮬을 이어 돌린다 (${pumped.toFixed(0)}ms 진행)`);
+
   await pop.close();
   await page.waitForTimeout(1200);
   const c = await page.evaluate(() => ({ sides: popoutSides(), back: document.getElementById('mid-panel').ownerDocument === document,
