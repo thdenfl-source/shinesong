@@ -610,6 +610,10 @@ function updateSimModeBtn() {
   const b = document.getElementById('sim-mode-btn');
   if (!b) return;
   b.classList.toggle('on', simModeOn);
+  // 3D 창·지도 창 오른쪽 버튼 묶음 맨 아래의 SIM 버튼도 함께
+  document.querySelectorAll('.sim-side-btn').forEach(x => {
+    x.classList.toggle('on', simModeOn); x.textContent = simModeOn ? 'SIM ON' : 'SIM OFF';
+  });
 }
 
 // SIM 버튼 — 묻지 않고 바로 켜고 끈다. 땅에서 시작할지 공중에서 이어 갈지는 지금 자리로
