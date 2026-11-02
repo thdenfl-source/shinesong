@@ -5,25 +5,38 @@
 export const name = '패널 새 창';
 
 export async function run(page, t) {
+  // 화면 배치 — 기본 3분할 PFD · CDU · MAP, 탭은 창마다 정해진 것만
+  const tabs = await page.evaluate(() => {
+    const txt = id => Array.from(document.getElementById(id).querySelectorAll('button'))
+      .filter(b => getComputedStyle(b).display !== 'none').map(b => b.textContent.trim()).join('|');
+    return { sel: [leftSel, midSel, rightSel].join('·'), tri: tripleMode,
+             L: txt('left-tabs'), M: txt('mid-tabs'), R: txt('page-tabs') };
+  });
+  t.ok(tabs.tri && tabs.sel === 'pfd·cdu·map', `처음에는 3분할 PFD · CDU · MAP (${tabs.sel})`);
+  t.ok(/^PFD\|⿰ 2분할\|⧉ POP UP$/.test(tabs.L), `PFD 창 탭: PFD · 2분할/3분할 · POP UP (${tabs.L})`);
+  t.ok(tabs.M === 'CDU|MAP|3D|⧉ POP UP|⟳', `CDU 창 탭: CDU · MAP · 3D · POP UP · 새로고침 (${tabs.M})`);
+  t.ok(tabs.R === 'CDU|MAP|3D|⧉ POP UP', `MAP 창 탭: CDU · MAP · 3D · POP UP (${tabs.R})`);
+  const two = await page.evaluate(() => { toggleTriple(false); const o = [leftSel, rightSel].join('·'); toggleTriple(true); return o; });
+  t.eq(two, 'pfd·map', '2분할은 PFD · MAP');
   const ctx = page.context();
   const pp = ctx.waitForEvent('page');
-  await page.click('#left-panel .po-btn');
+  await page.click('#mid-panel .po-btn');
   const pop = await pp;
   await page.waitForTimeout(1200);
   const a = await page.evaluate(() => {
-    const L = document.getElementById('left-panel');
-    return { sides: popoutSides(), moved: L.ownerDocument !== document, pfdW: document.getElementById('pfd').width,
-             cls: document.getElementById('app').className, divider: getComputedStyle(document.getElementById('panel-divider')).display };
+    const L = document.getElementById('mid-panel');
+    return { sides: popoutSides(), moved: L.ownerDocument !== document, pfdW: document.getElementById('cdu-wrap').getBoundingClientRect().width,
+             cls: document.getElementById('app').className, divider: getComputedStyle(document.getElementById('divider-2')).display };
   });
-  t.ok(a.sides.join() === 'left' && a.moved, '⧉ 를 누르면 좌측 패널이 새 창으로 옮겨 간다');
-  t.ok(a.pfdW > 100, `새 창에서도 PFD 가 그 창 크기로 그려진다 (${a.pfdW}px)`);
-  t.ok(/po-left/.test(a.cls) && a.divider === 'none', '본 창에서는 그 자리의 구분선이 사라지고 남은 패널이 나눠 갖는다');
+  t.ok(a.sides.join() === 'mid' && a.moved, 'POP UP 을 누르면 가운데(CDU) 패널이 새 창으로 옮겨 간다');
+  t.ok(a.pfdW > 100, `새 창에서도 CDU 가 그 창 크기로 그려진다 (${a.pfdW}px)`);
+  t.ok(/po-mid/.test(a.cls) && a.divider === 'none', '본 창에서는 그 자리의 구분선이 사라지고 남은 패널이 나눠 갖는다');
 
-  await pop.click('#left-tabs [data-sel="map"]');
+  await pop.click('#mid-tabs [data-sel="map"]');
   await page.waitForTimeout(500);
-  const b = await page.evaluate(() => ({ sel: leftSel, inPop: document.getElementById('map-wrap').ownerDocument !== document }));
+  const b = await page.evaluate(() => ({ sel: midSel, inPop: document.getElementById('map-wrap').ownerDocument !== document }));
   t.ok(b.sel === 'map' && b.inPop, '새 창의 탭을 누르면 본 창의 앱이 그 패널을 바꾼다(MAP 이 새 창으로)');
-  await pop.click('#left-tabs [data-sel="pfd"]');
+  await pop.click('#mid-tabs [data-sel="cdu"]');
   await page.waitForTimeout(300);
 
   const r0 = await page.evaluate(() => S.running);
@@ -35,10 +48,10 @@ export async function run(page, t) {
 
   await pop.close();
   await page.waitForTimeout(1200);
-  const c = await page.evaluate(() => ({ sides: popoutSides(), back: document.getElementById('left-panel').ownerDocument === document,
+  const c = await page.evaluate(() => ({ sides: popoutSides(), back: document.getElementById('mid-panel').ownerDocument === document,
     order: Array.from(document.getElementById('app').children).map(x => x.id).filter(Boolean).join(','),
-    btn: document.querySelector('#left-panel .po-btn').textContent }));
+    btn: document.querySelector('#mid-panel .po-btn').textContent }));
   t.ok(c.sides.length === 0 && c.back, '새 창을 닫으면 패널이 본 창으로 돌아온다');
-  t.ok(c.order.startsWith('left-panel,panel-divider'), `제자리(맨 왼쪽)로 돌아온다 (${c.order})`);
-  t.eq(c.btn, '⧉', '버튼도 원래대로');
+  t.ok(c.order.startsWith('left-panel,panel-divider,mid-panel'), `제자리(가운데)로 돌아온다 (${c.order})`);
+  t.eq(c.btn, '⧉ POP UP', '버튼도 원래대로');
 }

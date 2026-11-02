@@ -53,7 +53,7 @@ function restoreSession() {
     if (n.navRadios) { try { ['NAV1','NAV2'].forEach(k => { if (n.navRadios[k]) navRadios[k] = Object.assign({}, navRadios[k], n.navRadios[k]); }); } catch(e) { _swallow(e); } }
     const v = snap.view || {};
     mapHdgUp=!!v.mapHdgUp; followMode=!!v.followMode;
-    if (v.leftSel) leftSel=v.leftSel; if (v.midSel) midSel=v.midSel; if (v.rightSel) rightSel=v.rightSel;
+    if (v.leftSel) leftSel='pfd'; if (v.midSel) midSel=v.midSel; if (v.rightSel) rightSel=v.rightSel;
     if (v.tripleMode != null) tripleMode = !!v.tripleMode;
     // 재적용
     try { updateFlyBtns(); } catch(e) { _swallow(e); }
@@ -174,7 +174,7 @@ function init(){
   // 처음 켤 때의 우측 창 — 3분할이면 CDU(좌 PFD · 중 MAP · 우 CDU), 2분할이면 MAP.
   // 종전에는 늘 setPage(0) 이라 3분할에서도 우측이 MAP 이 되고, 그 바람에
   // 중앙에 있던 MAP 과 자리가 맞바뀌어 CDU 가 가운데로 밀려났다.
-  if (!_restored) setPage(tripleMode ? 2 : 0);   // 복원 시엔 restoreSession의 applyPanels로 배치 유지
+  if (!_restored) setPage(0);   // 3분할 PFD · CDU · MAP / 2분할 PFD · MAP — 우측은 늘 MAP 으로 시작   // 복원 시엔 restoreSession의 applyPanels로 배치 유지
   window.addEventListener('resize', () => { resizePFD(); try { leafMap.invalidateSize(); } catch(e) { _swallow(e); } scaleCdu(); });
   setTimeout(() => leafMap.invalidateSize(), 100);
   // 저장된 표시 포인트를 지도에 복원.

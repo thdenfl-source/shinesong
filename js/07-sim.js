@@ -762,14 +762,14 @@ function scaleCdu() {
 // 양쪽에 같은 창은 불가(사용자 클릭은 거부 피드백, 프로그램 호출은 스왑).
 let leftSel = 'pfd', rightSel = 'map';   // 'pfd' | 'map' | 'cdu' | (우측 한정 'plan')
 let midSel  = 'map';                    // 3분할일 때만 사용하는 중앙 패널
-// 처음 켜면 3분할 — 좌 PFD · 중 MAP · 우 CDU 가 기본 구성이다.
-// 사용자가 2분할을 골라 뒀으면(저장값 '0') 그 뜻을 따른다.
-let tripleMode = true;                  // 3분할(PFD·MAP·CDU) 여부
+// 처음 켜면 3분할 — 좌 PFD · 중 CDU · 우 MAP 이 기본 구성이다(2분할이면 PFD · MAP).
+// 사용자가 2분할을 골라 뒀으면(저장값 '0') 그 뜻을 따른다(배치를 바꾼 뒤로는 새 키로 본다).
+let tripleMode = true;                  // 3분할(PFD·CDU·MAP) 여부
 try {
-  const v = localStorage.getItem('tripleMode');
+  const v = localStorage.getItem('tripleMode2');
   if (v !== null) tripleMode = (v === '1');
 } catch(e) { _swallow(e); }
-if (tripleMode) { leftSel = 'pfd'; midSel = 'map'; rightSel = 'cdu'; }
+if (tripleMode) { leftSel = 'pfd'; midSel = 'cdu'; rightSel = 'map'; }
 
 // 3분할 분할 비율 [좌%, 중%] — null 이면 기본 배분(PFD 호스트 1.4배)
 const TRI_MIN = 12;                     // 한 창의 최소 비율(%)
@@ -799,13 +799,10 @@ function saveTriRatio() {
 // 3분할 ⇄ 2분할 전환. 3분할 진입 시 PFD·MAP·CDU를 좌·중·우로 배치한다.
 function toggleTriple(on) {
   tripleMode = (on === undefined) ? !tripleMode : !!on;
-  try { localStorage.setItem('tripleMode', tripleMode ? '1' : '0'); } catch(e) { _swallow(e); }
-  if (tripleMode) { leftSel = 'pfd'; midSel = 'map'; rightSel = 'cdu'; }
-  else {
-    // 2분할 복귀: 가운데 창을 우측으로 접는다(PFD·MAP·CDU → PFD·MAP)
-    if (midSel && midSel !== leftSel) rightSel = midSel;
-    if (rightSel === leftSel) rightSel = leftSel === 'map' ? 'cdu' : 'map';
-  }
+  try { localStorage.setItem('tripleMode2', tripleMode ? '1' : '0'); } catch(e) { _swallow(e); }
+  // 3분할은 PFD · CDU · MAP, 2분할은 PFD · MAP 이 기본이다
+  if (tripleMode) { leftSel = 'pfd'; midSel = 'cdu'; rightSel = 'map'; }
+  else { leftSel = 'pfd'; rightSel = 'map'; }
   applyPanels();
 }
 
@@ -858,11 +855,18 @@ function panelSet(k, v) { if (k === 'left') leftSel = v; else if (k === 'mid') m
 // (지도는 2D·3D 가 서로 다른 창이라 나란히 둘 수 있다)
 function fixPanelDupes() {
   const sides = tripleMode ? ['left', 'mid', 'right'] : ['left', 'right'];
+  // 화면 배치 — 좌측은 늘 PFD 창이고, 가운데·우측은 CDU·MAP·3D 중에서 고른다(단독 화면 중은 빼고)
+  const solo = document.body.classList.contains('solo-mode');
+  if (!solo) {
+    leftSel = 'pfd';
+    if (midSel === 'pfd') midSel = 'cdu';
+    if (rightSel === 'pfd') rightSel = 'map';
+  }
   const seen = new Set();
   sides.forEach(k => {
     let v = panelGet(k);
     if (seen.has(panelFam(v))) {
-      v = ['pfd', 'map', 'cdu', 'm3d'].find(x => !seen.has(panelFam(x))) || 'map';
+      v = (solo ? ['pfd', 'map', 'cdu', 'm3d'] : ['map', 'cdu', 'm3d']).find(x => !seen.has(panelFam(x))) || 'map';
       panelSet(k, v);
     }
     seen.add(panelFam(v));
@@ -890,6 +894,12 @@ function applyPanels() {
   const R = document.getElementById('right-panel');
   const app = document.getElementById('app');
   app.classList.toggle('triple', tripleMode);
+  // 새로고침은 CDU 창(3분할의 가운데) 탭에 — 2분할에는 가운데가 없으니 우측 탭 끝에
+  try {
+    const rb = document.getElementById('reload-btn');
+    const tabs = document.getElementById(tripleMode ? 'mid-tabs' : 'page-tabs');
+    if (rb && tabs && rb.parentElement !== tabs) tabs.appendChild(rb);
+  } catch (e) { _swallow(e); }
   const btn = document.getElementById('split-toggle');
   if (btn) btn.textContent = tripleMode ? '⿰ 2분할' : '⿲ 3분할';
 

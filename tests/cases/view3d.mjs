@@ -93,14 +93,14 @@ export async function run(page, t) {
   t.ok(btn.inside && btn.txt0 === '계기 ON' && btn.on0, `3D 창에 계기 ON/OFF 버튼이 있다 (${btn.txt0})`);
   t.ok(btn.off.txt === '계기 OFF' && !btn.off.show && btn.off.pref === '0', '누르면 계기를 감춘다(계기 OFF)');
   t.ok(btn.on.txt === '계기 ON' && btn.on.show && btn.on.pref === '1', '다시 누르면 다시 보인다(계기 ON)');
-  await page.evaluate(async () => { selectPanel('right', 'cdu', true); await new Promise(r => setTimeout(r, 300)); });
+  await page.evaluate(async () => { selectPanel('right', 'map', true); await new Promise(r => setTimeout(r, 300)); });
   const gone = await page.evaluate(OVINFO);
   t.ok(!gone.show, '3D 지도가 화면에 없으면 계기도 겹치지 않는다');
 
   // ── 창 선택 줄의 '⛶ 3D 단독' — 3D 지도를 창 가득, 계기를 왼쪽 위에 ──
   const before = await page.evaluate(() => ({ l: leftSel, m: midSel, r: rightSel, tri: tripleMode,
     inRow: !!document.querySelector('#left-tabs #m3d-solo-btn'), txt: document.getElementById('m3d-solo-btn').textContent }));
-  await page.click('#m3d-solo-btn');
+  await page.evaluate(() => document.getElementById('m3d-solo-btn').click());   // (탭에서는 감췄다 — 기능은 그대로)
   await page.waitForTimeout(1500);
   const solo = await page.evaluate(() => {
     const d3 = document.getElementById('map3d').getBoundingClientRect();

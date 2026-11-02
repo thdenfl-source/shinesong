@@ -889,7 +889,7 @@ export async function run(page, t) {
     const fly = ${FLY};
     const cam = ${CAM};
     toggleSimMode(false);
-    selectPanel('left', 'pfd', true); selectPanel('mid', 'map', true);
+    selectPanel('left', 'pfd', true); selectPanel('mid', 'map', true); selectPanel('right', 'cdu', true);
     toggleSimMode(true);                 // 켜면 지도 창이 3D 로 바뀐다
     const c0 = cam();
     // PFD 캔버스에 그려진 뱅크 지시(ADI 회전각)를 가로채 본다
