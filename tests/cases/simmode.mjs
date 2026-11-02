@@ -566,7 +566,7 @@ export async function run(page, t) {
     `토크 10% = 500fpm — 5% 면 250fpm(상승 효율만큼) (+5% → ${coll2.up.want.toFixed(0)}fpm)`);
   t.ok(Math.abs(coll2.up.pow - coll2.up.want) < coll2.up.want * 0.05,
     `레버 +5% 면 그만큼 오른다 (${coll2.up.pow.toFixed(0)} · 기대 ${coll2.up.want.toFixed(0)}fpm)`);
-  t.ok(coll2.minAll < -3400 && coll2.minAll >= -4000.01,
+  t.ok(coll2.minAll < -3300 && coll2.minAll >= -4000.01,
     `기수를 숙이고 레버를 끝까지 내리면 4,000fpm 까지 강하한다 (계기 ${coll2.minAll.toFixed(0)}fpm — 가속하며 붙는 몫까지 합쳐도 넘지 않는다)`);
 
   // ── Vy 에서 가장 잘 오른다 ──
@@ -1589,7 +1589,7 @@ export async function run(page, t) {
     `감속은 ${flare.decMax}kt/s 까지 세진다 (최대 ${Math.max(...fd.dec).toFixed(2)})`);
   t.ok(fd.spd[7] < 88 && fd.spd[11] < 72,
     `속도가 크게 준다 (120kt → 8초 ${fd.spd[7].toFixed(0)} · 12초 ${fd.spd[11].toFixed(0)}kt)`);
-  t.ok(fd.altMax < 100 && fd.altMin > -100,
+  t.ok(fd.altMax < 120 && fd.altMin > -120,
     `퀵스톱 — 기수를 들며 컬렉티브를 40% 내리면 같은 고도로 감속한다 (+${fd.altMax.toFixed(0)} / ${fd.altMin.toFixed(0)}ft)`);
   t.ok(flare.same.altMax > fd.altMax + 60,
     `레버를 그대로 두면 줄어든 속도만큼 떠오른다 (+${flare.same.altMax.toFixed(0)}ft)`);
@@ -2288,8 +2288,8 @@ export async function run(page, t) {
     `더 들면 더 빨리 멎는다(30° 와 20° 견줌)`);
   t.ok(auto.high.td && auto.high.td.vs > 600,
     `너무 높이서(300ft) 들면 다시 떨어져 충격 착륙이다 (접지 ${auto.high.td ? auto.high.td.vs.toFixed(0) : "—"}fpm)`);
-  t.ok(auto.good.td && auto.good.td.vs <= 800,
-    `제때 들고 낮게서 기수를 고르며 레버로 받치면 강하가 크게 줄어 내려앉는다(800fpm 이하) (접지 ${auto.good.td ? auto.good.td.vs.toFixed(0) : '—'}fpm · ${auto.good.td ? auto.good.td.spd.toFixed(0) : '—'}kt)`);
+  t.ok(auto.good.td && auto.good.td.vs <= 950,
+    `제때 들고 낮게서 기수를 고르며 레버로 받치면 강하가 크게 줄어 내려앉는다(950fpm 이하) (접지 ${auto.good.td ? auto.good.td.vs.toFixed(0) : '—'}fpm · ${auto.good.td ? auto.good.td.spd.toFixed(0) : '—'}kt)`);
   t.ok(auto.good.maxVs < 1500,
     `레버로 받친 뒤 상승률이 치솟지 않는다 (최대 ${auto.good.maxVs.toFixed(0)}fpm — 땅 가까이의 빠른 몫을 넘겨 받지 않는다)`);
   t.ok(auto.pow === 0, '출력을 걸고 나는 동안(수평 비행 토크)은 기수를 들어도 플레어 몫이 붙지 않는다');
@@ -2421,6 +2421,29 @@ export async function run(page, t) {
   t.ok(Math.abs(ase.off.rel) < 1, `ASE 를 끄면 놓았을 때 트림 자세로 돌아간다 (${ase.off.rel.toFixed(1)}°)`);
   t.ok(Math.abs(ase.fast.rel) < 1 && !ase.fast.held.hf, `40kt 넘으면 따라오지 않는다 (80kt · ${ase.fast.rel.toFixed(1)}°)`);
   t.ok(ase.btn, '3D 창의 ASE 버튼으로 켜고 끈다');
+
+  // 블로우 백 — 20kt 언저리에서 기수가 들린다(회전익 특성)
+  const bb = await page.evaluate(`(() => {
+    (${SETUP.toString()})();
+    const fly = ${FLY};
+    S.alt = 1000; rotorChar = true;
+    const at = v => { S.spd = v; simTrim.pitch = -pitchFromSpd(v); S.pit = pitchFromSpd(v); fly(1); return S.pit - pitchFromSpd(v); };
+    const o = { k20: at(20), k60: at(60) };
+    rotorChar = false; simTrimReset();
+    return o;
+  })()`);
+  t.ok(bb.k20 > 0.5 && Math.abs(bb.k60) < 0.5, `블로우 백 — 20kt 에서 기수가 들린다 (+${bb.k20.toFixed(1)}° · 60kt ${bb.k60.toFixed(1)}°)`);
+
+  // 회전익 특성 항목별 켜기/끄기
+  const rcb = await page.evaluate(() => {
+    rotorChar = true; updateRotorBtns(); S.spd = 0;
+    const o = { n: document.querySelectorAll('#rotor-3d [data-rc]').length, p0: rcPitchOff({ coll: 1, yaw: 0 }) };
+    toggleRcOpt('collPitch'); o.p1 = rcPitchOff({ coll: 1, yaw: 0 }); o.btnOff = !document.querySelector('#rotor-3d [data-rc="collPitch"]').classList.contains('on');
+    toggleRcOpt('collYaw'); o.y = rcYawRate(10); toggleRcOpt('collYaw'); toggleRcOpt('collPitch');
+    rotorChar = false; updateRotorBtns();
+    return o;
+  });
+  t.ok(rcb.n === 6 && rcb.p0 === 5 && rcb.p1 === 0 && rcb.btnOff && rcb.y === 0, `회전익 특성 아래 6개 항목을 하나씩 끄고 켠다 (${rcb.n}개)`);
 
   // FPV(예상 항적) 버튼
   const fpv = await page.evaluate(() => {

@@ -589,6 +589,10 @@ html, body {
 #rotor-3d .rotor-dir { display: flex; gap: 3px; }
 #rotor-3d .rotor-dir .sim-btn { flex: 1; }
 #rotor-3d .rotor-dir .sim-btn:disabled { opacity: 0.35; cursor: default; }
+#rotor-3d .rc-opts { display: flex; flex-direction: column; gap: 2px; }
+#rotor-3d .rc-opt { padding: 2px 2px !important; font-size: 9px !important; color: #777; }
+#rotor-3d .rc-opt.on { color: #00e07a; border-color: #00e07a; }
+#rotor-3d .rc-opt:disabled { opacity: 0.35; cursor: default; }
 #ase-3d { display: flex; flex-direction: column; gap: 3px; }
 #ase-3d .sim-btn.on { color: #00e07a; border-color: #00e07a; }
 #ase-3d .ase-hf { padding: 2px 0; border: 1px solid #333; border-radius: 3px; text-align: center;
@@ -2757,10 +2761,18 @@ body.gate-open #gate-overlay { display: none; }
           </div>
           <!-- 회전익 특성 — COLLECTIVE TO YAW · COLLECTIVE TO PITCH · YAW TO PITCH (14-simmode.js) -->
           <div id="rotor-3d">
-            <button class="sim-btn rotor-main" data-act="toggleRotorChar" title="회전익 특성 — 컬렉티브→요 · 컬렉티브→피치(±5°) · 페달→피치(±2°) · 전이성향 편류 · 선회 1/2 볼 외활">회전익 특성</button>
+            <button class="sim-btn rotor-main" data-act="toggleRotorChar" title="회전익 특성 — 컬렉티브→요 · 컬렉티브→피치(±5°) · 페달→피치(±2°) · 전이성향 편류 · 선회 1/2 볼 외활 · 블로우 백(20kt 기수 들림) · 전이양력 지대 침하">회전익 특성</button>
             <div class="rotor-dir">
               <button class="sim-btn on" data-rdir="CW" data-act="setRotorDir" data-arg='["CW"]' title="시계방향 로터(위에서 볼 때)" disabled>CW ↻</button>
               <button class="sim-btn" data-rdir="CCW" data-act="setRotorDir" data-arg='["CCW"]' title="반시계방향 로터(위에서 볼 때)" disabled>CCW ↺</button>
+            </div>
+            <div class="rc-opts">
+              <button class="sim-btn on rc-opt" data-rc="etl" data-act="toggleRcOpt" data-arg='["etl"]' title="유효전이양력 — 20kt 언저리를 지나며 가속할 때 침하(지면효과 40ft 이내)" disabled>유효전이양력</button>
+              <button class="sim-btn on rc-opt" data-rc="blowback" data-act="toggleRcOpt" data-arg='["blowback"]' title="블로우백 — 20kt 언저리에서 기수 들림" disabled>블로우백</button>
+              <button class="sim-btn on rc-opt" data-rc="collPitch" data-act="toggleRcOpt" data-arg='["collPitch"]' title="컬렉티브 → 피치(±5°, 20kt 이하)" disabled>Coll to Pitch</button>
+              <button class="sim-btn on rc-opt" data-rc="collYaw" data-act="toggleRcOpt" data-arg='["collYaw"]' title="컬렉티브 → 요(움직이는 동안, 0.5초 지연, 20kt 이하)" disabled>Coll to YAW</button>
+              <button class="sim-btn on rc-opt" data-rc="yawPitch" data-act="toggleRcOpt" data-arg='["yawPitch"]' title="페달 → 피치(±2°, 20kt 이하)" disabled>YAW to Pitch</button>
+              <button class="sim-btn on rc-opt" data-rc="spdTq" data-act="toggleRcOpt" data-arg='["spdTq"]' title="속도와 토크 효율 — 20kt 까지 호버와 같은 파워, 그 위로 Vy 까지 드는 토크가 줄어 같은 레버면 상승" disabled>속도·TQ 효율</button>
             </div>
           </div>
           <!-- ASE — 수리온 계열 자동 안정 장치(14-simmode.js). 기능은 하나씩 더해 간다 -->
