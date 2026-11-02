@@ -74,7 +74,8 @@ export async function run(page, t) {
       return (q[1] - shipLat) * 111320;
     })();
     shipHdg = 0; updateShipMarker();
-    return { offBefore, spawnOff, hull, bridge, bow, dashes, marks, east, northAtBow, n: fs.length };
+    return { offBefore, spawnOff, hull, bridge, bow, dashes, marks, east, northAtBow, n: fs.length,
+             cnt: { deck: of('deck').length, stripe: of('stripe').length, mast: of('mast').length } };
   });
   t.eq(geo.offBefore, 0, '배를 켜기 전에는 3D 에 아무것도 없다');
   t.ok(geo.spawnOff < 5, `3D 를 보고 있으면 3D 화면 가운데에 놓인다 (${geo.spawnOff.toFixed(1)}m)`);
@@ -113,7 +114,8 @@ export async function run(page, t) {
   }
   t.ok([m.lineup, m.td, m.shoulder, m.limit].every(q => q.h > 7 && q.h < 7.1),
     '표시는 갑판에 칠한 것이라 5cm 만 나온다');
-  t.ok(geo.hull.c === '#1a5fa8' && geo.bridge.c === '#2277bb', '색도 지도 모형과 같다');
+  t.ok(geo.hull.c === '#f2f3f4' && geo.bridge.c === '#fafafa' && geo.cnt.deck === 1 && geo.cnt.stripe === 6 && geo.cnt.mast >= 1,
+    `해경 3016함 도면처럼 흰 선체 · 초록 갑판 · 빨강·노랑·파랑 띠 · 마스트 (띠 ${geo.cnt.stripe}개)`);
   t.ok(Math.abs(geo.east - 50) < 0.5 && Math.abs(geo.northAtBow) < 0.5,
     `침로 090 이면 함수가 동쪽을 향한다 (동쪽 ${geo.east.toFixed(1)}m)`);
 
