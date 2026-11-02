@@ -215,6 +215,17 @@ export async function run(page, t) {
     const dn = (pose.lat - cam.lat) * 111320, de = (pose.lon - cam.lng) * 111320 * Math.cos(pose.lat * Math.PI / 180);
     out.cam = { horiz: Math.hypot(dn, de), brg: (Math.atan2(de, dn) * 180 / Math.PI + 360) % 360,
                 above: camAlt - pose.alt, pitch: _ml3d.getPitch(), bearing: (_ml3d.getBearing() + 360) % 360 };
+    // 외부 시점 카메라 버튼 — 1° 씩 돌고, 멀리 · 위아래, DEFAULT
+    out.ecShow = getComputedStyle(document.getElementById('extcam-3d')).display;
+    const camDist = () => { const c = _ml3d.transform.getCameraLngLat(), p = heli3dPose();
+      return Math.hypot((p.lat - c.lat) * 111320, (p.lon - c.lng) * 111320 * Math.cos(p.lat * Math.PI / 180)); };
+    heli3dExtCamera(); const b0 = (_ml3d.getBearing() + 360) % 360, d0 = camDist(), p0 = _ml3d.getPitch();
+    for (let i = 0; i < 10; i++) extCamStep('R');
+    extCamStep('OUT'); extCamStep('OUT'); extCamStep('U'); extCamStep('U');
+    heli3dExtCamera();
+    out.ec = { db: ((_ml3d.getBearing() - b0) + 540) % 360 - 180, farther: camDist() / d0, dp: _ml3d.getPitch() - p0 };
+    extCamDefault(); heli3dExtCamera();
+    out.ec.back = Math.abs((((_ml3d.getBearing() - b0) + 540) % 360) - 180);
     // 둘러보기 — 햇 ▶ 로 오른쪽 둘레로 돈다
     simLookHold(true); simLookDir = null;            // 누르고 있는 동안은 그 자리에 머문다
     simLook.yaw = 90; simLook.pitch = 0;
@@ -238,6 +249,9 @@ export async function run(page, t) {
   t.ok(ext.fp.btn !== 'none' && !ext.fp.ext && !ext.fp.model, 'SIM 1인칭 — EXT 버튼이 보이고, 눈이 기체 안이라 모형은 그리지 않는다');
   t.ok(ext.on.ext && ext.on.cls && ext.on.model, 'EXT 를 누르면 외부 시점 — 모형을 그린다');
   t.eq(ext.ov, 'none', '외부 시점에서는 계기(PFD 겹침)를 띄우지 않는다 — 모형을 가리지 않게');
+  t.ok(ext.ecShow !== 'none', 'EXT 에서는 카메라 조작 버튼이 보인다');
+  t.ok(Math.abs(ext.ec.db - 10) < 0.6 && ext.ec.farther > 1.1 && ext.ec.dp < 0 && ext.ec.back < 0.6,
+    `◀▶ 1° 씩 돌고(10번 ${ext.ec.db.toFixed(1)}°) · 거리 + 로 멀어지고(×${ext.ec.farther.toFixed(2)}) · ▲ 로 더 내려다보고 · DEFAULT 로 돌아온다`);
   t.ok(ext.on.chin === 0 && !ext.on.chinOn, '외부 시점에서는 CHIN 창을 닫는다');
   t.ok(ext.cam.horiz > 25 && ext.cam.horiz < 200 && Math.abs(((ext.cam.brg - 40 + 540) % 360) - 180) < 3,
     `카메라는 헬기 뒤에 있다 (${ext.cam.horiz.toFixed(0)}m · 헬기 쪽 방위 ${ext.cam.brg.toFixed(0)}°)`);
