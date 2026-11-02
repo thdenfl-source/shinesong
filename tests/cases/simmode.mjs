@@ -2434,6 +2434,17 @@ export async function run(page, t) {
   })()`);
   t.ok(bb.k20 > 1 && Math.abs(bb.k60) < 0.5, `블로우 백 — 20kt 에서 기수가 들린다 (+${bb.k20.toFixed(1)}° · 60kt ${bb.k60.toFixed(1)}°)`);
 
+  // 회전익 특성 항목별 켜기/끄기
+  const rcb = await page.evaluate(() => {
+    rotorChar = true; updateRotorBtns(); S.spd = 0;
+    const o = { n: document.querySelectorAll('#rotor-3d [data-rc]').length, p0: rcPitchOff({ coll: 1, yaw: 0 }) };
+    toggleRcOpt('collPitch'); o.p1 = rcPitchOff({ coll: 1, yaw: 0 }); o.btnOff = !document.querySelector('#rotor-3d [data-rc="collPitch"]').classList.contains('on');
+    toggleRcOpt('collYaw'); o.y = rcYawRate(10); toggleRcOpt('collYaw'); toggleRcOpt('collPitch');
+    rotorChar = false; updateRotorBtns();
+    return o;
+  });
+  t.ok(rcb.n === 6 && rcb.p0 === 5 && rcb.p1 === 0 && rcb.btnOff && rcb.y === 0, `회전익 특성 아래 6개 항목을 하나씩 끄고 켠다 (${rcb.n}개)`);
+
   // FPV(예상 항적) 버튼
   const fpv = await page.evaluate(() => {
     const b = document.getElementById('fpv-btn'); const o = { a: fpvOn };

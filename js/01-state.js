@@ -236,7 +236,10 @@ function tqRequiredAt(spd, bnk) {
   // 드는 토크가 줄어, 같은 레버면 그만큼 상승률로 나타난다
   let vy = TLIFT_KT;
   try { const v = (typeof perfVy === 'function') ? perfVy() : null; if (Number.isFinite(v) && v > TLIFT_KT0 + 5) vy = v; } catch (e) { _swallow(e); }
-  const tl   = Math.max(0, Math.min(1, (Math.abs(spd) - TLIFT_KT0) / (vy - TLIFT_KT0))) * TQ_TLIFT;
+  // (SIM 회전익 특성 '속도·TQ 효율' 을 끄면 종전처럼 0kt 부터 고르게 준다)
+  const rcSpd = (typeof rcOn === 'function') && simModeOn && rcOn('spdTq');
+  const tl   = rcSpd ? Math.max(0, Math.min(1, (Math.abs(spd) - TLIFT_KT0) / (vy - TLIFT_KT0))) * TQ_TLIFT
+                     : Math.min(1, Math.abs(spd) / TLIFT_KT) * TQ_TLIFT;
   return hoverTqRef() + lift - tl;
 }
 // 그날의 MTA(최대 가용 토크, %) — CDU PERF 의 MTA(30)(09-cdu.js perfMta).

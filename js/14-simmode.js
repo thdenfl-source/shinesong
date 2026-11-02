@@ -60,6 +60,10 @@ function simSpaceUp() { simWheelBrake = false; }
 const RC_DRIFT_BANK = 3;        // 전이성향 — 호버 편류를 막는 데 드는 뱅크(°)
 const RC_YAW_FRAC = 0.15, RC_COLL_PIT = 5, RC_YAW_PIT = 2;
 let rotorChar = false, rotorDir = 'CW';
+// 회전익 특성의 항목별 켜기/끄기(3D 창 회전익 특성 아래 버튼) — 회전익 특성이 켜져 있을 때만 뜻이 있다
+const rcOpt = { etl: true, blowback: true, collPitch: true, collYaw: true, yawPitch: true, spdTq: true };
+function rcOn(k) { return rotorChar && !!rcOpt[k]; }
+function toggleRcOpt(k) { if (k in rcOpt) { rcOpt[k] = !rcOpt[k]; updateRotorBtns(); } }
 function rotorSign() { return rotorDir === 'CW' ? 1 : -1; }   // 로터가 도는 쪽(요 + = 오른쪽)
 // 컬렉티브 투 피치를 뺀 나머지(컬렉티브→요 · 요→피치 · 전이성향)는 저속 현상이다 —
 // 15kt 부터 줄어 20kt 이상이면 없다
@@ -70,7 +74,7 @@ function rcLowK() { return Math.max(0, Math.min(1, (RC_LOW_KT1 - Math.abs(S.spd)
 function rcPitchOff(a) {
   if (!rotorChar) return 0;
   // 20kt 위(전진 비행)에서는 수평·수직 안정판이 잡아 주므로 셋 다 없다 — 호버 운용에서만
-  return (RC_COLL_PIT * a.coll - RC_YAW_PIT * rotorSign() * a.yaw) * rcLowK();
+  return ((rcOpt.collPitch ? RC_COLL_PIT * a.coll : 0) - (rcOpt.yawPitch ? RC_YAW_PIT * rotorSign() * a.yaw : 0)) * rcLowK();
 }
 // COLLECTIVE TO YAW — 레버를 움직이는 동안만 돈다(토크가 바뀌는 만큼 반작용이 바뀐다).
 // 올리면 로터 반대 방향, 내리면 로터 방향으로 — 레버 1%/s 당 RC_YAW_K °/s, 최대 RC_YAW_MAX °/s.
@@ -84,7 +88,7 @@ function rcLeverTq(a) {
   return hov + a.coll * (a.coll > 0 ? SIM_LEVER_TOP - hov : TQ_SPAN);
 }
 function rcYawRate(dLev) {
-  if (!rotorChar || !rcLowK() || !dLev) return 0;
+  if (!rcOn('collYaw') || !rcLowK() || !dLev) return 0;
   const r = Math.max(-RC_YAW_MAX, Math.min(RC_YAW_MAX, RC_YAW_K * dLev));
   return -rotorSign() * r * rcLowK();
 }
@@ -97,6 +101,9 @@ function updateRotorBtns() {
     const m = box.querySelector('.rotor-main'); if (m) m.classList.toggle('on', rotorChar);
     box.querySelectorAll('[data-rdir]').forEach(b => {
       b.classList.toggle('on', b.dataset.rdir === rotorDir); b.disabled = !rotorChar;
+    });
+    box.querySelectorAll('[data-rc]').forEach(b => {
+      b.classList.toggle('on', !!rcOpt[b.dataset.rc]); b.disabled = !rotorChar;
     });
   } catch (e) { _swallow(e); }
 }
@@ -910,7 +917,7 @@ function simFly(dt) {
     }
     pTgt += rcPitchOff(a);              // 회전익 특성 — 컬렉티브·페달이 피치로 옮겨 간다
     // 블로우 백(flapback) — 전이 비행(10~30kt, 20kt 에서 가장 셈) 에서 원판이 뒤로 젖혀져 기수가 들린다
-    if (rotorChar && !onGnd && !simAfcsPitch()) pTgt += RC_BLOWBACK * Math.max(0, 1 - Math.abs(Math.abs(S.spd) - 20) / 10);
+    if (rcOn('blowback') && !onGnd && !simAfcsPitch()) pTgt += RC_BLOWBACK * Math.max(0, 1 - Math.abs(Math.abs(S.spd) - 20) / 10);
     if (gnd3) pTgt = -a.pitch * SIM_PITCH_MAX;
     // 땅 위에서는 바퀴가 받치므로 위아래 10° 까지만 기운다
     if (onGnd) pTgt = Math.max(-GND_PITCH_MAX, Math.min(GND_PITCH_MAX, pTgt));
@@ -969,7 +976,7 @@ function simFly(dt) {
       if (dev < 0 && Math.abs(S.spd) < SPD_ETL_KT && S.tq >= hoverPowerTq() + HOV_TO_MARGIN) ke = 0;   // 호버 이륙 가속
       // 전이양력 지대(20kt 언저리)를 지나며 가속할 때의 침하는 회전익 특성 — 끄면 없다
       // (지면효과(IGE)를 받는 40ft 이내에서만 — 그 위에서는 침하가 없다)
-      if (dev < 0 && Math.abs(S.spd) < SPD_ETL_KT && (!rotorChar || S.alt - simGroundFt() > RC_IGE_FT)) ke = 0;
+      if (dev < 0 && Math.abs(S.spd) < SPD_ETL_KT && (!rcOn('etl') || S.alt - simGroundFt() > RC_IGE_FT)) ke = 0;
       _simKeVsF += (ke - _simKeVsF) * Math.min(1, dt / KE_TAU);
     }
 
@@ -1089,5 +1096,5 @@ function simFly(dt) {
 
 // 화면 버튼(data-act) 연결 — 이 파일이 11-charts.js 보다 나중에 로드되므로
 // 거기 목록에 넣으면 아직 정의되지 않은 이름이 된다. 여기서 직접 등록한다.
-try { appRegister({ toggleSimMode, simModeBtnPress, toggleRotorChar, setRotorDir, toggleAse }); } catch (e) { _swallow(e); }
+try { appRegister({ toggleSimMode, simModeBtnPress, toggleRotorChar, setRotorDir, toggleAse, toggleRcOpt }); } catch (e) { _swallow(e); }
 try { updateSimModeBtn(); } catch (e) { _swallow(e); }
