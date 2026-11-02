@@ -107,7 +107,8 @@ export async function run(page, t) {
     const half = document.getElementById('solo-half-btn'), hb = half.getBoundingClientRect();
     return { cur: _soloCurrent, left: leftSel, host: document.getElementById('map3d').parentElement.id,
              d3: { w: d3.width, h: d3.height }, vw: innerWidth, vh: innerHeight,
-             half: { shown: getComputedStyle(half).display !== 'none', mid: Math.abs(hb.x + hb.width / 2 - innerWidth / 2) < 2, top: hb.y } };
+             half: { shown: getComputedStyle(half).display !== 'none', inCtl: !!half.closest('#ctl3d'), txt: half.textContent,
+                     sim: !!document.querySelector('#ctl3d #sim3d-btn') } };
   });
   const sov = await page.evaluate(OVINFO);
   t.ok(before.inRow && /3D 단독/.test(before.txt), `창 선택 줄(PFD·MAP·CDU·3D 탭 옆)에 '${before.txt}' 버튼이 있다`);
@@ -116,8 +117,9 @@ export async function run(page, t) {
   t.ok(sov.show && sov.host === 'map3d-wrap' && sov.hsi &&
        Math.abs(sov.w - sov.vw / 4) < 2 && Math.abs(sov.h - sov.vh * 0.6) < 2 && sov.x < 12 && sov.y < 12,
     `계기가 왼쪽 위에 겹쳐 뜬다 — 가로 1/4 · 높이 3/5 (${Math.round(sov.w)}×${Math.round(sov.h)})`);
-  t.ok(solo.half.shown && solo.half.mid && solo.half.top < 20,
-    '빠져나가는 ✥ HALF 버튼이 위 가운데에 뜬다(오른쪽 위 3D 버튼과 겹치지 않게)');
+  t.ok(solo.half.shown && solo.half.inCtl && solo.half.txt === 'Split screen',
+    `빠져나가는 'Split screen' 버튼이 오른쪽 3D 버튼 묶음 아래에 뜬다 (${solo.half.txt})`);
+  t.ok(solo.half.sim, '3D 버튼 묶음 맨 아래에 SIM 버튼이 있다');
   await page.click('#solo-half-btn');
   await page.waitForTimeout(400);
   const back = await page.evaluate(() => ({ solo: _soloActive, l: leftSel, m: midSel, r: rightSel, tri: tripleMode,

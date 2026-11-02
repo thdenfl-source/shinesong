@@ -1385,6 +1385,11 @@ function setSolo(screen) {
   const halfBtn = document.getElementById('solo-half-btn');
   // (3D 단독도 툴바가 없다 — 위 가운데에 띄운다)
   if (halfBtn) { halfBtn.classList.toggle('show', screen === 'pfd' || screen === 'm3d'); halfBtn.classList.toggle('m3d', screen === 'm3d'); }
+  // 3D Only — 'Split screen' 으로 이름을 바꿔 오른쪽 3D 버튼 묶음 맨 아래에 둔다
+  try {
+    const ctl = document.getElementById('ctl3d');
+    if (halfBtn && screen === 'm3d' && ctl) { ctl.appendChild(halfBtn); halfBtn.textContent = 'Split screen'; halfBtn.classList.add('sim-btn'); }
+  } catch (e) { _swallow(e); }
   // MAP 상단 툴바 버튼 라벨: 전체화면(map)일 때 HALF, 그 외 FULL
   const mapFullBtn = document.getElementById('map-full-btn');
   if (mapFullBtn) mapFullBtn.textContent = (screen === 'map') ? 'HALF' : 'FULL';
@@ -1475,7 +1480,11 @@ function exitSolo() {
   _soloCurrent = null;
   document.getElementById('solo-bar').style.display = 'none';
   const halfBtn = document.getElementById('solo-half-btn');
-  if (halfBtn) halfBtn.classList.remove('show');
+  if (halfBtn) {
+    halfBtn.classList.remove('show', 'm3d', 'sim-btn');
+    if (halfBtn.parentElement !== document.body) document.body.appendChild(halfBtn);   // 3D Only 에서 옮겨 둔 것을 제자리로
+    halfBtn.textContent = '✥ HALF';
+  }
   const mapFullBtn = document.getElementById('map-full-btn');
   if (mapFullBtn) mapFullBtn.textContent = 'FULL';
   document.body.classList.remove('solo-mode');

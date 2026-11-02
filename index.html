@@ -604,6 +604,10 @@ html, body {
 #ase-3d .ase-hf.avail { color: #9aa4ae; border-color: #556; }
 #ase-3d .ase-hf.on { color: #00e07a; border-color: #00e07a; }
 #hdgref-map { top: 48px; }
+#simmap-btn { position: absolute; right: 8px; top: 140px; width: 86px; z-index: 900; padding: 5px 4px; }
+#map-wrap.map3d-on #simmap-btn { display: none; }
+.sim-side-btn.on { color: #00e07a !important; border-color: #00e07a !important; }
+#ctl3d #solo-half-btn { position: static !important; transform: none !important; width: 100%; display: block; margin-top: 3px; padding: 5px 4px; font-size: 11px; }
 /* 출발 공항 고르기(09-cdu.js openStartAirportPicker) */
 .ui-dlg.start-apt { width: min(560px, 94vw); max-width: min(560px, 94vw); }
 .start-apt-sub { font-size: 12px; color: #9aa4ae; }
@@ -2797,6 +2801,7 @@ body.gate-open #gate-overlay { display: none; }
             <button class="sim-btn ase-main" data-act="toggleAse" title="ASE — 켜면 HOVER FOLLOW: 40kt 이내에서 조종간을 트림에 맞서 쥐고 자세를 초당 2° 이내로 움직이면 트림 기준이 그 자세를 따라온다">ASE</button>
             <div class="ase-hf" title="HOVER FOLLOW — 트림 기준이 따라오는 중이면 켜진다">HOVER FOLLOW</div>
           </div>
+          <button class="sim-btn sim-side-btn" id="sim3d-btn" data-act="simModeBtnPress" title="SIM 모드 켜기/끄기 — PFD 의 SIM 버튼과 같다">SIM OFF</button>
           </div>
         </div>
         <div id="tilt-ctrl">
@@ -2834,6 +2839,8 @@ body.gate-open #gate-overlay { display: none; }
           </div>
           <div class="hdgref-comp" title="자기 나침반(스탠바이) — DG 를 맞출 때 견준다"></div>
         </div>
+        <!-- SIM — 지도 창 오른쪽 버튼 맨 아래(PFD 의 SIM 버튼과 같다) -->
+        <button class="sim-btn sim-side-btn" id="simmap-btn" data-act="simModeBtnPress" title="SIM 모드 켜기/끄기 — PFD 의 SIM 버튼과 같다">SIM OFF</button>
       <div id="geo-panel">
         <div id="geo-panel-hdr">주소 · 지명 검색
           <span id="geo-close" data-act="closeGeoSearch" title="닫기">✕</span></div>
