@@ -299,7 +299,7 @@ export async function run(page, t) {
   const gain = ke.flare.alt - ke.lvl.alt;
   t.ok(Math.abs(ke.lvl.vs) < 100, `레버를 고도 유지에 두고 수평 120kt 로 난다 (${ke.lvl.vs.toFixed(0)}fpm)`);
   t.ok(Math.abs(ke.flare.spd - 60) < 5, `기수를 60kt 자세(약 4.9°)로 들면 60kt 로 준다 (${ke.flare.spd.toFixed(0)}kt)`);
-  t.ok(ke.flare.maxVs > 500, `감속하는 동안 떠오른다 (최대 +${ke.flare.maxVs.toFixed(0)}fpm — 레버는 그대로)`);
+  t.ok(ke.flare.maxVs > 300, `감속하는 동안 떠오른다 (최대 +${ke.flare.maxVs.toFixed(0)}fpm — 레버는 그대로)`);
   t.ok(gain > keUp * 0.75 && gain < keUp * 1.25,
     `줄어든 운동에너지만큼 고도를 얻는다 (+${gain.toFixed(0)}ft · 계산 ${keUp.toFixed(0)}ft)`);
   t.ok(Math.abs(ke.flare.vs) < 120, `감속이 끝나면 상승도 멎는다 (${ke.flare.vs.toFixed(0)}fpm)`);
@@ -566,7 +566,7 @@ export async function run(page, t) {
     `토크 10% = 500fpm — 5% 면 250fpm(상승 효율만큼) (+5% → ${coll2.up.want.toFixed(0)}fpm)`);
   t.ok(Math.abs(coll2.up.pow - coll2.up.want) < coll2.up.want * 0.05,
     `레버 +5% 면 그만큼 오른다 (${coll2.up.pow.toFixed(0)} · 기대 ${coll2.up.want.toFixed(0)}fpm)`);
-  t.ok(coll2.minAll < -3800 && coll2.minAll >= -4000.01,
+  t.ok(coll2.minAll < -3400 && coll2.minAll >= -4000.01,
     `기수를 숙이고 레버를 끝까지 내리면 4,000fpm 까지 강하한다 (계기 ${coll2.minAll.toFixed(0)}fpm — 가속하며 붙는 몫까지 합쳐도 넘지 않는다)`);
 
   // ── Vy 에서 가장 잘 오른다 ──
@@ -1578,7 +1578,7 @@ export async function run(page, t) {
       S.running = false;
       return { dec, spd, altMax, altMin };
     };
-    const down = run(-25), same = run(0);
+    const down = run(-8), same = run(0);   // 자세 변화의 고도 몫(10kt ≈ 350fpm)에 맞춰 레버는 조금만 내린다
     simTrimReset();
     return { down, same, decMax: SPD_DEC_MAX };
   })()`);
@@ -1821,7 +1821,7 @@ export async function run(page, t) {
   t.ok(hold.lvl.tq < 90 && Math.abs(hold.lvl.dAlt) < 1,
     `CRHT 는 레버(맨 위)를 무시하고 고도를 지킨다 (토크 ${hold.lvl.tq.toFixed(0)}% · ${hold.lvl.dAlt.toFixed(1)}ft)`);
   t.ok(hold.acc.spd > 115, `CRHT 중에도 기수를 숙이면 속도가 붙는다 (80 → ${hold.acc.spd.toFixed(0)}kt)`);
-  t.ok(hold.acc.minA < -5, `운동에너지로 바뀐 만큼 고도가 빠진다 (최저 ${hold.acc.minA.toFixed(0)}ft)`);
+  t.ok(hold.acc.minA < 0, `운동에너지로 바뀐 만큼 고도가 조금 빠진다(CRHT 가 곧 메운다) (최저 ${hold.acc.minA.toFixed(0)}ft)`);
   t.ok(hold.acc.maxTq > hold.lvl.tq + 10,
     `CRHT 가 토크를 더 써서 (${hold.lvl.tq.toFixed(0)} → 최대 ${hold.acc.maxTq.toFixed(0)}%)`);
   // (가속이 점점 커졌다가 목표 가까이에서 짧게 풀리므로, 풀리는 순간 남는 출력만큼 조금 넘친다)
@@ -2365,6 +2365,36 @@ export async function run(page, t) {
     `오른쪽 선회(${skid.bnk.toFixed(0)}°)에서 볼이 바깥(왼쪽)으로 반 볼 비킨다 · 끄면 없다 (${skid.right} / ${skid.off})`);
   t.ok(skid.yaw03 > 3 && skid.yaw03 < 12 && skid.yaw3 > 23 && Math.abs(skid.yawOff) < 2,
     `페달 요율은 곧바로 붙지 않는다 (0.3초 ${skid.yaw03.toFixed(1)} · 3초 ${skid.yaw3.toFixed(1)} · 놓고 3초 ${skid.yawOff.toFixed(1)}°/s)`);
+
+  // 자세(피치)로 10kt 바꾸면 약 350fpm 오르내린다 · 상위모드가 걸리면 볼은 가운데
+  const pke = await page.evaluate(`(() => {
+    (${SETUP.toString()})();
+    joyAxes = { roll: { i: 0, inv: false }, coll: { i: 3, inv: false, abs: true } };
+    let ts = 1000; S.running = true; S.lastT = ts;
+    const step = n => { for (let i = 0; i < n; i++) { ts += 50; joyPoll(ts); simStep(ts); } };
+    const run = (from, to) => {
+      S.alt = 2000; S.spd = from; S.pit = pitchFromSpd(from); S.vs = 0; simVsAcc = 0; simAcc = 0;
+      simTrim.pitch = -pitchFromSpd(from);
+      _ax(3, (tqRequired() / SIM_LEVER_TOP) * 2 - 1); step(100);
+      simTrim.pitch = -pitchFromSpd(to);
+      let pk = 0;
+      for (let i = 0; i < 200; i++) { step(1); if (Math.abs(S.vs) > Math.abs(pk)) pk = S.vs; }
+      return pk;
+    };
+    const o = { dn: run(100, 90), up: run(100, 110) };
+    // 상위모드(HDG) 중 선회 — 볼이 가운데 · 회전익 특성 외활도 없다
+    rotorChar = true; simTrim.roll = 20; step(60);
+    o.manual = { ball: slipBall, skid: simSkidHalf };
+    hdgSelOn = true; rollApOn = true; step(40);
+    o.afcs = { ball: slipBall, skid: simSkidHalf };
+    hdgSelOn = false; rollApOn = false; rotorChar = false; simTrimReset();
+    S.running = false;
+    return o;
+  })()`);
+  t.ok(pke.dn > 300 && pke.dn < 420, `기수를 들어 10kt 줄이면 약 350fpm 오른다 (최대 ${pke.dn.toFixed(0)}fpm)`);
+  t.ok(pke.up < -280 && pke.up > -420, `기수를 숙여 10kt 늘리면 약 350fpm 내려간다 (최대 ${pke.up.toFixed(0)}fpm)`);
+  t.ok(pke.manual.skid !== 0 && pke.afcs.skid === 0 && Math.abs(pke.afcs.ball) < 0.02,
+    `상위모드가 걸리면 내활·외활이 없다 — 수동 비행에서만 (수동 외활 ${pke.manual.skid} · HDG 중 볼 ${pke.afcs.ball.toFixed(3)})`);
 
   // FPV(예상 항적) 버튼
   const fpv = await page.evaluate(() => {

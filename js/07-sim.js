@@ -361,7 +361,9 @@ function slipUpdate(dt) {
   if (Math.abs(dh) > 10) dh = 0;                  // 배치·리셋처럼 한 번에 옮긴 것 — 돈 것이 아니다
   const r = dh * D2R / dt;                        // 요율(rad/s, 오른쪽 +)
   const v = Math.abs(S.spd) * 1.6878;             // ft/s
-  const tgt = Math.max(-1, Math.min(1, Math.tan(S.bnk * D2R) - v * r / 32.174));
+  let tgt = Math.max(-1, Math.min(1, Math.tan(S.bnk * D2R) - v * r / 32.174));
+  // SIM — 상위모드가 걸려 있으면 AFCS 가 협조 선회로 잡는다(볼 가운데). 내활·외활은 순수 수동 비행에서만
+  try { if (typeof simAfcsAny === 'function' && simAfcsAny()) tgt = 0; } catch (e) { _swallow(e); }
   slipBall += (tgt - slipBall) * Math.min(1, dt / SLIP_TAU);
 }
 

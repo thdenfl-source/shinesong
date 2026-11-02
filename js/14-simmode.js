@@ -117,6 +117,11 @@ const SIDE_K       = 0.5;     // 옆방향 속도가 따라가는 빠르기(1/s)
 function simAfcsLat() {
   return simModeOn && !gspdOn && !gspdCoasting && (navApOn || (hdgSelOn && rollApOn));
 }
+// 상위모드가 하나라도 걸려 있는가 — 그때는 AFCS 가 협조 선회로 잡아 볼이 가운데다(내활·외활 없음)
+function simAfcsAny() {
+  return simModeOn && !!(hdgSelOn || navApOn || altHoldOn || crhtOn || simIasOn || gspdOn || gsOn ||
+    (typeof holdOn !== 'undefined' && holdOn));
+}
 function simAfcsVert() { return simModeOn && (altHoldOn || crhtOn || (gsOn && !!_simGs())); }
 // G/S 를 잡고 있으면 강하선(gsDeviation)이 고도를 정한다 — ALT·CRHT 보다 앞선다
 function _simGs() { try { return gsOn ? gsDeviation() : null; } catch (e) { return null; } }
@@ -254,10 +259,14 @@ const TQ_KT  = 1;           // 남는(모자란) 토크 1% 당 같은 자세의 
 const TQ_KT_MAX = 10;
 const TQ_KT_VS0 = 500, TQ_KT_VS1 = 700;   // 오르내림이 500fpm 을 넘어야 속도차가 생기기 시작해 700fpm 에서 다 붙는다
 const DESC_TQ = 5;          // 수평 비행 토크보다 이만큼(%) 모자라야 강하 파워로 본다(고도 유지 중 미세한 차는 빼고)      // 강하 파워에서 감속이 돌려주는 상승률 몫(반)
-const SIM_KE_EFF = 0.5;        // 운동에너지 중 고도로 옮겨 가는 몫(나머지는 항력으로 잃는다)
+const SIM_KE_EFF = 0.14;       // 감속할 때 운동에너지 중 고도로 옮겨 가는 몫(10kt → 약 350fpm) · 종전 0.5
+const SIM_KE_EFF_ACC = 0.17;   // 가속할 때 고도로 치르는 몫(10kt → 약 330fpm)
 const SIM_KE_FPM = 0.514444 * 0.514444 / 9.80665 * 196.8504;   // kt × kt/s → fpm (≈5.31)
 // 지금의 속도·가감속이 만드는 상승률(fpm). 땅 위에서는 미끄럼이 멈춰 세울 뿐이다.
 let _simKePowered = false;     // 지금 가감속이 남는 출력의 속도차 몫인가(simFly 가 채운다)
+// ── 자세(피치) 변화 ↔ 고도 ── 기수를 들어 10kt 줄이면 약 350fpm 오르고, 숙여 10kt 늘리면 약 350fpm 내려간다
+// (100kt 언저리 · 최대치). 운동에너지 법칙 그대로라 줄였다 늘리면 고도가 제자리로 돌아온다.
+// 가속은 감속보다 천천히 붙으므로 같은 상승·강하율이 나오게 몫을 조금 크게 둔다(SIM_KE_EFF_ACC).
 function simKeVs(onGnd, spd = S.spd, acc = simAcc) {
   if (onGnd || _simKePowered) return 0;
   // 호버에서 기수를 숙여(5°) 이륙 가속할 때 — 호버 토크 + 7% 넘게 쓰면 가라앉지 않는다
@@ -265,7 +274,7 @@ function simKeVs(onGnd, spd = S.spd, acc = simAcc) {
   if (acc > 0 && Math.abs(spd) < SPD_ETL_KT && S.tq >= hoverPowerTq() + HOV_TO_MARGIN) return 0;
   // 강하 파워에서 기수를 들어 줄어드는 강하율은 반만(DESC_KE_K)
   const k = (acc < 0 && !simAfcsVert() && S.tq < tqRequired() - DESC_TQ) ? DESC_KE_K : 1;
-  return -SIM_KE_EFF * k * SIM_KE_FPM * spd * acc;
+  return -(acc < 0 ? SIM_KE_EFF : SIM_KE_EFF_ACC) * k * SIM_KE_FPM * spd * acc;
 }
 // ── 오토로테이션 플레어 ──
 // 레버를 내리고(출력 없이) 내려오는 중에 기수를 들면 원판이 뒤로 젖혀져, 앞에서 오던 바람이
@@ -923,7 +932,7 @@ function simFly(dt) {
     }
   } else simYawRate = 0;
   // 회전익 특성 — 선회 중 1/2 볼 외활(skid): 볼이 선회 바깥쪽으로 반 볼 비킨다(20kt 위 · 뱅크 10° 에서 다)
-  simSkidHalf = (rotorChar && !onGnd) ? -Math.sign(S.bnk) * Math.min(1, Math.abs(S.bnk) / 10) * (1 - rcLowK()) : 0;
+  simSkidHalf = (rotorChar && !onGnd && !simAfcsAny()) ? -Math.sign(S.bnk) * Math.min(1, Math.abs(S.bnk) / 10) * (1 - rcLowK()) : 0;
   // 회전익 특성 — 컬렉티브 토크의 반작용으로 동체가 로터 반대 방향으로 돈다(공중에서만)
   const lev = rcLeverTq(a);
   const dLev = (_rcLevPrev === null) ? 0 : (lev - _rcLevPrev) / dt;
