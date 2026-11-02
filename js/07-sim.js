@@ -894,6 +894,7 @@ function applyPanels() {
   const R = document.getElementById('right-panel');
   const app = document.getElementById('app');
   app.classList.toggle('triple', tripleMode);
+  try { applyPoRatio(); } catch (e) { _swallow(e); }
   // 새로고침은 CDU 창(3분할의 가운데) 탭에 — 2분할에는 가운데가 없으니 우측 탭 끝에
   try {
     const rb = document.getElementById('reload-btn');
@@ -959,6 +960,24 @@ function setPage(n) { selectPanel('right', ['map', 'plan', 'cdu'][n] || 'map', t
 // ── 분할 비율 조절: 경계선 그립을 드래그(좌우/위아래) ──
 // 2분할: 좌측 패널에 인라인 flex-basis를 지정(pfd-host 55% 규칙보다 우선)
 // 3분할: 두 경계선을 각각 드래그. 인접한 두 창만 서로 크기를 주고받는다.
+// ── 패널을 새 창으로 띄운 뒤 본 창에 남은 패널(00-popout.js) ──
+// 둘이 남으면 그 사이 경계를 끌어 비율을 고른다 — 앞쪽 패널이 poRatio(%)를 갖고 뒤쪽이 나머지를 채운다
+let poRatio = 50;
+function poRemaining() {
+  const sides = (typeof popoutSides === 'function') ? popoutSides() : [];
+  if (!sides.length) return [];
+  return ['left', 'mid', 'right'].filter(k => !sides.includes(k) && (k !== 'mid' || tripleMode))
+    .map(k => document.getElementById(k + '-panel')).filter(el => el && el.ownerDocument === document);
+}
+function applyPoRatio() {
+  const app = document.getElementById('app');
+  if (!app) return;
+  const rem = poRemaining();
+  ['left', 'mid', 'right'].forEach(k => { const el = document.getElementById(k + '-panel'); if (el) el.classList.remove('po-a'); });
+  if (rem.length === 2) rem[0].classList.add('po-a');
+  app.style.setProperty('--po-a', poRatio.toFixed(2) + '%');
+  try { resizePFD(); } catch (e) { _swallow(e); }
+}
 (function initDividerDrag() {
   const grip  = document.getElementById('divider-grip');
   const grip2 = document.getElementById('divider-grip-2');
@@ -996,14 +1015,18 @@ function setPage(n) { selectPanel('right', ['map', 'plan', 'cdu'][n] || 'map', t
     if (!el) return;
     let dragging = false;
     el.addEventListener('pointerdown', e => {
-      if (which === 2 && !tripleMode) return;
+      if (which === 2 && !tripleMode && !poRemaining().length) return;
       e.preventDefault(); dragging = true;
       try { el.setPointerCapture(e.pointerId); } catch(err) { _swallow(err); }
     });
     el.addEventListener('pointermove', e => {
       if (!dragging) return;
       const pct = pctOf(e);
-      if (!tripleMode) {
+      // 패널 하나를 새 창으로 띄워 둘만 남았으면 — 남은 경계로 그 둘의 비율을 고른다(00-popout.js)
+      if (poRemaining().length === 2) {
+        poRatio = Math.max(15, Math.min(85, pct));
+        applyPoRatio();
+      } else if (!tripleMode) {
         applyRatio(Math.max(25, Math.min(75, pct)));
       } else {
         const cur = triRatio || triDefaultRatio();
@@ -1026,7 +1049,8 @@ function setPage(n) { selectPanel('right', ['map', 'plan', 'cdu'][n] || 'map', t
     const end = () => {
       if (!dragging) return;
       dragging = false;
-      if (tripleMode) saveTriRatio();
+      if (poRemaining().length === 2) { /* 새 창 배치의 비율은 그 동안만 쓴다 */ }
+      else if (tripleMode) saveTriRatio();
       else {
         const mm = /0 0 ([\d.]+)%/.exec(L.style.flex || '');
         if (mm) try { localStorage.setItem('splitRatio', mm[1]); } catch(err) { _swallow(err); }
@@ -1037,7 +1061,8 @@ function setPage(n) { selectPanel('right', ['map', 'plan', 'cdu'][n] || 'map', t
     el.addEventListener('pointercancel', end);
     // 더블탭/더블클릭 → 기본 배분으로 되돌리기
     el.addEventListener('dblclick', () => {
-      if (tripleMode) { triRatio = null; applyTriRatio(); saveTriRatio(); }
+      if (poRemaining().length === 2) { poRatio = 50; applyPoRatio(); }
+      else if (tripleMode) { triRatio = null; applyTriRatio(); saveTriRatio(); }
       else { L.style.flex = ''; app.classList.remove('split-custom');
              try { localStorage.removeItem('splitRatio'); } catch(err) { _swallow(err); } }
       afterResize();
@@ -1217,7 +1242,8 @@ function updateSoloBtn() {
     const on = (_soloActive && _soloCurrent === k);
     b.textContent = on ? '✥ 분할' : `⛶ ${SOLO_NAMES[k]} 단독`;
     b.classList.toggle('active', on);
-  });
+  });  const ob = document.getElementById('m3d-only-btn');
+  if (ob) { const on = _soloActive && _soloCurrent === 'm3d'; ob.textContent = on ? '✥ 분할' : '⛶ 3D Only'; ob.classList.toggle('active', on); }
 }
 
 // MAP 상단 툴바의 FULL/HALF 토글 — 상황에 맞게 전체화면 진입/분할 복귀

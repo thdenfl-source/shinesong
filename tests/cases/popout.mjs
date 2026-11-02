@@ -15,7 +15,7 @@ export async function run(page, t) {
   t.ok(tabs.tri && tabs.sel === 'pfd·cdu·map', `처음에는 3분할 PFD · CDU · MAP (${tabs.sel})`);
   t.ok(/^PFD\|⿰ 2분할\|⧉ POP UP$/.test(tabs.L), `PFD 창 탭: PFD · 2분할/3분할 · POP UP (${tabs.L})`);
   t.ok(tabs.M === 'CDU|MAP|3D|⧉ POP UP|⟳', `CDU 창 탭: CDU · MAP · 3D · POP UP · 새로고침 (${tabs.M})`);
-  t.ok(tabs.R === 'CDU|MAP|3D|⧉ POP UP', `MAP 창 탭: CDU · MAP · 3D · POP UP (${tabs.R})`);
+  t.ok(tabs.R === 'CDU|MAP|3D|⛶ 3D Only|⧉ POP UP', `MAP 창 탭: CDU · MAP · 3D · 3D Only · POP UP (${tabs.R})`);
   const two = await page.evaluate(() => { toggleTriple(false); const o = [leftSel, rightSel].join('·'); toggleTriple(true); return o; });
   t.eq(two, 'pfd·map', '2분할은 PFD · MAP');
   const ctx = page.context();
@@ -31,6 +31,15 @@ export async function run(page, t) {
   t.ok(a.sides.join() === 'mid' && a.moved, 'POP UP 을 누르면 가운데(CDU) 패널이 새 창으로 옮겨 간다');
   t.ok(a.pfdW > 100, `새 창에서도 CDU 가 그 창 크기로 그려진다 (${a.pfdW}px)`);
   t.ok(/po-mid/.test(a.cls) && a.divider === 'none', '본 창에서는 그 자리의 구분선이 사라지고 남은 패널이 나눠 갖는다');
+
+  // 둘만 남은 본 창 — 남은 경계(좌|우)를 끌면 비율이 바뀐다
+  const g = await page.evaluate(() => { const r = document.getElementById('divider-grip').getBoundingClientRect();
+    const a = document.getElementById('app').getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2, ax: a.x, aw: a.width }; });
+  await page.mouse.move(g.x, g.y); await page.mouse.down();
+  await page.mouse.move(g.ax + g.aw * 0.3, g.y, { steps: 6 }); await page.mouse.up();
+  await page.waitForTimeout(300);
+  const lw = await page.evaluate(() => document.getElementById('left-panel').getBoundingClientRect().width / document.getElementById('app').getBoundingClientRect().width);
+  t.ok(Math.abs(lw - 0.3) < 0.05, `창 하나를 띄운 뒤 남은 두 창의 비율을 끌어 바꾼다 (좌 ${(lw * 100).toFixed(0)}%)`);
 
   await pop.click('#mid-tabs [data-sel="map"]');
   await page.waitForTimeout(500);
