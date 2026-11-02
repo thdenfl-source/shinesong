@@ -983,7 +983,8 @@ function simFly(dt) {
       // 남는 출력(수평 비행 토크보다 많이)을 걸고 가속할 때는 엔진이 속도를 낸다 — 고도로 치르지 않는다
       // (남는 토크 0 → 5% 사이에서 서서히). 수평 비행 출력에서 기수를 숙여 가속하면 종전대로 고도로 치른다.
       // 그래서 같은 토크로 이륙 가속하면 Vy 까지 상승률이 점점 오르고(속도·TQ 효율), Vy 를 넘으면 상승 효율이 떨어져 준다.
-      if (dev < 0) ke *= 1 - Math.max(0, Math.min(1, (S.tq - tqRequired()) / KE_PWR_FREE));
+      // (ALT·CRHT 가 출력을 몰 때는 빼고 — 그때는 AFCS 가 가속에 드는 출력을 더 써서 고도를 지킨다)
+      if (dev < 0 && !simAfcsVert()) ke *= 1 - Math.max(0, Math.min(1, (S.tq - tqRequired()) / KE_PWR_FREE));
       if (dev < 0 && Math.abs(S.spd) < SPD_ETL_KT && S.tq >= hoverPowerTq() + HOV_TO_MARGIN) ke = 0;   // 호버 이륙 가속
       // 전이양력 지대(20kt 언저리)를 지나며 가속할 때의 침하는 회전익 특성 — 끄면 없다
       // (지면효과(IGE)를 받는 40ft 이내에서만 — 그 위에서는 침하가 없다)
