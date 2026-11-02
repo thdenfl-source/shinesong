@@ -2422,6 +2422,18 @@ export async function run(page, t) {
   t.ok(Math.abs(ase.fast.rel) < 1 && !ase.fast.held.hf, `40kt 넘으면 따라오지 않는다 (80kt · ${ase.fast.rel.toFixed(1)}°)`);
   t.ok(ase.btn, '3D 창의 ASE 버튼으로 켜고 끈다');
 
+  // 블로우 백 — 20kt 언저리에서 기수가 들린다(회전익 특성)
+  const bb = await page.evaluate(`(() => {
+    (${SETUP.toString()})();
+    const fly = ${FLY};
+    S.alt = 1000; rotorChar = true;
+    const at = v => { S.spd = v; simTrim.pitch = -pitchFromSpd(v); S.pit = pitchFromSpd(v); fly(1); return S.pit - pitchFromSpd(v); };
+    const o = { k20: at(20), k60: at(60) };
+    rotorChar = false; simTrimReset();
+    return o;
+  })()`);
+  t.ok(bb.k20 > 1 && Math.abs(bb.k60) < 0.5, \`블로우 백 — 20kt 에서 기수가 들린다 (+\${bb.k20.toFixed(1)}° · 60kt \${bb.k60.toFixed(1)}°)\`);
+
   // FPV(예상 항적) 버튼
   const fpv = await page.evaluate(() => {
     const b = document.getElementById('fpv-btn'); const o = { a: fpvOn };

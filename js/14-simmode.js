@@ -63,6 +63,7 @@ let rotorChar = false, rotorDir = 'CW';
 function rotorSign() { return rotorDir === 'CW' ? 1 : -1; }   // 로터가 도는 쪽(요 + = 오른쪽)
 // 컬렉티브 투 피치를 뺀 나머지(컬렉티브→요 · 요→피치 · 전이성향)는 저속 현상이다 —
 // 15kt 부터 줄어 20kt 이상이면 없다
+const RC_BLOWBACK = 3;          // 블로우 백 기수 들림(°) — 20kt 에서 최대
 const RC_LOW_KT0 = 15, RC_LOW_KT1 = 20;
 function rcLowK() { return Math.max(0, Math.min(1, (RC_LOW_KT1 - Math.abs(S.spd)) / (RC_LOW_KT1 - RC_LOW_KT0))); }
 function rcPitchOff(a) {
@@ -907,6 +908,8 @@ function simFly(dt) {
       if (!a.pitch) pRate = SIM_IAS_RATE;
     }
     pTgt += rcPitchOff(a);              // 회전익 특성 — 컬렉티브·페달이 피치로 옮겨 간다
+    // 블로우 백(flapback) — 전이 비행(10~30kt, 20kt 에서 가장 셈) 에서 원판이 뒤로 젖혀져 기수가 들린다
+    if (rotorChar && !onGnd && !simAfcsPitch()) pTgt += RC_BLOWBACK * Math.max(0, 1 - Math.abs(Math.abs(S.spd) - 20) / 10);
     if (gnd3) pTgt = -a.pitch * SIM_PITCH_MAX;
     // 땅 위에서는 바퀴가 받치므로 위아래 10° 까지만 기운다
     if (onGnd) pTgt = Math.max(-GND_PITCH_MAX, Math.min(GND_PITCH_MAX, pTgt));
