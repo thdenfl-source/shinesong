@@ -1295,7 +1295,7 @@ export async function run(page, t) {
   t.eq(joyTrim.hatHeld, 3.75, `햇 ▲ 를 누르고 있으면 이어 간다 (${joyTrim.hatHeld}° — 첫 0.25° + 0.5° × 7)`);
   t.eq(joyTrim.dupKeyFirst.pitch, 0.25,
     `햇과 방향키가 함께 들어와도 한 칸(0.25°)이다 (${joyTrim.dupKeyFirst.pitch}°)`);
-  t.ok(joyTrim.dupKeyFirst.armed && joyTrim.dupHeld === 2,
+  t.ok(joyTrim.dupKeyFirst.armed && joyTrim.dupHeld === 1.75,   // 첫 딸깍 0.25° + 이어 0.5° × 3
     `그때도 누르고 있으면 이어 간다 — 뒤에 들어온 쪽이 홀드를 끊지 않는다 (${joyTrim.dupHeld}°)`);
   t.eq(joyTrim.dupPadFirst, 0.25, `햇이 먼저 들어와도 한 칸이다 (${joyTrim.dupPadFirst}°)`);
   t.ok(joyTrim.boundKey.alt === 100 && joyTrim.boundKey.pitch === 0,
