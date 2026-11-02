@@ -277,6 +277,8 @@ function joyPads() {
     const g = fn.call(navigator);
     const list = Array.prototype.slice.call(g || []).filter(Boolean);
     // WebHID 로 직접 연 장치도 같은 패드로 취급한다(13-joyhid.js)
+    // 패널을 새 창으로 띄워 그쪽에 포커스가 있으면 본 창에 패드가 안 올라오는 브라우저가 있다(00-popout.js)
+    if (!list.length && typeof popoutGamepads === 'function') { try { list.push(...popoutGamepads()); } catch (e) { _swallow(e); } }
     try { const h = (typeof joyHidPad === 'function') ? joyHidPad() : null; if (h) list.push(h); }
     catch (e) { _swallow(e); }
     return list;

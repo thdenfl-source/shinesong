@@ -45,8 +45,9 @@ import * as view3d from './cases/view3d.mjs';
 import * as runway from './cases/runway.mjs';
 import * as apptune from './cases/apptune.mjs';
 import * as lock from './cases/lock.mjs';
+import * as popout from './cases/popout.mjs';
 
-const SUITES = [smoke, actions, coords, chartcal, hold, nav, gspd, dialog, chartview, procdata, simspd, tascalc, brg, fpwpt, maprot, map3d, dmearc, dme, fporder, wptcrs, brglbl, directto, crssync, locsta, susp, layout, gslope, joystick, geosearch, simmode, ship3d, heli3d, ralt, startapt, hdgref, sound, view3d, runway, apptune, lock];
+const SUITES = [smoke, actions, coords, chartcal, hold, nav, gspd, dialog, chartview, procdata, simspd, tascalc, brg, fpwpt, maprot, map3d, dmearc, dme, fporder, wptcrs, brglbl, directto, crssync, locsta, susp, layout, gslope, joystick, geosearch, simmode, ship3d, heli3d, ralt, startapt, hdgref, sound, view3d, runway, apptune, lock, popout];
 const filter = process.argv.slice(2);
 
 function makeT() {
