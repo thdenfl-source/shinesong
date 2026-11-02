@@ -525,4 +525,19 @@ export async function run(page, t) {
   });
   t.ok(off.n === 0 && off.trail === 0, '배 표시를 끄면 3D 모형과 항적도 사라진다');
   t.eq(page.errors.length, 0, `페이지 오류 없음${page.errors.length ? ' — ' + page.errors[0] : ''}`);
+
+  // SHIP 메뉴 '항공기 위치' — 헬기를 갑판 착함 원에 앉힌 채로 SIM 시작
+  const ph = await page.evaluate(async () => {
+    if (simModeOn) toggleSimMode(false);
+    if (!shipVisible) shipToggleOn();
+    shipLat = 37.0; shipLon = 126.0; shipHdg = 90; shipSpd = 0; updateShipMarker();
+    document.getElementById('ship-menu-heli').click();
+    await new Promise(r => setTimeout(r, 200));
+    const n = (S.lat - shipLat) * 111320, e = (S.lon - shipLon) * 111320 * Math.cos(shipLat * Math.PI / 180);
+    const o = { sim: simModeOn, deck: simOnDeck(), alt: S.alt, floor: simFloorFt(), hdg: S.hdg, e, n, tq: S.tq };
+    toggleSimMode(false);
+    return o;
+  });
+  t.ok(ph.sim && Math.abs(ph.alt - 7 / 0.3048) < 0.6 && Math.abs(ph.e + 30) < 1 && Math.abs(ph.n) < 1 && ph.hdg === 90 && ph.tq === 0,
+    `'항공기 위치' — 헬기가 착함 원(30m 뒤)에 앉은 채 SIM 이 켜진다 (갑판 ${ph.alt.toFixed(1)}ft · 함미 쪽 ${(-ph.e).toFixed(1)}m)`);
 }
