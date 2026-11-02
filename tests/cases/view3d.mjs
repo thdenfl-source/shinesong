@@ -93,7 +93,7 @@ export async function run(page, t) {
   t.ok(btn.inside && btn.txt0 === '계기 ON' && btn.on0, `3D 창에 계기 ON/OFF 버튼이 있다 (${btn.txt0})`);
   t.ok(btn.off.txt === '계기 OFF' && !btn.off.show && btn.off.pref === '0', '누르면 계기를 감춘다(계기 OFF)');
   t.ok(btn.on.txt === '계기 ON' && btn.on.show && btn.on.pref === '1', '다시 누르면 다시 보인다(계기 ON)');
-  await page.evaluate(async () => { selectPanel('right', 'cdu', true); await new Promise(r => setTimeout(r, 300)); });
+  await page.evaluate(async () => { selectPanel('right', 'map', true); await new Promise(r => setTimeout(r, 300)); });
   const gone = await page.evaluate(OVINFO);
   t.ok(!gone.show, '3D 지도가 화면에 없으면 계기도 겹치지 않는다');
 

@@ -38,11 +38,11 @@ export async function run(page, t) {
 
   t.eq(v.triple, true, '처음부터 3분할이다');
   t.eq(v.pfd, 'left-panel',  `좌측은 PFD (${v.pfd})`);
-  t.eq(v.map, 'mid-panel',   `중앙은 MAP (${v.map})`);
-  t.eq(v.cdu, 'right-panel', `우측은 CDU (${v.cdu})`);
+  t.eq(v.cdu, 'mid-panel',   `중앙은 CDU (${v.cdu})`);
+  t.eq(v.map, 'right-panel', `우측은 MAP (${v.map})`);
   t.eq(v.shownAll, true, '세 창이 모두 보인다');
-  t.eq(v.tabs.join('·'), 'pfd·map·cdu', `탭 표시도 그대로다 (${v.tabs.join('·')})`);
-  t.eq(v.sel.join('·'), 'pfd·map·cdu', '상태값도 같다');
+  t.eq(v.tabs.join('·'), 'pfd·cdu·map', `탭 표시도 그대로다 (${v.tabs.join('·')})`);
+  t.eq(v.sel.join('·'), 'pfd·cdu·map', '상태값도 같다');
   t.ok(v.midW > 50, `중앙 패널이 실제로 자리를 차지한다 (${v.midW}px)`);
 
   // ── 2분할을 골라 두면 그 뜻을 따른다 ──
@@ -92,7 +92,7 @@ export async function run(page, t) {
     `그때 버튼은 되돌아가는 버튼이 된다 (${solo.on.txt})`);
   t.eq(solo.off.solo, false, '한 번 더 누르면 나온다');
   t.eq(solo.off.triple, true, '나오면 3분할 배치가 그대로 돌아온다');
-  t.eq(solo.off.sel, 'pfd·map·cdu', `창 배치도 들어가기 전 그대로다 (${solo.off.sel})`);
+  t.eq(solo.off.sel, 'pfd·cdu·map', `창 배치도 들어가기 전 그대로다 (${solo.off.sel})`);
   t.ok(solo.off.m > 50 && solo.off.r > 50,
     `가운데·우측 창이 다시 자리를 잡는다 (${solo.off.m}px · ${solo.off.r}px)`);
 
@@ -121,7 +121,7 @@ export async function run(page, t) {
     t.eq(r.on.others.join('·'), '0·0', `나머지 두 창은 접힌다 (${r.on.others.join('·')}px)`);
     t.ok(r.on.w > r.full * 0.95, `화면을 가득 채운다 (${r.on.w}px / ${r.full}px)`);
     t.eq(r.solo, false, '나오면 단독이 풀린다');
-    t.eq(r.sel, 'pfd·map·cdu', `배치도 들어가기 전 그대로다 (${r.sel})`);
+    t.eq(r.sel, 'pfd·cdu·map', `배치도 들어가기 전 그대로다 (${r.sel})`);
   }
 
   // ── Flight Plan 은 CDU 가 있는 창에서 열린다 ──

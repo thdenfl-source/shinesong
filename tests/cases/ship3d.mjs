@@ -120,6 +120,9 @@ export async function run(page, t) {
   // ── 실제로 그려지는가 ──
   const drawn = await page.evaluate(async () => {
     const wait = ms => new Promise(r => setTimeout(r, ms));
+    // 지도를 가운데 창에 두고 본다(기본 배치는 우측 MAP — 설정창이 끄는 자리를 덮는다)
+    selectPanel('mid', 'map', true); selectPanel('right', 'cdu', true); await wait(600);
+    try { _ml3d.resize(); } catch (e) {}
     _ml3d.jumpTo({ center: [shipLon, shipLat], zoom: 18, pitch: 0, bearing: 0 });
     await wait(1500);
     const p = _ml3d.project([shipLon, shipLat]);
