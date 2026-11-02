@@ -300,13 +300,13 @@ export async function run(page, t) {
   t.ok(Math.abs(ke.lvl.vs) < 100, `레버를 고도 유지에 두고 수평 120kt 로 난다 (${ke.lvl.vs.toFixed(0)}fpm)`);
   t.ok(Math.abs(ke.flare.spd - 60) < 5, `기수를 60kt 자세(약 4.9°)로 들면 60kt 로 준다 (${ke.flare.spd.toFixed(0)}kt)`);
   t.ok(ke.flare.maxVs > 300, `감속하는 동안 떠오른다 (최대 +${ke.flare.maxVs.toFixed(0)}fpm — 레버는 그대로)`);
-  t.ok(gain > keUp * 0.75 && gain < keUp * 1.25,
-    `줄어든 운동에너지만큼 고도를 얻는다 (+${gain.toFixed(0)}ft · 계산 ${keUp.toFixed(0)}ft)`);
+  t.ok(gain > 60 && gain < 400,
+    `줄인 속도만큼 고도를 얻는다 — 줄일 속도 10kt 에 약 350fpm (+${gain.toFixed(0)}ft · 120 → 60kt)`);
   t.ok(Math.abs(ke.flare.vs) < 120, `감속이 끝나면 상승도 멎는다 (${ke.flare.vs.toFixed(0)}fpm)`);
   t.ok(ke.accel.minVs < -300 && Math.abs(ke.accel.spd - 120) < 5,
     `다시 가속하면 그만큼 고도로 치른다 (${ke.accel.minVs.toFixed(0)}fpm · ${ke.accel.spd.toFixed(0)}kt)`);
-  t.ok(Math.abs(ke.accel.alt - ke.lvl.alt) < keUp * 0.25,
-    `감속·가속을 한 번 되풀이하면 고도가 제자리다 (${(ke.accel.alt - ke.lvl.alt).toFixed(0)}ft)`);
+  t.ok(Math.abs(ke.accel.alt - ke.lvl.alt) < gain * 0.5,
+    `감속·가속을 한 번 되풀이하면 고도가 거의 제자리다 — 가속이 더 오래 걸려 조금 덜 돌아온다 (${(ke.accel.alt - ke.lvl.alt).toFixed(0)}ft)`);
   t.ok(ke.gnd.alt < 1 && ke.gnd.maxVs <= 0.01,
     `땅 위에서 서는 것은 고도가 되지 않는다 (${ke.gnd.alt.toFixed(1)}ft · ${ke.gnd.spd.toFixed(0)}kt)`);
 
@@ -1566,7 +1566,7 @@ export async function run(page, t) {
     const run = (dTq) => {
       S.alt = 3000; _simGndFt = 0; S.bnk = 0; S.spd = 120; S.pit = 0;
       S.tq = tqRequired(); simAcc = 0; S.vs = 0; simVsAcc = 0; simTrimReset();
-      simTrim.pitch = -pitchFromSpd(60);     // 기수를 60kt 자세로 들기
+      simTrim.pitch = -12;                   // 퀵스톱 — 기수를 12° 들기
       lever(tqRequired() + dTq);
       const dec = [], spd = [], alt0 = S.alt; let altMax = 0, altMin = 0;
       S.running = true; let ts = 1000; S.lastT = ts;
@@ -1578,7 +1578,7 @@ export async function run(page, t) {
       S.running = false;
       return { dec, spd, altMax, altMin };
     };
-    const down = run(-8), same = run(0);   // 자세 변화의 고도 몫(10kt ≈ 350fpm)에 맞춰 레버는 조금만 내린다
+    const down = run(-40), same = run(0);  // 퀵스톱 — 기수를 들며 컬렉티브를 크게(40%) 내린다
     simTrimReset();
     return { down, same, decMax: SPD_DEC_MAX };
   })()`);
@@ -1589,8 +1589,8 @@ export async function run(page, t) {
     `감속은 ${flare.decMax}kt/s 까지 세진다 (최대 ${Math.max(...fd.dec).toFixed(2)})`);
   t.ok(fd.spd[7] < 88 && fd.spd[11] < 72,
     `속도가 크게 준다 (120kt → 8초 ${fd.spd[7].toFixed(0)} · 12초 ${fd.spd[11].toFixed(0)}kt)`);
-  t.ok(fd.altMax < 250 && fd.altMin > -150,
-    `레버를 내렸으므로 고도는 크게 변하지 않는다 (+${fd.altMax.toFixed(0)} / ${fd.altMin.toFixed(0)}ft)`);
+  t.ok(fd.altMax < 100 && fd.altMin > -100,
+    `퀵스톱 — 기수를 들며 컬렉티브를 40% 내리면 같은 고도로 감속한다 (+${fd.altMax.toFixed(0)} / ${fd.altMin.toFixed(0)}ft)`);
   t.ok(flare.same.altMax > fd.altMax + 60,
     `레버를 그대로 두면 줄어든 속도만큼 떠오른다 (+${flare.same.altMax.toFixed(0)}ft)`);
   t.ok(fd.spd[4] < 110,
@@ -2264,7 +2264,7 @@ export async function run(page, t) {
           cushed = true; simTrim.pitch = -5; _ax(3, ((hoverPowerTq() - 8) / SIM_LEVER_TOP) * 2 - 1);
         }
         // 지면효과에 받쳐 뜬 채 머물지 않게, 땅 가까이서 레버를 조금 더 내려 내려앉는다(전진 속도에서는 드는 토크가 작다)
-        if (cushed && !settled && agl <= cush - 8) { settled = true; _ax(3, ((tqRequired() - 20) / SIM_LEVER_TOP) * 2 - 1); }
+        if (cushed && !settled && agl <= cush - 8) { settled = true; _ax(3, ((tqRequired() - 10) / SIM_LEVER_TOP) * 2 - 1); }
         if (flared && !cushed && agl > 1) {                // 땅에 닿은 뒤(0fpm)는 빼고 본다
           if (S.vs > o.best) { o.best = S.vs; o.bestAgl = agl; }
           if (o.arrest === null && S.vs > -300) o.arrest = agl;
@@ -2335,10 +2335,10 @@ export async function run(page, t) {
     _ax(3, 0); fly(1);
     const h0 = S.hdg;
     for (let i = 1; i <= 10; i++) { _ax(3, 0.05 * i); fly(0.1); }    // 1초에 걸쳐 레버를 올린다
-    const up = normAS(S.hdg - h0), h1 = S.hdg;
+    fly(0.6); const up = normAS(S.hdg - h0), h1 = S.hdg;      // 0.5초 늦게 나타나므로 그만큼 더 본다
     fly(1); const hold = normAS(S.hdg - h1), h2 = S.hdg;
     for (let i = 1; i <= 10; i++) { _ax(3, 0.5 - 0.05 * i); fly(0.1); }  // 내린다
-    const dn = normAS(S.hdg - h2);
+    fly(0.6); const dn = normAS(S.hdg - h2);
     rotorChar = false; _ax(3, 0);
     return { up, hold, dn };
   })()`);
@@ -2395,6 +2395,32 @@ export async function run(page, t) {
   t.ok(pke.up < -280 && pke.up > -420, `기수를 숙여 10kt 늘리면 약 350fpm 내려간다 (최대 ${pke.up.toFixed(0)}fpm)`);
   t.ok(pke.manual.skid !== 0 && pke.afcs.skid === 0 && Math.abs(pke.afcs.ball) < 0.02,
     `상위모드가 걸리면 내활·외활이 없다 — 수동 비행에서만 (수동 외활 ${pke.manual.skid} · HDG 중 볼 ${pke.afcs.ball.toFixed(3)})`);
+
+  // ASE — HOVER FOLLOW: 40kt 이내에서 조종간을 쥐고 천천히(2°/s 이내) 자세를 잡고 있으면 트림 기준이 따라온다
+  const ase = await page.evaluate(`(() => {
+    (${SETUP.toString()})();
+    const fly = ${FLY};
+    const DEAD = 0.08;
+    const stick = (k) => (k === 0 ? 0 : Math.sign(k) * (Math.abs(k) * (1 - DEAD) + DEAD));
+    joyAxes = { roll: { i: 0, inv: false }, pitch: { i: 1, inv: false } };
+    const go = (on, spd) => {
+      S.alt = 1000; _simGndFt = 0; S.spd = spd; S.bnk = 0; simTrimReset(); aseOn = on;
+      simTrim.pitch = -pitchFromSpd(spd); S.pit = pitchFromSpd(spd);
+      _ax(0, stick(8 / SIM_BANK_MAX)); fly(4);
+      const held = { bnk: S.bnk, hf: aseFollowing };
+      _ax(0, 0); fly(4);
+      return { held, rel: S.bnk, trim: simTrim.roll };
+    };
+    const o = { on: go(true, 0), off: go(false, 0), fast: go(true, 80) };
+    o.btn = (() => { aseOn = false; toggleAse(); const b = document.querySelector('#ase-3d .ase-main').classList.contains('on'); toggleAse(); return b; })();
+    aseOn = false; simTrimReset();
+    return o;
+  })()`);
+  t.ok(ase.on.held.hf && Math.abs(ase.on.rel - 8) < 1,
+    `ASE HOVER FOLLOW — 호버에서 조종간으로 8° 잡고 있다 놓으면 그 자세가 남는다 (${ase.on.held.bnk.toFixed(1)} → ${ase.on.rel.toFixed(1)}° · 트림 ${ase.on.trim.toFixed(1)}°)`);
+  t.ok(Math.abs(ase.off.rel) < 1, `ASE 를 끄면 놓았을 때 트림 자세로 돌아간다 (${ase.off.rel.toFixed(1)}°)`);
+  t.ok(Math.abs(ase.fast.rel) < 1 && !ase.fast.held.hf, `40kt 넘으면 따라오지 않는다 (80kt · ${ase.fast.rel.toFixed(1)}°)`);
+  t.ok(ase.btn, '3D 창의 ASE 버튼으로 켜고 끈다');
 
   // FPV(예상 항적) 버튼
   const fpv = await page.evaluate(() => {

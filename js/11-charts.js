@@ -2170,6 +2170,7 @@ appRegister({
   tiltAdj,
   toggle3dMap,
   toggleChinView,
+  popoutToggle: (side) => popoutToggle(side),
   toggleCtl3d,
   cycleMap3dQuality,
   toggleAltHold,

@@ -75,6 +75,8 @@ function rcPitchOff(a) {
 // 레버를 멈추면 회전도 멈춘다(페달로 받아 둔 만큼 그대로다).
 const RC_YAW_K = 0.3, RC_YAW_MAX = 7.5;     // 7.5°/s(종전 최대의 2배)
 let _rcLevPrev = null;
+const RC_YAW_DELAY = 0.5;      // 컬렉티브 → 요가 나타나기까지(s)
+let _rcYawBuf = [], _rcT = 0;
 function rcLeverTq(a) {
   const hov = hoverPowerTq();
   return hov + a.coll * (a.coll > 0 ? SIM_LEVER_TOP - hov : TQ_SPAN);
@@ -95,6 +97,41 @@ function updateRotorBtns() {
       b.classList.toggle('on', b.dataset.rdir === rotorDir); b.disabled = !rotorChar;
     });
   } catch (e) { _swallow(e); }
+}
+// ── ASE(수리온 계열 자동 안정 장치) ──
+// 3D 창의 ASE 버튼으로 켜고 끈다. 기능은 하나씩 더해 간다.
+//  HOVER FOLLOW — 40kt 이내에서 조종간을 트림에 맞서 쥐고(against trim) 자세를 초당 2° 이내로
+//                 천천히 움직이거나 붙잡고 있으면, 트림 기준이 그 자세를 따라온다(trim follow).
+//                 그래서 조종간을 놓아도 그 자세가 남는다. 빠르게(2°/s 넘게) 움직이는 동안은 따라오지 않는다.
+const ASE_HF_KT = 40, ASE_HF_RATE = 2;
+let aseOn = false, aseFollowing = false;
+function toggleAse() { aseOn = !aseOn; if (!aseOn) aseFollowing = false; updateAseBtns(); }
+function updateAseBtns() {
+  try {
+    const box = document.getElementById('ase-3d'); if (!box) return;
+    const m = box.querySelector('.ase-main'); if (m) m.classList.toggle('on', aseOn);
+    const hf = box.querySelector('.ase-hf');
+    if (hf) { hf.classList.toggle('avail', aseOn); hf.classList.toggle('on', aseOn && aseFollowing); }
+  } catch (e) { _swallow(e); }
+}
+function aseHoverFollow(a, onGnd, rollRate, pitRate) {
+  const was = aseFollowing;
+  aseFollowing = false;
+  if (aseOn && simModeOn && !onGnd && Math.abs(S.spd) < ASE_HF_KT) {
+    const axes = [
+      ['roll', a.roll, rollRate, !simAfcsLat(), S.bnk, SIM_TRIM_MAX_ROLL],
+      ['pitch', a.pitch, pitRate, !simAfcsPitch(), -(S.pit - rcPitchOff(a)), SIM_TRIM_MAX_PITCH],
+    ];
+    for (const [k, stick, rate, free, att, max] of axes) {
+      if (!free || Math.abs(stick) <= SIM_TRIM_HOLD_DEAD || simTrimHeld[k] === null) continue;
+      if (Math.abs(rate) > ASE_HF_RATE) continue;
+      // 쥐고 있는 동안은 종전 트림을 붙잡아 두므로(against trim) 자세는 그대로 — 기준만 지금 자세로 옮긴다
+      simTrim[k] = Math.max(-max, Math.min(max, att));
+      simTrimAct[k] = simTrim[k]; _simTrimSlewing[k] = false;
+      aseFollowing = true;
+    }
+  }
+  if (was !== aseFollowing) updateAseBtns();
 }
 let simLow = false;            // LIGHT ON WHEELS — 바퀴가 떨어지기 직전(HOV−20%…HOV−10%)
 function simLightOnWheels() { return simModeOn && simLow; }
@@ -176,12 +213,12 @@ const SIM_SPD_BACK  = -40;     // 후방 비행 한계(kt) — 헬기는 뒤로�
 //         감속은 가속보다 빨리 붙고 세다(1초에 6kt/s 씩 · 최대 15kt/s).
 //         가속은 속도가 붙을수록(전이양력으로 출력이 남을수록) 세진다.
 //   고도: 상승률도 같은 식이다 — 레버를 움직이면 오르내림이 점점 빨라지며 붙는다.
-const SPD_JERK = 2.667;   // ×2/3   // 속도·상승률 변화 빠르기를 종전의 반으로     // 가감속이 커지는 빠르기(kt/s²)
-const SPD_ACC_UP0 = 1.667;   // ×2/3   // 속도·상승률 변화 빠르기를 종전의 반으로     // 제자리 언저리에서 낼 수 있는 가속(kt/s)
-const SPD_ACC_UP = 3.333;   // ×2/3   // 속도·상승률 변화 빠르기를 종전의 반으로     // 전이양력을 다 받은 뒤의 최대 가속(kt/s)
+const SPD_JERK = 4.0;   // 자세에 따른 증감속 — 종전(×2/3)보다 50% 빠르게
+const SPD_ACC_UP0 = 2.5;   // 자세에 따른 증감속 — 종전(×2/3)보다 50% 빠르게
+const SPD_ACC_UP = 5.0;   // 자세에 따른 증감속 — 종전(×2/3)보다 50% 빠르게
 const SPD_ETL_KT   = 40;      // 가속이 다 세지는 속도(kt)
-const SPD_DEC_JERK = 8.0;   // ×2/3   // 속도·상승률 변화 빠르기를 종전의 반으로     // 감속이 커지는 빠르기(kt/s²)
-const SPD_DEC_MAX = 5.0;   // ×2/3   // 속도·상승률 변화 빠르기를 종전의 반으로    // 최대 감속(kt/s) — 원판을 젖히면 항력까지 같이 받는다
+const SPD_DEC_JERK = 12.0;   // 자세에 따른 증감속 — 종전(×2/3)보다 50% 빠르게
+const SPD_DEC_MAX = 7.5;   // 자세에 따른 증감속 — 종전(×2/3)보다 50% 빠르게
 // 상승·강하율이 바뀌는 빠르기 — 변화의 빠르기가 일정하게 커져(저크) 바뀐 양이 시간의 제곱으로 는다.
 // 종전보다 저크 4배 · 한계 5배(레버에 상승률이 훨씬 빨리 붙는다). 차차 맞춰 간다
 // 피치로 바뀌는 상승·강하(감속·가속이 돌려주는 운동에너지 몫)는 가감속 저크를 4배(가속 8 · 감속 24kt/s²)로 해 4배 빨리 붙는다
@@ -251,7 +288,7 @@ let simVsAcc = 0;             // 지금 상승률이 바뀌는 빠르기(fpm/s)
 // 감속·가속을 되풀이해도 고도가 저절로 쌓이지 않는다.
 // (감속이 빨라진 만큼 줄여, 동고도 감속에서 떠오르는 높이가 지나치지 않게 한다)
 const CLIMB_PIT_OFF = 1;   // 상승 중 같은 속도에 드는 기수 들림(°) — 상승 80kt = 5°
-const DESC_DEC_K = 0.1667;   // ×2/3   // 속도·상승률 변화 빠르기를 종전의 반으로     // 강하 파워 감속: 남은 속도(kt)당 감속(kt/s) — 정비례
+const DESC_DEC_K = 0.25;   // 강하 파워 감속: 남은 속도(kt)당 감속(kt/s) — 정비례 · 50% 빠르게
 const DESC_KE_K = 0.5;
 const HOV_TO_MARGIN = 7;    // 호버 토크보다 이만큼(%) 더 쓰면 이륙 가속 중 침하가 없다
 const TQ_FPM = 50;          // 토크 10% = 500fpm
@@ -267,8 +304,17 @@ let _simKePowered = false;     // 지금 가감속이 남는 출력의 속도차
 // ── 자세(피치) 변화 ↔ 고도 ── 기수를 들어 10kt 줄이면 약 350fpm 오르고, 숙여 10kt 늘리면 약 350fpm 내려간다
 // (100kt 언저리 · 최대치). 운동에너지 법칙 그대로라 줄였다 늘리면 고도가 제자리로 돌아온다.
 // 가속은 감속보다 천천히 붙으므로 같은 상승·강하율이 나오게 몫을 조금 크게 둔다(SIM_KE_EFF_ACC).
+// 조종사가 직접 몰 때(GSPD 밖)는 '자세가 정한 속도' 와 지금 속도의 차이가 오르내림이 된다 —
+// 기수를 들어 줄일 속도가 10kt 면 약 350fpm 오르고, 숙여 늘릴 속도가 10kt 면 약 350fpm 내려간다.
+// 그래서 퀵스톱(기수를 10~15° 들어 크게 줄이기)에서는 떠오르려는 몫이 커서, 컬렉티브를 크게 내려야
+// 같은 고도로 감속한다. 속도가 맞춰지면 그 몫은 사라진다. 낮은 속도에서는 운동에너지가 작으므로 줄인다.
+const KE_FPM_PER_KT = 45, KE_FPM_PER_KT_ACC = 40, KE_DEV_MAX = 40, KE_FULL_KT = 60, KE_TAU = 0.3;
+let _simKeVsF = 0;             // 그 몫(fpm) — simFly 가 매 구간 채운다
 function simKeVs(onGnd, spd = S.spd, acc = simAcc) {
-  if (onGnd || _simKePowered) return 0;
+  if (onGnd) return 0;
+  if (!gspdOn) return _simKeVsF;
+  // GSPD(상위모드)가 가감속을 몰 때는 가감속 그대로의 운동에너지 교환
+  if (_simKePowered) return 0;
   // 호버에서 기수를 숙여(5°) 이륙 가속할 때 — 호버 토크 + 7% 넘게 쓰면 가라앉지 않는다
   // (호버 이륙 가속에만 — 전이양력을 다 받기 전(SPD_ETL_KT) 까지. 순항에서 가속할 때는 운동에너지 법칙 그대로)
   if (acc > 0 && Math.abs(spd) < SPD_ETL_KT && S.tq >= hoverPowerTq() + HOV_TO_MARGIN) return 0;
@@ -701,7 +747,7 @@ function toggleSimMode(on, opt) {
     // (타력 비행과 SIM 조종이 같은 속도를 함께 쓰지 않게)
     if (gspdCoasting) { S.spd = gspdActFwd; simLat = gspdActLat; gspdCoasting = false; }
     try { if (gsOn) toggleGs(); } catch (e) { _swallow(e); }
-    hdgSelOn = false; rollApOn = false; altHoldOn = false; crhtOn = false; simIasOn = false; _rcLevPrev = null; simYawRate = 0; _simKePowered = false;
+    hdgSelOn = false; rollApOn = false; altHoldOn = false; crhtOn = false; simIasOn = false; _rcLevPrev = null; simYawRate = 0; _simKePowered = false; _simKeVsF = 0; _rcYawBuf = []; _rcT = 0;
     _simOnDeck = false;
     try { updateHoverBtns(); } catch (e) { _swallow(e); }
     // 손을 떼면 그 자리에서 날던 대로 — 지금 자세를 그대로 이어받는다
@@ -830,11 +876,12 @@ function simFly(dt) {
   // GSPD 가 걸려 있으면 자세·속도는 GSPD 가 맡는다 — 조종간 좌우·전후는
   // 07-sim.js 의 GSPD 수렴에서 fly-through 로 쓰인다(simGspdStick).
   // 페달·컬렉티브는 그대로 조종사 몫이다.
-  if (gspdOn) _simKePowered = false;
+  if (gspdOn) { _simKePowered = false; _simKeVsF = 0; }
   if (!gspdOn) {
     // 조종간 값에 트림을 더한다 — 가운데 두어도 트림 자세를 지킨다
     const cl = v => Math.max(-1, Math.min(1, v));
     simTrimSlew(dt);
+    const bnk0 = S.bnk, pit0 = S.pit;   // ASE Hover follow — 이 구간의 자세 변화 빠르기를 잰다
     const roll = cl(a.roll + simTrimEff('roll', a.roll) / SIM_BANK_MAX);
     const pitch = cl(a.pitch + simTrimEff('pitch', a.pitch) / SIM_PITCH_MAX);
     // 3점 접지 — 땅에서 토크가 LIGHT ON WHEELS 아래면 바퀴 셋이 받치고 있다. 트림·회전익 특성은
@@ -865,6 +912,7 @@ function simFly(dt) {
     if (onGnd) pTgt = Math.max(-GND_PITCH_MAX, Math.min(GND_PITCH_MAX, pTgt));
     const dP = pTgt - S.pit;
     S.pit += Math.sign(dP) * Math.min(Math.abs(dP), pRate * dt);
+    aseHoverFollow(a, onGnd, (S.bnk - bnk0) / dt, (S.pit - pit0) / dt);
 
     // ── 피치 → 속도 ──
     // 고도를 지키며 나는 헬기는 '자세 하나가 곧 속도' 다 — 수평 120kt,
@@ -908,6 +956,15 @@ function simFly(dt) {
       }
     }
     S.spd = Math.max(SIM_SPD_BACK, Math.min(SIM_SPD_MAX, S.spd + simAcc * dt));
+    // 자세가 정한 속도와의 차이 → 오르내림(simKeVs)
+    if (onGnd) _simKeVsF = 0;
+    else {
+      const dev = Math.max(-KE_DEV_MAX, Math.min(KE_DEV_MAX, S.spd - sTgt));
+      let ke = (dev > 0 ? KE_FPM_PER_KT : KE_FPM_PER_KT_ACC) * dev * Math.min(1, Math.abs(S.spd) / KE_FULL_KT);
+      if (_simKePowered) ke = 0;                                   // 남는 출력이 낸 속도차는 엔진 몫
+      if (dev < 0 && Math.abs(S.spd) < SPD_ETL_KT && S.tq >= hoverPowerTq() + HOV_TO_MARGIN) ke = 0;   // 호버 이륙 가속
+      _simKeVsF += (ke - _simKeVsF) * Math.min(1, dt / KE_TAU);
+    }
 
     // ── 저속에서는 뱅크가 옆걸음이 된다 ──
     // 제자리에서 오른쪽으로 기울이면 기수는 그대로 둔 채 오른쪽으로 간다.
@@ -937,8 +994,13 @@ function simFly(dt) {
   const lev = rcLeverTq(a);
   const dLev = (_rcLevPrev === null) ? 0 : (lev - _rcLevPrev) / dt;
   _rcLevPrev = lev;
+  // 0.5초 늦게 나타난다(RC_YAW_DELAY) — 레버를 움직인 뒤 토크 반작용이 동체를 돌리기까지
+  _rcT += dt;
+  _rcYawBuf.push({ t: _rcT, r: (rotorChar && !onGnd) ? rcYawRate(dLev) : 0 });
+  while (_rcYawBuf.length > 1 && _rcYawBuf[1].t <= _rcT - RC_YAW_DELAY) _rcYawBuf.shift();
+  const yrDelayed = (_rcYawBuf[0].t <= _rcT - RC_YAW_DELAY + 1e-9) ? _rcYawBuf[0].r : 0;
   if (rotorChar && !onGnd && !simAfcsLat()) {
-    const yr = rcYawRate(dLev);
+    const yr = yrDelayed;
     if (yr) { S.hdg = normA(S.hdg + yr * dt); selHdg = ((Math.round(hdgInd()) + 359) % 360) + 1; }
   }
 
@@ -1020,5 +1082,5 @@ function simFly(dt) {
 
 // 화면 버튼(data-act) 연결 — 이 파일이 11-charts.js 보다 나중에 로드되므로
 // 거기 목록에 넣으면 아직 정의되지 않은 이름이 된다. 여기서 직접 등록한다.
-try { appRegister({ toggleSimMode, simModeBtnPress, toggleRotorChar, setRotorDir }); } catch (e) { _swallow(e); }
+try { appRegister({ toggleSimMode, simModeBtnPress, toggleRotorChar, setRotorDir, toggleAse }); } catch (e) { _swallow(e); }
 try { updateSimModeBtn(); } catch (e) { _swallow(e); }
