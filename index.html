@@ -111,6 +111,9 @@ html, body {
 /* 화면 배치 — 단독 화면 버튼은 탭에서 뺀다(기능은 남김) */
 #pfd-solo-btn, #m3d-solo-btn, #map-solo-btn, #cdu-solo-btn { display: none !important; }
 #app:not(.triple) #m3d-only-btn { display: none; }   /* 3D Only 는 3분할의 우측 창 탭에 */
+/* Top(늘 위 창) 버튼 — 새 창으로 띄운 패널에서만 보인다(00-popout.js 가 새 창에 보이게 한다) */
+.po-top-btn { display: none !important; flex: 0 0 auto !important; padding: 0 9px !important; color: #ffd200 !important; }
+.po-top-btn.on { background: #3a3000 !important; }
 /* 분할 전환 버튼 */
 .split-tab { margin-left: auto; color: #7ab8f5 !important; }
 #left-panel {
@@ -2454,6 +2457,7 @@ body.gate-open #gate-overlay { display: none; }
       <button class="page-tab split-tab" id="m3d-solo-btn" data-act="panelSolo" data-arg='["m3d"]' title="3D 단독 — 3D 지도를 화면 가득, PFD(계기만)를 왼쪽 위에 겹쳐(한 번 더 누르면 원래 배치)">⛶ 3D 단독</button>
       <button class="page-tab split-tab" id="split-toggle" data-act="toggleTriple" title="2분할 ⇄ 3분할">⿲ 3분할</button>
       <button class="page-tab po-btn" data-act="popoutToggle" data-arg='["left"]' title="이 패널을 새 창으로 띄운다(다중 모니터에 따로 배치)">⧉ POP UP</button>
+      <button class="page-tab po-top-btn" data-act="popoutTop" data-arg='["left", "$el"]' title="Top — 이 창을 다른 창들보다 늘 위에 띄운다(한 번 더 누르면 본 창으로)">📌 Top</button>
     </div>
     <div id="pfd-wrap">
     <canvas id="pfd"></canvas>
@@ -2694,6 +2698,7 @@ body.gate-open #gate-overlay { display: none; }
       <button class="page-tab" data-sel="m3d" data-act="selectPanel" data-arg='["mid", "m3d"]' title="3D — SIM 이 꺼져 있으면 지형 정찰(우하단 조작 버튼), SIM 이면 조종석 시야">3D</button>
       <button class="page-tab split-tab" id="map-solo-btn" data-act="panelSolo" data-arg='["map"]' title="MAP 단독 — 지도만 화면 가득(한 번 더 누르면 원래 배치)">⛶ MAP 단독</button>
       <button class="page-tab po-btn" data-act="popoutToggle" data-arg='["mid"]' title="이 패널을 새 창으로 띄운다(다중 모니터에 따로 배치)">⧉ POP UP</button>
+      <button class="page-tab po-top-btn" data-act="popoutTop" data-arg='["mid", "$el"]' title="Top — 이 창을 다른 창들보다 늘 위에 띄운다(한 번 더 누르면 본 창으로)">📌 Top</button>
     </div>
   </div>
   <div id="divider-2"><div id="divider-grip-2"></div></div>
@@ -2707,6 +2712,7 @@ body.gate-open #gate-overlay { display: none; }
       <button class="page-tab split-tab" id="m3d-only-btn" data-act="panelSolo" data-arg='["m3d"]' title="3D Only — 3D 지도를 화면 가득, PFD(계기)를 왼쪽 위에 겹쳐(한 번 더 누르면 원래 배치)">⛶ 3D Only</button>
       <button class="page-tab split-tab" id="cdu-solo-btn" data-act="panelSolo" data-arg='["cdu"]' title="CDU 단독 — CDU 만 화면 가득(한 번 더 누르면 원래 배치)">⛶ CDU 단독</button>
       <button class="page-tab po-btn" data-act="popoutToggle" data-arg='["right"]' title="이 패널을 새 창으로 띄운다(다중 모니터에 따로 배치)">⧉ POP UP</button>
+      <button class="page-tab po-top-btn" data-act="popoutTop" data-arg='["right", "$el"]' title="Top — 이 창을 다른 창들보다 늘 위에 띄운다(한 번 더 누르면 본 창으로)">📌 Top</button>
       <button id="reload-btn" data-act="hardReload" title="새로고침(상태 초기화)">⟳</button>
     </div>
 

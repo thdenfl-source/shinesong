@@ -79,6 +79,7 @@
       } catch (e) { /* 닫히는 중 */ }
       const b = w.panel.querySelector('.po-btn');
       if (b) { b.textContent = '⧉ 복귀'; b.title = '이 패널을 본 창으로 되돌린다'; }
+      const tb = w.panel.querySelector('.po-top-btn'); if (tb) tb.classList.toggle('on', !!w.pip);
     });
     ['left', 'mid', 'right'].forEach(s => {
       if (wins.some(w => w.side === s)) return;
@@ -90,6 +91,102 @@
     try { if (typeof applyPanels === 'function') applyPanels(); } catch (e) { console.warn('[popout]', e); }
     const kick = () => { try { W.dispatchEvent(new Event('resize')); } catch (e) { /* 무시 */ } };
     kick(); setTimeout(kick, 60); setTimeout(kick, 300);
+  }
+
+  // 새 창(또는 Top 창)의 문서를 꾸민다 — 스타일을 그대로 옮겨 싣는다
+  function _popDocSetup(win, side, write) {
+    const doc = win.document;
+    if (write) {
+      doc.open();
+      doc.write('<!doctype html><html lang="ko"><head><meta charset="utf-8">' +
+        '<meta name="viewport" content="width=device-width, initial-scale=1.0">' +
+        '<base href="' + String(location.href).replace(/"/g, '&quot;') + '">' +
+        '<title>' + TITLE[side] + ' — Flight Simulator</title></head>' +
+        '<body><div id="app"></div></body></html>');
+      doc.close();
+    } else {
+      const base = doc.createElement('base'); base.href = String(location.href); doc.head.appendChild(base);
+      doc.title = TITLE[side] + ' — Flight Simulator (Top)';
+      const app = doc.createElement('div'); app.id = 'app'; doc.body.appendChild(app);
+    }
+    Array.from(D.head.querySelectorAll('style, link[rel="stylesheet"]')).forEach(n => doc.head.appendChild(doc.importNode(n, true)));
+    const st = doc.createElement('style');
+    st.textContent =
+      'html,body{width:100%;height:100%;margin:0;overflow:hidden;background:#000;}' +
+      '#app.po-root{position:absolute;inset:0;display:flex !important;flex-direction:row;}' +
+      '#app.po-root > #left-panel,#app.po-root > #mid-panel,#app.po-root > #right-panel' +
+      '{display:flex !important;flex:1 1 0 !important;width:100% !important;min-width:0;}' +
+      '.po-top-btn{display:inline-block !important;}';
+    doc.head.appendChild(st);
+    doc.body.className = D.body.className;
+  }
+  // 패널을 그 창으로 옮겨 붙이고 이벤트·주기를 잇는다
+  function _popAttach(rec) {
+    const { side, win, panel } = rec;
+    const doc = win.document;
+    doc.getElementById('app').appendChild(panel);
+    wins.push(rec);
+    reg.doc.forEach(([t, f, o]) => doc.addEventListener(t, f, o));
+    reg.win.forEach(([t, f, o]) => win.addEventListener(t, f, o));
+    win.addEventListener('pagehide', () => { if (wins.includes(rec)) popoutClose(side); });
+    rec.timer = setInterval(() => { if (win.closed && wins.includes(rec)) popoutClose(side); }, 500);
+    // 본 창이 가려지면(새 창을 전체화면으로 키우면 그 아래에 깔린다) 브라우저가 본 창의 그리기 주기(rAF)를
+    // 멈춰 세운다 — 시뮬·3D 지도가 멈춘다. 그때는 새 창의 그리기 주기로 시뮬 한 프레임을 대신 돌리고
+    // 3D 지도를 곧바로 그린다(본 창이 다시 돌기 시작하면 손을 뗀다).
+    const pump = () => {
+      if (win.closed || !wins.includes(rec)) return;
+      try {
+        const now = W.performance.now();
+        if (typeof simStep === 'function' && typeof _simLastTick !== 'undefined' && now - _simLastTick > 120) {
+          simStep(now, true);
+          popoutRedrawMaps(win);
+        }
+      } catch (e) { console.warn('[popout] pump', e); }
+      try { win.requestAnimationFrame(pump); } catch (e) { /* 닫히는 중 */ }
+    };
+    try { win.requestAnimationFrame(pump); } catch (e) { /* 무시 */ }
+  }
+
+  // ── Top — 다른 창들보다 늘 위에 뜨는 창(문서 PIP · 크롬·엣지 116 이상) ──
+  // 누른 창(본 창 또는 새 창)에서 '항상 위' 창을 열고 패널을 그리로 옮긴다. 한 번 더 누르면 본 창으로 돌아온다.
+  // 새 창에서 연 Top 창은 그 새 창에 딸려 있어(닫으면 Top 창도 닫힌다) 새 창을 작게 접어 둔다.
+  function popoutTop(side, el) {
+    if (!PANEL_ID[side]) return false;
+    const cur = wins.find(w => w.side === side);
+    if (cur && cur.pip) return popoutClose(side);
+    const host = (el && el.ownerDocument && el.ownerDocument.defaultView) || W;
+    const dpip = host.documentPictureInPicture;
+    if (!dpip || typeof dpip.requestWindow !== 'function') {
+      try { uiAlert('이 브라우저는 늘 위에 뜨는 창(Top)을 지원하지 않습니다 — 크롬·엣지 최신 판에서 쓸 수 있습니다.'); }
+      catch (e) { alert('Top 창을 지원하지 않는 브라우저입니다.'); }
+      return false;
+    }
+    const panel = cur ? cur.panel : gid(PANEL_ID[side]);
+    if (!panel) return false;
+    const r = panel.getBoundingClientRect();
+    let req;
+    try { req = dpip.requestWindow({ width: Math.max(420, Math.round(r.width)), height: Math.max(360, Math.round(r.height)) }); }
+    catch (e) { console.warn('[popout] Top', e); return false; }
+    req.then(pip => {
+      let ph, base = null;
+      if (cur) {                                     // 새 창에 떠 있던 패널 — 그 창은 바탕으로 접어 둔다
+        const i = wins.indexOf(cur); if (i >= 0) wins.splice(i, 1);
+        clearInterval(cur.timer);
+        ph = cur.ph; base = (host !== W) ? host : null;
+        if (base) {
+          try { base.document.getElementById('app').innerHTML = '<div style="color:#7ab8f5;font:12px sans-serif;padding:10px">Top 창을 띄운 바탕 창입니다 — 닫으면 Top 창도 닫힙니다.</div>'; } catch (e) { /* 무시 */ }
+          try { base.resizeTo(320, 140); } catch (e) { /* 무시 */ }
+        } else { try { if (!cur.win.closed) cur.win.close(); } catch (e) { /* 무시 */ } }
+      } else {
+        ph = D.createComment('popout:' + side);
+        panel.parentNode.insertBefore(ph, panel);
+      }
+      _popDocSetup(pip, side, false);
+      _popAttach({ side, win: pip, panel, ph, timer: null, base, pip: true });
+      syncAppClasses();
+      relayout();
+    }).catch(e => { console.warn('[popout] Top', e); });
+    return true;
   }
 
   function popoutOpen(side) {
@@ -107,49 +204,11 @@
       catch (e) { alert('팝업이 차단되었습니다.'); }
       return false;
     }
-    const doc = win.document;
-    doc.open();
-    doc.write('<!doctype html><html lang="ko"><head><meta charset="utf-8">' +
-      '<meta name="viewport" content="width=device-width, initial-scale=1.0">' +
-      '<base href="' + String(location.href).replace(/"/g, '&quot;') + '">' +
-      '<title>' + TITLE[side] + ' — Flight Simulator</title></head>' +
-      '<body><div id="app"></div></body></html>');
-    doc.close();
-    // 3) 스타일을 그대로 옮겨 싣는다
-    Array.from(D.head.querySelectorAll('style, link[rel="stylesheet"]')).forEach(n => doc.head.appendChild(doc.importNode(n, true)));
-    const st = doc.createElement('style');
-    st.textContent =
-      'html,body{width:100%;height:100%;margin:0;overflow:hidden;background:#000;}' +
-      '#app.po-root{position:absolute;inset:0;display:flex !important;flex-direction:row;}' +
-      '#app.po-root > #left-panel,#app.po-root > #mid-panel,#app.po-root > #right-panel' +
-      '{display:flex !important;flex:1 1 0 !important;width:100% !important;min-width:0;}';
-    doc.head.appendChild(st);
-    doc.body.className = D.body.className;
+    _popDocSetup(win, side, true);
     // 패널을 옮긴다(제자리 표시를 남겨 두고)
     const ph = D.createComment('popout:' + side);
     panel.parentNode.insertBefore(ph, panel);
-    doc.getElementById('app').appendChild(panel);
-    const rec = { side, win, panel, ph, timer: null };
-    wins.push(rec);
-    reg.doc.forEach(([t, f, o]) => doc.addEventListener(t, f, o));
-    reg.win.forEach(([t, f, o]) => win.addEventListener(t, f, o));
-    win.addEventListener('pagehide', () => popoutClose(side));
-    rec.timer = setInterval(() => { if (win.closed) popoutClose(side); }, 500);
-    // 본 창이 가려지면(새 창을 전체화면으로 키우면 그 아래에 깔린다) 브라우저가 본 창의 그리기 주기(rAF)를
-    // 멈춰 세운다 — 시뮬·3D 지도가 멈춘다. 그때는 새 창의 그리기 주기로 시뮬 한 프레임을 대신 돌리고
-    // 3D 지도를 곧바로 그린다(본 창이 다시 돌기 시작하면 손을 뗀다).
-    const pump = () => {
-      if (win.closed || !wins.includes(rec)) return;
-      try {
-        const now = W.performance.now();
-        if (typeof simStep === 'function' && typeof _simLastTick !== 'undefined' && now - _simLastTick > 120) {
-          simStep(now, true);
-          popoutRedrawMaps(win);
-        }
-      } catch (e) { console.warn('[popout] pump', e); }
-      try { win.requestAnimationFrame(pump); } catch (e) { /* 닫히는 중 */ }
-    };
-    try { win.requestAnimationFrame(pump); } catch (e) { /* 무시 */ }
+    _popAttach({ side, win, panel, ph, timer: null, base: null, pip: false });
     syncAppClasses();
     relayout();
     return true;
@@ -166,6 +225,7 @@
       else { const app = gid('app'); if (app) app.appendChild(rec.panel); }
     } catch (e) { console.warn('[popout] 되돌리기 실패', e); }
     try { if (!rec.win.closed) rec.win.close(); } catch (e) { /* 무시 */ }
+    try { if (rec.base && !rec.base.closed) rec.base.close(); } catch (e) { /* 무시 */ }
     syncAppClasses();
     relayout();
     return true;
@@ -203,6 +263,6 @@
   }
   function popoutSides() { return wins.map(w => w.side); }
 
-  W.popoutOpen = popoutOpen; W.popoutClose = popoutClose; W.popoutToggle = popoutToggle;
+  W.popoutOpen = popoutOpen; W.popoutTop = popoutTop; W.popoutClose = popoutClose; W.popoutToggle = popoutToggle;
   W.popoutGamepads = popoutGamepads; W.popoutSides = popoutSides;
 })();
