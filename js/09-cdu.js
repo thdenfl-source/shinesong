@@ -273,7 +273,7 @@ let shipInputMode = 'SPD', shipInput = '';
 
 function shipIcon() {
   return L.divIcon({
-    html: `<div data-act="openShipPanel" style="transform:rotate(${shipHdg}deg);transform-origin:12px 20px;line-height:0;cursor:pointer;"><svg width="24" height="40" viewBox="0 0 24 40" xmlns="http://www.w3.org/2000/svg"><path d="M12 1 Q20 7 21 17 L21 33 Q21 39 12 39 Q3 39 3 33 L3 17 Q4 7 12 1Z" fill="#1a5fa8" stroke="#7ab8f5" stroke-width="1.5"/><rect x="8" y="13.8" width="8" height="10" rx="2" fill="#2277bb" stroke="#7ab8f5" stroke-width="0.7"/><circle cx="12" cy="5" r="2.5" fill="#7ab8f5" opacity="0.9"/><line x1="12" y1="1" x2="12" y2="39" stroke="#88ccff" stroke-width="0.5" stroke-dasharray="2,3" opacity="0.4"/></svg></div>`,
+    html: `<div data-act="openShipPanel" style="transform:rotate(${shipHdg}deg);transform-origin:12px 20px;line-height:0;cursor:pointer;"><svg width="24" height="40" viewBox="0 0 24 40" xmlns="http://www.w3.org/2000/svg"><path d="M12 1 Q20 7 21 17 L21 33 Q21 39 12 39 Q3 39 3 33 L3 17 Q4 7 12 1Z" fill="#2f7d4a" stroke="#f2f3f4" stroke-width="1.5"/><rect x="8" y="13.8" width="8" height="10" rx="2" fill="#fafafa" stroke="#23418f" stroke-width="0.7"/><circle cx="12" cy="5" r="2.5" fill="#e3e5e7" opacity="0.9"/><line x1="12" y1="1" x2="12" y2="39" stroke="#88ccff" stroke-width="0.5" stroke-dasharray="2,3" opacity="0.4"/></svg></div>`,
     iconSize: [24, 40], iconAnchor: [12, 20], className: ''
   });
 }
@@ -476,6 +476,11 @@ makePanelDraggable('ship-panel', 'ship-panel-header');
 // 3D 에서도 끌어 옮기고, 두 번 누르면 설정창이 열린다(2D 와 같다).
 const SHIP3D_LEN = 100, SHIP3D_BEAM = 25;   // m
 const SHIP3D_DECK = 7;                      // 갑판 높이(수면 위 m)
+const SHIP3D_BOOT = 1.2;                    // 붉은 선저(흘수선 아래로 보이는 몫)의 높이(m)
+// 해경 3016함 도면의 색 — 흰 선체 · 붉은 선저 · 초록 갑판 · 빨강·노랑·파랑 띠 · 파란 상부 띠
+const SHIP3D_C = { hull: '#f2f3f4', bridge: '#fafafa', bow: '#e3e5e7', boot: '#7b1e1e', deck: '#2f7d4a',
+  red: '#d42a2a', yellow: '#f2c200', blue: '#1f3f9a', band: '#23418f', mast: '#b9bec3', radome: '#ffffff',
+  funnel: '#d0d3d6', black: '#1a1a1a', boat: '#e8552b', gun: '#8a8f94' };
 // 아이콘 좌표(24×40, 가운데 12·20) → 함정 좌표(m) [오른쪽 +, 함미 쪽 +]
 const _ship3dM = ([x, y]) => [(x - 12) * SHIP3D_BEAM / 18, (y - 20) * SHIP3D_LEN / 38];
 function _ship3dQuad(out, p0, c, p1, n) {   // 2차 베지어(Q)를 점으로 펼친다
@@ -556,19 +561,50 @@ const SHIP3D_PARTS = (() => {
   const bow = [];
   for (let i = 0; i <= 16; i++) { const a = i / 16 * 2 * Math.PI; bow.push([12 + 2.5 * Math.cos(a), 5 + 2.5 * Math.sin(a)]); }
   const parts = [
-    { ring: hull,   h: SHIP3D_DECK,      c: '#1a5fa8', k: 'hull' },
-    { ring: bridge, h: SHIP3D_DECK + 10, c: '#2277bb', k: 'bridge' },
-    { ring: bow,    h: SHIP3D_DECK + 3,  c: '#7ab8f5', k: 'bow' },
+    { ring: hull,   h: SHIP3D_DECK,      b: SHIP3D_BOOT, c: SHIP3D_C.hull, k: 'hull' },
+    { ring: bridge, h: SHIP3D_DECK + 10, c: SHIP3D_C.bridge, k: 'bridge' },
+    { ring: bow,    h: SHIP3D_DECK + 3,  c: SHIP3D_C.bow, k: 'bow' },
   ];
   // 중심선 — x=12, 점선(2 칸 긋고 3 칸 띄움), 굵기 0.5. 갑판 위로 살짝(5cm)만 나온다.
   // 함교 앞쪽만 둔다 — 함교 뒤 비행갑판에는 노란 정렬선이 있다.
   for (let y = 1; y + 2 < SHIP3D_BRIDGE_Y; y += 5) {
     parts.push({ ring: [[11.75, y], [12.25, y], [12.25, y + 2], [11.75, y + 2], [11.75, y]],
-                 h: SHIP3D_DECK + 0.05, c: '#88ccff', k: 'dash', line: true });
+                 h: SHIP3D_DECK + 0.05, c: '#e8e8e8', k: 'dash', line: true });
   }
   // 아이콘은 화면 좌표(아래가 +)라 돌림 방향이 지도와 반대다 — 바깥 고리를 반시계로 맞춘다
   parts.forEach(p => { p.ring = p.ring.map(_ship3dM).reverse(); });
-  return parts.concat(SHIP3D_DECK_MARKS);
+  // ── 꾸밈(해경 3016함 도면) — 부딪힘·착함 바닥에는 쓰지 않는다(deco) ──
+  const hullM = parts[0].ring;
+  const scaled = (k, kx, ky) => hullM.map(([x, y]) => [x * kx, y * ky]);
+  const rect = (x, f, hw, hl) => [[x - hw, -(f - hl)], [x + hw, -(f - hl)], [x + hw, -(f + hl)], [x - hw, -(f + hl)], [x - hw, -(f - hl)]];
+  const circ = (x, f, rr) => { const o = []; for (let i = 0; i <= 20; i++) { const a = i / 20 * 2 * Math.PI; o.push([x + rr * Math.cos(a), -(f + rr * Math.sin(a))]); } return o; };
+  const deco = (ring, b, h, c, k) => ({ ring, b, h, c, k: k || 'deco', deco: true });
+  const C = SHIP3D_C;
+  const decoParts = [
+    deco(hullM, 0, SHIP3D_BOOT, C.boot, 'boot'),                         // 흘수선 아래 붉은 선저
+    deco(scaled(0, 0.96, 0.985), SHIP3D_DECK, SHIP3D_DECK + 0.03, C.deck, 'deck'),   // 초록 갑판
+    // 함수 쪽 선체의 빨강·노랑·파랑 띠(좌·우현)
+    ...[[C.red, 1.6], [C.yellow, 2.8], [C.blue, 4.0]].flatMap(([c, f]) => [
+      deco(rect(12.55, f + 0.6, 0.12, 0.6), SHIP3D_BOOT, SHIP3D_DECK - 0.3, c, 'stripe'),
+      deco(rect(-12.55, f + 0.6, 0.12, 0.6), SHIP3D_BOOT, SHIP3D_DECK - 0.3, c, 'stripe')]),
+    // 상부 구조물 윗단의 파란 띠
+    deco(rect(0, 3.15, 5.75, 13.3), SHIP3D_DECK + 8.4, SHIP3D_DECK + 9.4, C.band, 'band'),
+    // 마스트 · 가로대 · 레이돔
+    deco(rect(0, 8, 0.45, 0.45), SHIP3D_DECK + 10, SHIP3D_DECK + 24, C.mast, 'mast'),
+    deco(rect(0, 8, 3.2, 0.2), SHIP3D_DECK + 20, SHIP3D_DECK + 20.4, C.mast, 'mast'),
+    deco(circ(0, 12, 1.3), SHIP3D_DECK + 10, SHIP3D_DECK + 12.6, C.radome, 'radome'),
+    deco(circ(3.2, 2, 1), SHIP3D_DECK + 10, SHIP3D_DECK + 12, C.radome, 'radome'),
+    deco(circ(-3.2, 2, 1), SHIP3D_DECK + 10, SHIP3D_DECK + 12, C.radome, 'radome'),
+    // 연돌(검은 배기구)
+    deco(circ(0, -5.5, 2.2), SHIP3D_DECK + 10, SHIP3D_DECK + 13.5, C.funnel, 'funnel'),
+    deco(circ(0, -5.5, 1.4), SHIP3D_DECK + 13.5, SHIP3D_DECK + 13.8, C.black, 'funnel'),
+    // 구명정(주황) — 상부 구조물 좌·우현
+    deco(rect(6.7, -5.5, 1.1, 3.6), SHIP3D_DECK + 4, SHIP3D_DECK + 6, C.boat, 'boat'),
+    deco(rect(-6.7, -5.5, 1.1, 3.6), SHIP3D_DECK + 4, SHIP3D_DECK + 6, C.boat, 'boat'),
+    // 함포 포신
+    deco(rect(0, 44, 0.25, 2.6), SHIP3D_DECK + 2.2, SHIP3D_DECK + 2.6, C.gun, 'gun'),
+  ];
+  return parts.concat(decoParts, SHIP3D_DECK_MARKS);
 })();
 // 함정 좌표(m) → 경위도. 함수(앞)가 침로를 향한다.
 function _ship3dLngLat([xr, ya]) {
@@ -581,7 +617,7 @@ function _ship3dGeo() {
   return {
     type: 'FeatureCollection',
     features: SHIP3D_PARTS.map(p => ({
-      type: 'Feature', properties: { h: p.h, c: p.c, k: p.k },
+      type: 'Feature', properties: { h: p.h, b: p.b || 0, c: p.c, k: p.k },
       geometry: { type: 'Polygon',
                   coordinates: [p.ring.map(_ship3dLngLat)].concat(p.hole ? [p.hole.map(_ship3dLngLat)] : []) },
     })),
@@ -606,7 +642,7 @@ function shipDeckTopM(lat, lon) {
   };
   let top = null;
   SHIP3D_PARTS.forEach(p => {
-    if (p.line || !inside(p.ring)) return;              // 중심선·비행갑판 표시는 갑판에 칠한 것이다
+    if (p.line || p.deco || !inside(p.ring)) return;    // 중심선·비행갑판 표시·꾸밈은 바닥이 아니다
     if (top === null || p.h > top) top = p.h;
   });
   return top;
@@ -632,7 +668,7 @@ function _ship3dAddTo(map) {
   map.addSource('ship-3d', { type: 'geojson', data: _ship3dGeo() });
   map.addLayer({ id: 'ship-3d', type: 'fill-extrusion', source: 'ship-3d',
     paint: { 'fill-extrusion-color': ['get', 'c'], 'fill-extrusion-height': ['get', 'h'],
-             'fill-extrusion-base': 0, 'fill-extrusion-opacity': 1 } });
+             'fill-extrusion-base': ['get', 'b'], 'fill-extrusion-opacity': 1 } });
 }
 // 3D 지도가 다 뜨면(04-map.js 의 load) 함정·항적 레이어를 한 번 얹는다
 function _ship3dEnsure() {

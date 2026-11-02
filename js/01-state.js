@@ -611,7 +611,7 @@ function startTrimHold(dir) {
     }
     simTrimNudge(dir);
     trimHoldTimer = setTimeout(() => {
-      trimHoldInt = setInterval(() => simTrimNudge(dir), SIM_TRIM_REP_MS);
+      trimHoldInt = setInterval(() => simTrimNudge(dir, true), SIM_TRIM_REP_MS);
     }, SIM_TRIM_HOLD_MS - SIM_TRIM_REP_MS);
     return;
   }
