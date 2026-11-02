@@ -437,14 +437,14 @@ function _afldIndexOf(icao) {
 function _mapOpenWpt(i) {
   try { leafMap.closePopup(); } catch(e) { _swallow(e); }
   if (i < 0 || i >= S.wps.length) return;
-  if (leftSel !== 'cdu' && rightSel !== 'cdu') selectPanel(leftSel === 'map' ? 'right' : 'left', 'cdu');
+  if (![leftSel, tripleMode ? midSel : null, rightSel].some(v => v === 'cdu' || v === 'plan')) selectPanel(tripleMode ? 'mid' : 'right', 'cdu');
   try { openFlightPlan(); fpWptOpen(i); } catch(e) { _swallow(e); }
 }
 function _mapOpenAirfield(icao) {
   try { leafMap.closePopup(); } catch(e) { _swallow(e); }
   const i = _afldIndexOf(icao);
   if (i < 0) return;
-  if (leftSel !== 'cdu' && rightSel !== 'cdu') selectPanel(leftSel === 'map' ? 'right' : 'left', 'cdu');
+  if (![leftSel, tripleMode ? midSel : null, rightSel].some(v => v === 'cdu' || v === 'plan')) selectPanel(tripleMode ? 'mid' : 'right', 'cdu');
   try { openAirfield(i); } catch(e) { _swallow(e); }
 }
 // INFO 목록에 있고, 공개 비행장이거나 잠금 해제된 경우에만 '공항 정보' 버튼을 준다(보안)

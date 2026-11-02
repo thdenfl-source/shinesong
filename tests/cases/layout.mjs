@@ -48,7 +48,7 @@ export async function run(page, t) {
   // ── 2분할을 골라 두면 그 뜻을 따른다 ──
   const ctx2 = await browser.newContext({ viewport: { width: 1400, height: 900 } });
   const two = await ctx2.newPage();
-  await two.addInitScript(() => { try { localStorage.setItem('tripleMode', '0'); } catch (e) {} });
+  await two.addInitScript(() => { try { localStorage.setItem('tripleMode2', '0'); } catch (e) {} });
   await two.goto(url);
   await two.waitForTimeout(900);
   const w = await two.evaluate(() => ({
@@ -130,9 +130,8 @@ export async function run(page, t) {
   const plan = await fresh.evaluate(async () => {
     const wait = ms => new Promise(r => setTimeout(r, ms));
     toggleTriple(true);
-    selectPanel('left', 'cdu', true);
-    selectPanel('mid', 'map', true);
-    selectPanel('right', 'pfd', true);
+    selectPanel('mid', 'cdu', true);      // 기본 배치 — 좌 PFD · 중 CDU · 우 MAP
+    selectPanel('right', 'map', true);
     await wait(150);
     const host = id => {
       const e = document.getElementById(id);
@@ -143,7 +142,7 @@ export async function run(page, t) {
     const on = { plan: host('fp-wrap'), pfd: host('pfd-wrap'), map: host('map-wrap'),
                  cdu: host('cdu-wrap'), sel: [leftSel, midSel, rightSel].join('·'),
                  // 탭 표시는 CDU 가 켜진 것으로 본다(PLAN 은 CDU 의 한 화면이다)
-                 tab: (document.querySelector('#left-tabs [data-sel].active') || {}).dataset?.sel };
+                 tab: (document.querySelector('#mid-tabs [data-sel].active') || {}).dataset?.sel };
     fpBackToCdu();                       // BACK 으로 돌아오면 그 자리가 다시 CDU
     await wait(150);
     const back = { cdu: host('cdu-wrap'), plan: host('fp-wrap'), pfd: host('pfd-wrap') };
@@ -158,15 +157,15 @@ export async function run(page, t) {
     await wait(150);
     return { on, back, usual };
   });
-  t.eq(plan.on.plan, 'left-panel', `CDU 가 좌측이면 Flight Plan 도 좌측에서 열린다 (${plan.on.plan})`);
-  t.eq(plan.on.pfd, 'right-panel', 'PFD 는 제자리에 그대로 있다 (종전에는 여기가 바뀌었다)');
-  t.eq(plan.on.map, 'mid-panel', '가운데 지도도 그대로다');
+  t.eq(plan.on.plan, 'mid-panel', `CDU 가 가운데면 Flight Plan 도 가운데에서 열린다 (${plan.on.plan})`);
+  t.eq(plan.on.pfd, 'left-panel', 'PFD 는 제자리에 그대로 있다');
+  t.eq(plan.on.map, 'right-panel', '우측 지도도 그대로다');
   t.eq(plan.on.cdu, null, 'CDU 화면은 그 자리에서 Flight Plan 으로 바뀐 것이다');
-  t.eq(plan.on.sel, 'plan·map·pfd', `창 상태도 그렇다 (${plan.on.sel})`);
+  t.eq(plan.on.sel, 'pfd·plan·map', `창 상태도 그렇다 (${plan.on.sel})`);
   t.eq(plan.on.tab, 'cdu', 'CDU 탭이 켜진 채로 보인다');
-  t.eq(plan.back.cdu, 'left-panel', 'BACK 을 누르면 그 자리가 다시 CDU 가 된다');
+  t.eq(plan.back.cdu, 'mid-panel', 'BACK 을 누르면 그 자리가 다시 CDU 가 된다');
   t.eq(plan.back.plan, null, 'Flight Plan 은 접힌다');
-  t.eq(plan.back.pfd, 'right-panel', 'PFD 는 끝까지 제자리다');
+  t.eq(plan.back.pfd, 'left-panel', 'PFD 는 끝까지 제자리다');
   t.eq(plan.usual.plan, 'right-panel', `CDU 가 우측이면 종전대로 우측에서 열린다 (${plan.usual.plan})`);
   t.eq(plan.usual.pfd, 'left-panel', '그때는 좌측 PFD 가 그대로다');
 
@@ -178,19 +177,18 @@ export async function run(page, t) {
     const wait = ms => new Promise(r => setTimeout(r, ms));
     const sel = () => [leftSel, midSel, rightSel].join('·');
     toggleTriple(true);
-    selectPanel('left', 'cdu', true); selectPanel('mid', 'map', true);
-    selectPanel('right', 'pfd', true);
+    selectPanel('mid', 'cdu', true); selectPanel('right', 'map', true);   // 좌 PFD · 중 CDU · 우 MAP
     await wait(120);
-    openFlightPlan();                       // 좌측이 PLAN 이 된다
+    openFlightPlan();                       // 가운데가 PLAN 이 된다
     await wait(120);
     const a = sel();
-    // 그 상태에서 우측에 CDU 를 부르면 좌측 PLAN 과 겹쳐서는 안 된다
+    // 그 상태에서 우측에 CDU 를 부르면 가운데 PLAN 과 겹쳐서는 안 된다
     selectPanel('right', 'cdu', true);
     await wait(120);
     const b = sel();
     const frames = document.querySelectorAll('.page-content:not(.page-hidden) .cdu-frame').length;
     // 저장된 배치를 되살리듯 상태를 직접 겹쳐 놓아도 그릴 때 바로잡는다
-    leftSel = 'cdu'; midSel = 'map'; rightSel = 'plan';
+    leftSel = 'pfd'; midSel = 'cdu'; rightSel = 'plan';
     applyPanels(); await wait(120);
     const c = sel();
     // 2D·3D 지도는 나란히 둘 수 있다
@@ -203,7 +201,7 @@ export async function run(page, t) {
     await wait(120);
     return { a, b, c, d, frames };
   });
-  t.eq(dup.a, 'plan·map·pfd', `CDU 자리에서 Flight Plan 이 열린다 (${dup.a})`);
+  t.eq(dup.a, 'pfd·plan·map', `CDU 자리에서 Flight Plan 이 열린다 (${dup.a})`);
   t.ok(!/plan/.test(dup.b) || !/cdu/.test(dup.b),
     `CDU 를 다른 창으로 부르면 PLAN 과 겹치지 않는다 (${dup.b})`);
   t.eq(dup.frames, 1, `CDU 화면은 한 번만 뜬다 (${dup.frames}개)`);

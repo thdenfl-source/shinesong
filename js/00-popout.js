@@ -83,7 +83,7 @@
     ['left', 'mid', 'right'].forEach(s => {
       if (wins.some(w => w.side === s)) return;
       const p = gid(PANEL_ID[s]); const b = p && p.querySelector('.po-btn');
-      if (b) { b.textContent = '⧉'; b.title = '이 패널을 새 창으로 띄운다(다중 모니터에 따로 배치)'; }
+      if (b) { b.textContent = '⧉ POP UP'; b.title = '이 패널을 새 창으로 띄운다(다중 모니터에 따로 배치)'; }
     });
   }
   function relayout() {

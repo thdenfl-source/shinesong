@@ -100,7 +100,7 @@ export async function run(page, t) {
   // ── 창 선택 줄의 '⛶ 3D 단독' — 3D 지도를 창 가득, 계기를 왼쪽 위에 ──
   const before = await page.evaluate(() => ({ l: leftSel, m: midSel, r: rightSel, tri: tripleMode,
     inRow: !!document.querySelector('#left-tabs #m3d-solo-btn'), txt: document.getElementById('m3d-solo-btn').textContent }));
-  await page.click('#m3d-solo-btn');
+  await page.evaluate(() => document.getElementById('m3d-solo-btn').click());   // (탭에서는 감췄다 — 기능은 그대로)
   await page.waitForTimeout(1500);
   const solo = await page.evaluate(() => {
     const d3 = document.getElementById('map3d').getBoundingClientRect();

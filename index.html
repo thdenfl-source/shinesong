@@ -107,6 +107,8 @@ html, body {
 #app.po-mid #divider-2, #app.po-right #divider-2 { display: none; }
 #app.po-right:not(.triple) #panel-divider, #app.po-mid.po-right #panel-divider { display: none; }
 #app.po-any > #left-panel, #app.po-any > #mid-panel, #app.po-any > #right-panel { flex: 1 1 0 !important; }
+/* 화면 배치 — 단독 화면 버튼은 탭에서 뺀다(기능은 남김) */
+#pfd-solo-btn, #m3d-solo-btn, #map-solo-btn, #cdu-solo-btn { display: none !important; }
 /* 분할 전환 버튼 */
 .split-tab { margin-left: auto; color: #7ab8f5 !important; }
 #left-panel {
@@ -2433,13 +2435,10 @@ body.gate-open #gate-overlay { display: none; }
   <div id="left-panel">
     <div id="left-tabs">
       <button class="page-tab active" data-sel="pfd" data-act="selectPanel" data-arg='["left", "pfd"]'>PFD</button>
-      <button class="page-tab" data-sel="map" data-act="selectPanel" data-arg='["left", "map"]'>MAP</button>
-      <button class="page-tab" data-sel="cdu" data-act="selectPanel" data-arg='["left", "cdu"]'>CDU</button>
-      <button class="page-tab" data-sel="m3d" data-act="selectPanel" data-arg='["left", "m3d"]' title="3D 지도 — 2D 지도와 나란히 볼 수 있습니다">3D</button>
       <button class="page-tab split-tab" id="pfd-solo-btn" data-act="pfdSolo" title="PFD 단독 — PFD 만 화면 가득(한 번 더 누르면 원래 배치)">⛶ PFD 단독</button>
       <button class="page-tab split-tab" id="m3d-solo-btn" data-act="panelSolo" data-arg='["m3d"]' title="3D 단독 — 3D 지도를 화면 가득, PFD(계기만)를 왼쪽 위에 겹쳐(한 번 더 누르면 원래 배치)">⛶ 3D 단독</button>
       <button class="page-tab split-tab" id="split-toggle" data-act="toggleTriple" title="2분할 ⇄ 3분할">⿲ 3분할</button>
-      <button class="page-tab po-btn" data-act="popoutToggle" data-arg='["left"]' title="이 패널을 새 창으로 띄운다(다중 모니터에 따로 배치)">⧉</button>
+      <button class="page-tab po-btn" data-act="popoutToggle" data-arg='["left"]' title="이 패널을 새 창으로 띄운다(다중 모니터에 따로 배치)">⧉ POP UP</button>
     </div>
     <div id="pfd-wrap">
     <canvas id="pfd"></canvas>
@@ -2675,12 +2674,11 @@ body.gate-open #gate-overlay { display: none; }
   <!-- 3분할일 때만 보이는 중앙 패널 -->
   <div id="mid-panel">
     <div id="mid-tabs" class="panel-tabs">
-      <button class="page-tab" data-sel="pfd" data-act="selectPanel" data-arg='["mid", "pfd"]'>PFD</button>
-      <button class="page-tab active" data-sel="map" data-act="selectPanel" data-arg='["mid", "map"]'>MAP</button>
       <button class="page-tab" data-sel="cdu" data-act="selectPanel" data-arg='["mid", "cdu"]'>CDU</button>
-      <button class="page-tab" data-sel="m3d" data-act="selectPanel" data-arg='["mid", "m3d"]' title="3D 지도 — 2D 지도와 나란히 볼 수 있습니다">3D</button>
+      <button class="page-tab" data-sel="map" data-act="selectPanel" data-arg='["mid", "map"]'>MAP</button>
+      <button class="page-tab" data-sel="m3d" data-act="selectPanel" data-arg='["mid", "m3d"]' title="3D — SIM 이 꺼져 있으면 지형 정찰(우하단 조작 버튼), SIM 이면 조종석 시야">3D</button>
       <button class="page-tab split-tab" id="map-solo-btn" data-act="panelSolo" data-arg='["map"]' title="MAP 단독 — 지도만 화면 가득(한 번 더 누르면 원래 배치)">⛶ MAP 단독</button>
-      <button class="page-tab po-btn" data-act="popoutToggle" data-arg='["mid"]' title="이 패널을 새 창으로 띄운다(다중 모니터에 따로 배치)">⧉</button>
+      <button class="page-tab po-btn" data-act="popoutToggle" data-arg='["mid"]' title="이 패널을 새 창으로 띄운다(다중 모니터에 따로 배치)">⧉ POP UP</button>
     </div>
   </div>
   <div id="divider-2"><div id="divider-grip-2"></div></div>
@@ -2688,12 +2686,11 @@ body.gate-open #gate-overlay { display: none; }
   <div id="right-panel">
 
     <div id="page-tabs">
-      <button class="page-tab" data-sel="pfd" data-act="selectPanel" data-arg='["right", "pfd"]'>PFD</button>
-      <button class="page-tab active" data-sel="map" data-act="selectPanel" data-arg='["right", "map"]'>MAP</button>
       <button class="page-tab" data-sel="cdu" data-act="selectPanel" data-arg='["right", "cdu"]'>CDU</button>
-      <button class="page-tab" data-sel="m3d" data-act="selectPanel" data-arg='["right", "m3d"]' title="3D 지도 — 2D 지도와 나란히 볼 수 있습니다">3D</button>
+      <button class="page-tab active" data-sel="map" data-act="selectPanel" data-arg='["right", "map"]'>MAP</button>
+      <button class="page-tab" data-sel="m3d" data-act="selectPanel" data-arg='["right", "m3d"]' title="3D — SIM 이 꺼져 있으면 지형 정찰(우하단 조작 버튼), SIM 이면 조종석 시야">3D</button>
       <button class="page-tab split-tab" id="cdu-solo-btn" data-act="panelSolo" data-arg='["cdu"]' title="CDU 단독 — CDU 만 화면 가득(한 번 더 누르면 원래 배치)">⛶ CDU 단독</button>
-      <button class="page-tab po-btn" data-act="popoutToggle" data-arg='["right"]' title="이 패널을 새 창으로 띄운다(다중 모니터에 따로 배치)">⧉</button>
+      <button class="page-tab po-btn" data-act="popoutToggle" data-arg='["right"]' title="이 패널을 새 창으로 띄운다(다중 모니터에 따로 배치)">⧉ POP UP</button>
       <button id="reload-btn" data-act="hardReload" title="새로고침(상태 초기화)">⟳</button>
     </div>
 
