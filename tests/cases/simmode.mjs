@@ -2432,7 +2432,7 @@ export async function run(page, t) {
     rotorChar = false; simTrimReset();
     return o;
   })()`);
-  t.ok(bb.k20 > 1 && Math.abs(bb.k60) < 0.5, \`블로우 백 — 20kt 에서 기수가 들린다 (+\${bb.k20.toFixed(1)}° · 60kt \${bb.k60.toFixed(1)}°)\`);
+  t.ok(bb.k20 > 1 && Math.abs(bb.k60) < 0.5, `블로우 백 — 20kt 에서 기수가 들린다 (+${bb.k20.toFixed(1)}° · 60kt ${bb.k60.toFixed(1)}°)`);
 
   // FPV(예상 항적) 버튼
   const fpv = await page.evaluate(() => {
