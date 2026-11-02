@@ -780,6 +780,9 @@ function syncChinView() {
     if (ext.classList.contains('show') !== sim) ext.classList.toggle('show', sim);
     if (ext.classList.contains('on') !== extOn) ext.classList.toggle('on', extOn);
   }
+  // 외부 시점 카메라 버튼 — SIM 의 EXT 일 때만
+  const ec = document.getElementById('extcam-3d');
+  if (ec && ec.classList.contains('show') !== (sim && extOn)) ec.classList.toggle('show', sim && extOn);
   // 3D 지도 바로 뒤에 붙어 다닌다(2D 위에 겹쳐 쓰든, 제 창으로 옮겨 가든)
   if (row.previousElementSibling !== d3) d3.after(row);
   const want = _chinWanted();

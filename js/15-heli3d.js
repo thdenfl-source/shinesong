@@ -553,7 +553,38 @@ const EXT_DIST = 40;     // 헬기 가운데까지의 거리(m) — 전장의 �
 const EXT_SPAN = 44;     // 화면 가로에 들어올 폭(m) — 좁은(세로로 긴) 창이면 그만큼 물러선다
 const EXT_ELEV = 12;     // 내려다보는 각(°)
 const EXT_TGT_Z = 2.5;   // 바라보는 곳 — 바닥에서 2.5m(동체 가운데)
-let _extFloor = null, _extFloorT = 0;   // 외부 시점 카메라의 바닥(그려진 땅 + 3m, 걸러서)
+let _extFloor = null, _extFloorT = 0;
+// 외부 시점 카메라 조작(3D 창 EXT 아래 버튼) — 헬기를 축으로 1° 씩 돌고(◀▶), 위아래(▲▼),
+// 거리(− 가까이 · + 멀리), DEFAULT(뒤에서 기본 거리·각). 누르고 있으면 이어 간다.
+const EXT_ZOOM_STEP = 1.1, EXT_ZOOM_MIN = 0.5, EXT_ZOOM_MAX = 25;
+let extCam = { yaw: 0, elev: 0, zoom: 1 };
+function extCamStep(dir) {
+  if (dir === 'L') extCam.yaw = normAS(extCam.yaw - 1);
+  else if (dir === 'R') extCam.yaw = normAS(extCam.yaw + 1);
+  else if (dir === 'U') extCam.elev = Math.min(85 - EXT_ELEV, extCam.elev + 1);
+  else if (dir === 'D') extCam.elev = Math.max(-5 - EXT_ELEV, extCam.elev - 1);
+  else if (dir === 'IN') extCam.zoom = Math.max(EXT_ZOOM_MIN, extCam.zoom / EXT_ZOOM_STEP);
+  else if (dir === 'OUT') extCam.zoom = Math.min(EXT_ZOOM_MAX, extCam.zoom * EXT_ZOOM_STEP);
+  try { if (_ml3d) _applyFollow(); } catch (e) { _swallow(e); }
+  updateExtCamInfo();
+}
+function extCamDefault() { extCam = { yaw: 0, elev: 0, zoom: 1 }; try { if (_ml3d) _applyFollow(); } catch (e) { _swallow(e); } updateExtCamInfo(); }
+let _extHoldT = null, _extHoldI = null;
+function extCamHold(dir) {
+  extCamStop();
+  extCamStep(dir);
+  _extHoldT = setTimeout(() => { _extHoldI = setInterval(() => extCamStep(dir), 50); }, 350);
+}
+function extCamStop() {
+  if (_extHoldT) { clearTimeout(_extHoldT); _extHoldT = null; }
+  if (_extHoldI) { clearInterval(_extHoldI); _extHoldI = null; }
+}
+function updateExtCamInfo() {
+  const el = document.getElementById('extcam-info');
+  if (el) el.textContent = `${Math.round((extCam.yaw + 360) % 360)}° · ${EXT_ELEV + extCam.elev}° · ×${extCam.zoom.toFixed(1)}`;
+}
+document.addEventListener('pointerup', extCamStop);
+document.addEventListener('pointercancel', extCamStop);   // 외부 시점 카메라의 바닥(그려진 땅 + 3m, 걸러서)
 function toggleExtView(on) {
   simExtView = (typeof on === 'boolean') ? on : !simExtView;
   try { if (typeof simLookReset === 'function') simLookReset(); } catch (e) { _swallow(e); }
@@ -570,15 +601,15 @@ function heli3dExtCamera() {
   _h3PoseNow = { t: performance.now(), pose };
   let look = { yaw: 0, pitch: 0 };
   try { if (typeof simLookStep === 'function') look = simLookStep(); } catch (e) { _swallow(e); }
-  const az = normA(pose.hdg + look.yaw);
-  let el = Math.max(-5, Math.min(80, EXT_ELEV - look.pitch));   // 햇 ▲ = 올려다본다(카메라가 내려간다)
+  const az = normA(pose.hdg + look.yaw + extCam.yaw);
+  let el = Math.max(-5, Math.min(85, EXT_ELEV + extCam.elev - look.pitch));   // 햇 ▲ = 올려다본다(카메라가 내려간다)
   const tgtAlt = pose.alt + EXT_TGT_Z;
   // 창의 가로 시야각으로 거리를 정한다 — 헬기 전체(와 앞뒤 여유)가 가로에 들어오게
   const box = _ml3d.getContainer();
   let fov = 36.87;
   try { if (Number.isFinite(_ml3d.transform.fov)) fov = _ml3d.transform.fov; } catch (e) { _swallow(e); }
   const hHalf = Math.atan(Math.tan(fov / 2 * D2R) * (box.clientWidth || 1) / (box.clientHeight || 1));
-  const R = Math.max(EXT_DIST, EXT_SPAN / 2 / Math.tan(hHalf));
+  const R = Math.max(EXT_DIST, EXT_SPAN / 2 / Math.tan(hHalf)) * extCam.zoom;
   let horiz = R * Math.cos(el * D2R), up = R * Math.sin(el * D2R);
   const cl = Math.cos(pose.lat * D2R);
   const camLon = pose.lon - horiz * Math.sin(az * D2R) / (111320 * cl);
@@ -627,4 +658,4 @@ function heli3dNoseSync(look) {
 }
 
 // 화면 버튼(data-act) 연결 — 11-charts.js 보다 나중에 로드되므로 여기서 직접 등록한다
-try { appRegister({ toggleExtView }); } catch (e) { _swallow(e); }
+try { appRegister({ toggleExtView, extCamHold, extCamDefault }); } catch (e) { _swallow(e); }
