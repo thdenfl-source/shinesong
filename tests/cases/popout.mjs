@@ -25,14 +25,32 @@ export async function run(page, t) {
     const host = id => document.getElementById(id).parentElement.id;
     const o = { sel: [leftSel, midSel, rightSel, botSel].join('·'), pfd: host('pfd-wrap'), m3d: host('map3d-wrap'), map: host('map-wrap'), cdu: host('cdu-wrap'),
                 L: box('left-panel'), M: box('mid-panel'), R: box('right-panel'), B: box('bot-panel'), btn: document.getElementById('split-toggle').textContent };
-    cycleSplit(); o.after = { tri: tripleMode, quad: quadMode }; setSplitMode(3); await new Promise(r => setTimeout(r, 300));
+    o.btn = document.getElementById('split-toggle').textContent;
+    o.gripVis = getComputedStyle(document.getElementById('qgrip-1')).display;
+    cycleSplit(); o.after = { tri: tripleMode, quad: quadMode }; setSplitMode(4); await new Promise(r => setTimeout(r, 300));
     return o;
   });
   t.ok(quad.sel === 'pfd·m3d·map·cdu' && quad.pfd === 'left-panel' && quad.m3d === 'mid-panel' && quad.map === 'right-panel' && quad.cdu === 'bot-panel',
     `4분할 — 위 PFD · 3D · MAP, 아래 CDU (${quad.sel})`);
-  t.ok(quad.L.y === quad.M.y && quad.M.y === quad.R.y && quad.B.y > quad.L.y + quad.L.height - 5 && quad.B.width > quad.L.width * 2,
-    '세 창이 위에 나란히, CDU 창은 아래 가로로 넓게');
+  t.ok(quad.L.y === quad.M.y && quad.M.y === quad.R.y && Math.abs(quad.L.height - quad.M.height) < 2 &&
+       quad.R.height < quad.L.height * 0.7 && quad.B.y > quad.R.y + quad.R.height - 5 && Math.abs(quad.B.x - quad.R.x) < 2,
+    '왼쪽 두 창(PFD · 3D)은 높이를 다 쓰고, 오른쪽 열을 위 MAP · 아래 CDU 로 나눈다');
   t.ok(quad.btn === '⿰ 2분할' && !quad.after.tri && !quad.after.quad, '분할 버튼은 2 → 3 → 4 → 2 로 돈다');
+  // 4분할 비율 — 1|2 열 그립을 끌면 PFD 폭이, 3열 위|아래 그립을 끌면 MAP 높이가 바뀐다
+  const drag = async (id, fx, fy) => {
+    const g = await page.evaluate(i => { const r = document.getElementById(i).getBoundingClientRect(); const a = document.getElementById('app').getBoundingClientRect();
+      return { x: r.x + r.width / 2, y: r.y + r.height / 2, ax: a.x, ay: a.y, aw: a.width, ah: a.height }; }, id);
+    await page.mouse.move(g.x, g.y); await page.mouse.down();
+    await page.mouse.move(fx === null ? g.x : g.ax + g.aw * fx, fy === null ? g.y : g.ay + g.ah * fy, { steps: 6 });
+    await page.mouse.up(); await page.waitForTimeout(250);
+  };
+  await drag('qgrip-1', 0.25, null);
+  await drag('qgrip-3', null, 0.4);
+  const qr = await page.evaluate(() => { const a = document.getElementById('app').getBoundingClientRect(), L = document.getElementById('left-panel').getBoundingClientRect(),
+    R = document.getElementById('right-panel').getBoundingClientRect(); return { l: L.width / a.width, r: R.height / a.height, vis: getComputedStyle(document.getElementById('qgrip-1')).display }; });
+  t.ok(quad.gripVis !== 'none' && Math.abs(qr.l - 0.25) < 0.03 && Math.abs(qr.r - 0.4) < 0.03,
+    `4분할 경계를 끌어 비율을 바꾼다 (PFD 폭 ${(qr.l * 100).toFixed(0)}% · MAP 높이 ${(qr.r * 100).toFixed(0)}%)`);
+  await page.evaluate(async () => { setSplitMode(3); await new Promise(r => setTimeout(r, 300)); });
   const ctx = page.context();
   const pp = ctx.waitForEvent('page');
   await page.click('#mid-panel .po-btn');

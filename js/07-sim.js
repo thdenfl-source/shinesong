@@ -818,6 +818,53 @@ function setSplitMode(n) {
   else { leftSel = 'pfd'; rightSel = 'map'; }
   applyPanels();
 }
+// ── 4분할 비율 — [1열 폭 %, 2열 폭 %, 3열 위 창 높이 %] · 경계 그립을 끌어 바꾼다 ──
+const QUAD_DEF = [36, 32, 55], QUAD_MIN = 12;
+let quadRatio = QUAD_DEF.slice();
+try { const q = JSON.parse(localStorage.getItem('quadSplit') || 'null'); if (Array.isArray(q) && q.length === 3 && q.every(Number.isFinite)) quadRatio = q; } catch (e) { _swallow(e); }
+function applyQuadRatio() {
+  const app = document.getElementById('app'); if (!app) return;
+  app.style.setProperty('--q1', quadRatio[0].toFixed(2) + '%');
+  app.style.setProperty('--q2', quadRatio[1].toFixed(2) + '%');
+  app.style.setProperty('--q3', quadRatio[2].toFixed(2) + '%');
+}
+(function initQuadGrips() {
+  const app = document.getElementById('app');
+  if (!app) return;
+  const after = () => {
+    requestAnimationFrame(() => { try { resizePFD(); drawPFD(); } catch (e) { _swallow(e); } });
+    setTimeout(() => {
+      try { leafMap.invalidateSize(); } catch (e) { _swallow(e); }
+      try { if (_ml3d) _ml3d.resize(); } catch (e) { _swallow(e); }
+      try { scaleCdu(); } catch (e) { _swallow(e); }
+    }, 60);
+  };
+  const bind = (id, which) => {
+    const el = document.getElementById(id); if (!el) return;
+    let drag = false;
+    el.addEventListener('pointerdown', e => { if (!quadMode) return; e.preventDefault(); drag = true; try { el.setPointerCapture(e.pointerId); } catch (err) { _swallow(err); } });
+    el.addEventListener('pointermove', e => {
+      if (!drag) return;
+      const r = app.getBoundingClientRect();
+      const px = (e.clientX - r.left) / r.width * 100, py = (e.clientY - r.top) / r.height * 100;
+      let [a, b, c] = quadRatio;
+      if (which === 1) { const edge = a + b; a = Math.max(QUAD_MIN, Math.min(edge - QUAD_MIN, px)); b = edge - a; }
+      else if (which === 2) { b = Math.max(QUAD_MIN, Math.min(100 - QUAD_MIN - a, px - a)); }
+      else { c = Math.max(15, Math.min(85, py)); }
+      quadRatio = [a, b, c]; applyQuadRatio();
+      try { resizePFD(); } catch (err) { _swallow(err); }
+    });
+    const end = () => { if (!drag) return; drag = false; try { localStorage.setItem('quadSplit', JSON.stringify(quadRatio)); } catch (err) { _swallow(err); } after(); };
+    el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end);
+    el.addEventListener('dblclick', () => {
+      const d = QUAD_DEF;
+      if (which === 1) { quadRatio[0] = d[0]; quadRatio[1] = d[1]; } else if (which === 2) quadRatio[1] = d[1]; else quadRatio[2] = d[2];
+      applyQuadRatio(); try { localStorage.setItem('quadSplit', JSON.stringify(quadRatio)); } catch (err) { _swallow(err); } after();
+    });
+  };
+  bind('qgrip-1', 1); bind('qgrip-2', 2); bind('qgrip-3', 3);
+  applyQuadRatio();
+})();
 // 분할 버튼 — 2 → 3 → 4 → 2 분할로 돌아간다
 function cycleSplit() { setSplitMode(quadMode ? 2 : tripleMode ? 4 : 3); }
 
