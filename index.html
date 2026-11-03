@@ -111,8 +111,8 @@ html, body {
 /* 화면 배치 — 단독 화면 버튼은 탭에서 뺀다(기능은 남김) */
 #pfd-solo-btn, #m3d-solo-btn, #map-solo-btn, #cdu-solo-btn { display: none !important; }
 #app:not(.triple) #m3d-only-btn { display: none; }   /* 3D Only 는 3분할의 우측 창 탭에 */
-/* Top(늘 위 창) 버튼 — 새 창으로 띄운 패널에서만 보인다(00-popout.js 가 새 창에 보이게 한다) */
-.po-top-btn { display: none !important; flex: 0 0 auto !important; padding: 0 9px !important; color: #ffd200 !important; }
+/* Top(늘 위 창) 버튼 — 본 창에서 누르면 그 패널을 곧바로 늘 위 창으로, 새 창에서 누르면 새 창의 패널을 늘 위 창으로 */
+.po-top-btn { display: inline-block !important; flex: 0 0 auto !important; padding: 0 9px !important; color: #ffd200 !important; }
 .po-top-btn.on { background: #3a3000 !important; }
 /* 분할 전환 버튼 */
 .split-tab { margin-left: auto; color: #7ab8f5 !important; }
