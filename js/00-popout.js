@@ -65,12 +65,12 @@
     return out;
   };
 
-  const PANEL_ID = { left: 'left-panel', mid: 'mid-panel', right: 'right-panel' };
-  const TITLE = { left: '좌측 패널', mid: '가운데 패널', right: '우측 패널' };
+  const PANEL_ID = { left: 'left-panel', mid: 'mid-panel', right: 'right-panel', bot: 'bot-panel' };
+  const TITLE = { left: '좌측 패널', mid: '가운데 패널', right: '우측 패널', bot: '아래 패널' };
 
   function syncAppClasses() {
     const app = gid('app'); if (!app) return;
-    ['left', 'mid', 'right'].forEach(s => app.classList.toggle('po-' + s, wins.some(w => w.side === s)));
+    ['left', 'mid', 'right', 'bot'].forEach(s => app.classList.toggle('po-' + s, wins.some(w => w.side === s)));
     app.classList.toggle('po-any', wins.length > 0);
     wins.forEach(w => {
       try {
@@ -81,7 +81,7 @@
       if (b) { b.textContent = '⧉ 복귀'; b.title = '이 패널을 본 창으로 되돌린다'; }
       const tb = w.panel.querySelector('.po-top-btn'); if (tb) { tb.classList.toggle('on', !!w.pip); tb.textContent = w.pip ? '📌 복귀' : '📌 Top'; }
     });
-    ['left', 'mid', 'right'].forEach(s => {
+    ['left', 'mid', 'right', 'bot'].forEach(s => {
       if (wins.some(w => w.side === s)) return;
       const p = gid(PANEL_ID[s]); const b = p && p.querySelector('.po-btn');
       if (b) { b.textContent = '⧉ POP UP'; b.title = '이 패널을 새 창으로 띄운다(다중 모니터에 따로 배치)'; }
@@ -115,7 +115,7 @@
     st.textContent =
       'html,body{width:100%;height:100%;margin:0;overflow:hidden;background:#000;}' +
       '#app.po-root{position:absolute;inset:0;display:flex !important;flex-direction:row;}' +
-      '#app.po-root > #left-panel,#app.po-root > #mid-panel,#app.po-root > #right-panel' +
+      '#app.po-root > #left-panel,#app.po-root > #mid-panel,#app.po-root > #right-panel,#app.po-root > #bot-panel' +
       '{display:flex !important;flex:1 1 0 !important;width:100% !important;min-width:0;}' +
       '.po-top-btn{display:inline-block !important;}';
     doc.head.appendChild(st);
@@ -203,6 +203,7 @@
     const have = wins.find(w => w.side === side);
     if (have) { try { have.win.focus(); } catch (e) { /* 무시 */ } return true; }
     if (side === 'mid' && typeof tripleMode !== 'undefined' && !tripleMode) return false;
+    if (side === 'bot' && typeof quadMode !== 'undefined' && !quadMode) return false;
     const panel = gid(PANEL_ID[side]);
     if (!panel) return false;
     const r = panel.getBoundingClientRect();
@@ -257,6 +258,7 @@
   // 3분할을 끄면 가운데 패널은 본 창으로 되돌린다(2분할에는 가운데 자리가 없다)
   setInterval(() => {
     if (typeof tripleMode !== 'undefined' && !tripleMode && wins.some(w => w.side === 'mid')) popoutClose('mid');
+    if (typeof quadMode !== 'undefined' && !quadMode && wins.some(w => w.side === 'bot')) popoutClose('bot');
   }, 500);
   // 본 창을 닫으면 새 창도 닫는다(혼자 남은 새 창은 움직이지 않는다)
   W.addEventListener('pagehide', () => { wins.slice().forEach(w => { try { w.win.close(); } catch (e) { /* 무시 */ } }); });

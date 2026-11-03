@@ -13,14 +13,29 @@ export async function run(page, t) {
              L: txt('left-tabs'), M: txt('mid-tabs'), R: txt('page-tabs') };
   });
   t.ok(tabs.tri && tabs.sel === 'pfd·cdu·map', `처음에는 3분할 PFD · CDU · MAP (${tabs.sel})`);
-  t.ok(/^PFD\|⿰ 2분할$/.test(tabs.L), `PFD 창 탭: PFD · 2분할/3분할 (+ 📌 Top) (${tabs.L})`);
-  t.ok(tabs.M === 'CDU|MAP|3D|⟳', `CDU 창 탭: CDU · MAP · 3D · 새로고침 (+ 📌 Top) (${tabs.M})`);
-  t.ok(tabs.R === 'CDU|MAP|3D|⛶ 3D Only', `MAP 창 탭: CDU · MAP · 3D · 3D Only (+ 📌 Top) (${tabs.R})`);
+  t.ok(/^PFD\|▦ 4분할\|⧉ POP UP$/.test(tabs.L), `PFD 창 탭: PFD · 분할(→4분할) · POP UP (+ 📌 Top) (${tabs.L})`);
+  t.ok(tabs.M === 'CDU|MAP|3D|⧉ POP UP|⟳', `CDU 창 탭: CDU · MAP · 3D · POP UP · 새로고침 (+ 📌 Top) (${tabs.M})`);
+  t.ok(tabs.R === 'CDU|MAP|3D|⛶ 3D Only|⧉ POP UP', `MAP 창 탭: CDU · MAP · 3D · 3D Only · POP UP (+ 📌 Top) (${tabs.R})`);
   const two = await page.evaluate(() => { toggleTriple(false); const o = [leftSel, rightSel].join('·'); toggleTriple(true); return o; });
   t.eq(two, 'pfd·map', '2분할은 PFD · MAP');
+  // 4분할 — 위에 PFD · 3D · MAP, 아래에 CDU
+  const quad = await page.evaluate(async () => {
+    setSplitMode(4); await new Promise(r => setTimeout(r, 400));
+    const box = id => document.getElementById(id).getBoundingClientRect();
+    const host = id => document.getElementById(id).parentElement.id;
+    const o = { sel: [leftSel, midSel, rightSel, botSel].join('·'), pfd: host('pfd-wrap'), m3d: host('map3d-wrap'), map: host('map-wrap'), cdu: host('cdu-wrap'),
+                L: box('left-panel'), M: box('mid-panel'), R: box('right-panel'), B: box('bot-panel'), btn: document.getElementById('split-toggle').textContent };
+    cycleSplit(); o.after = { tri: tripleMode, quad: quadMode }; setSplitMode(3); await new Promise(r => setTimeout(r, 300));
+    return o;
+  });
+  t.ok(quad.sel === 'pfd·m3d·map·cdu' && quad.pfd === 'left-panel' && quad.m3d === 'mid-panel' && quad.map === 'right-panel' && quad.cdu === 'bot-panel',
+    `4분할 — 위 PFD · 3D · MAP, 아래 CDU (${quad.sel})`);
+  t.ok(quad.L.y === quad.M.y && quad.M.y === quad.R.y && quad.B.y > quad.L.y + quad.L.height - 5 && quad.B.width > quad.L.width * 2,
+    '세 창이 위에 나란히, CDU 창은 아래 가로로 넓게');
+  t.ok(quad.btn === '⿰ 2분할' && !quad.after.tri && !quad.after.quad, '분할 버튼은 2 → 3 → 4 → 2 로 돈다');
   const ctx = page.context();
   const pp = ctx.waitForEvent('page');
-  await page.evaluate(() => document.querySelector('#mid-panel .po-btn').click());   // (보통 새 창 — 버튼은 감췄고 기능은 남겼다)
+  await page.click('#mid-panel .po-btn');
   const pop = await pp;
   await page.waitForTimeout(1200);
   const a = await page.evaluate(() => {
@@ -95,7 +110,7 @@ export async function run(page, t) {
     btn: document.querySelector('#mid-panel .po-btn').textContent }));
   t.ok(c.sides.length === 0 && c.back, '새 창을 닫으면 패널이 본 창으로 돌아온다');
   t.ok(c.order.startsWith('left-panel,panel-divider,mid-panel'), `제자리(가운데)로 돌아온다 (${c.order})`);
-  t.eq(c.btn, '⧉ POP UP', '버튼도 원래대로(감춰 둔 것)');
+  t.eq(c.btn, '⧉ POP UP', '버튼도 원래대로');
 
   // 본 창의 📌 Top — 그 패널을 곧바로 늘 위 창으로(새 창을 거치지 않는다)
   if (await page.evaluate(() => typeof documentPictureInPicture !== 'undefined')) {

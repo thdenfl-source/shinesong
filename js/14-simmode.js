@@ -797,8 +797,8 @@ function toggleSimMode(on, opt) {
 let _simView = null;
 function simEnterView() {
   if (_simView) return;
-  const sides = tripleMode ? ['left', 'mid', 'right'] : ['left', 'right'];
-  const get = k => (k === 'left' ? leftSel : k === 'mid' ? midSel : rightSel);
+  const sides = panelSides();
+  const get = panelGet;
   const v = { side: null, was: null, follow: followMode, overlay: false };
   if (!sides.some(k => get(k) === 'm3d')) {
     const mapSide = sides.find(k => get(k) === 'map');

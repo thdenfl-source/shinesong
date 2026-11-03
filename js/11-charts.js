@@ -2221,6 +2221,8 @@ appRegister({
   toggleTcut,
   toggleTrackRec,
   toggleTriple,
+  cycleSplit,
+  setSplitMode,
   toggleWind,
   toggleWxPanel,
 });
