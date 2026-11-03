@@ -174,8 +174,13 @@
         clearInterval(cur.timer);
         ph = cur.ph; base = (host !== W) ? host : null;
         if (base) {
-          try { base.document.getElementById('app').innerHTML = '<div style="color:#7ab8f5;font:12px sans-serif;padding:10px">Top 창을 띄운 바탕 창입니다 — 닫으면 Top 창도 닫힙니다.</div>'; } catch (e) { /* 무시 */ }
-          try { base.resizeTo(320, 140); } catch (e) { /* 무시 */ }
+          // 바탕 창은 건드리지 않는다(크기를 바꾸거나 문서를 갈아엎으면 브라우저가 Top 창을 닫아 버린다) — 안내만 얹는다
+          try {
+            const note = base.document.createElement('div');
+            note.textContent = 'Top 창을 띄운 바탕 창입니다 — 이 창을 닫으면 Top 창도 닫힙니다(최소화는 괜찮습니다).';
+            note.style.cssText = 'color:#7ab8f5;font:12px sans-serif;padding:10px';
+            base.document.getElementById('app').appendChild(note);
+          } catch (e) { /* 무시 */ }
         } else { try { if (!cur.win.closed) cur.win.close(); } catch (e) { /* 무시 */ } }
       } else {
         ph = D.createComment('popout:' + side);
@@ -185,7 +190,10 @@
       _popAttach({ side, win: pip, panel, ph, timer: null, base, pip: true });
       syncAppClasses();
       relayout();
-    }).catch(e => { console.warn('[popout] Top', e); });
+    }).catch(e => {
+      console.warn('[popout] Top', e);
+      try { uiAlert('Top 창을 열지 못했습니다: ' + ((e && (e.name + ' ' + e.message)) || e)); } catch (_) { /* 무시 */ }
+    });
     return true;
   }
 

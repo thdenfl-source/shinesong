@@ -8,7 +8,7 @@ export async function run(page, t) {
   // 화면 배치 — 기본 3분할 PFD · CDU · MAP, 탭은 창마다 정해진 것만
   const tabs = await page.evaluate(() => {
     const txt = id => Array.from(document.getElementById(id).querySelectorAll('button'))
-      .filter(b => getComputedStyle(b).display !== 'none').map(b => b.textContent.trim()).join('|');
+      .filter(b => getComputedStyle(b).display !== 'none' && !b.classList.contains('po-top-btn')).map(b => b.textContent.trim()).join('|');
     return { sel: [leftSel, midSel, rightSel].join('·'), tri: tripleMode,
              L: txt('left-tabs'), M: txt('mid-tabs'), R: txt('page-tabs') };
   });
@@ -43,7 +43,7 @@ export async function run(page, t) {
 
   const topVis = await pop.evaluate(() => getComputedStyle(document.querySelector('#mid-tabs .po-top-btn')).display);
   const topMain = await page.evaluate(() => getComputedStyle(document.querySelector('#page-tabs .po-top-btn')).display);
-  t.ok(topVis !== 'none' && topMain === 'none', `새 창 위에는 📌 Top 버튼이 있고 본 창에는 없다 (${topVis} · ${topMain})`);
+  t.ok(topVis !== 'none' && topMain !== 'none', `새 창과 본 창 탭에 📌 Top 버튼이 있다 (${topVis} · ${topMain})`);
 
   await pop.click('#mid-tabs [data-sel="map"]');
   await page.waitForTimeout(500);
@@ -96,4 +96,17 @@ export async function run(page, t) {
   t.ok(c.sides.length === 0 && c.back, '새 창을 닫으면 패널이 본 창으로 돌아온다');
   t.ok(c.order.startsWith('left-panel,panel-divider,mid-panel'), `제자리(가운데)로 돌아온다 (${c.order})`);
   t.eq(c.btn, '⧉ POP UP', '버튼도 원래대로');
+
+  // 본 창의 📌 Top — 그 패널을 곧바로 늘 위 창으로(새 창을 거치지 않는다)
+  if (await page.evaluate(() => typeof documentPictureInPicture !== 'undefined')) {
+    const pp4 = ctx.waitForEvent('page', { timeout: 5000 }).catch(() => null);
+    await page.click('#page-tabs .po-top-btn');
+    const pip2 = await pp4;
+    await page.waitForTimeout(1200);
+    const m = await page.evaluate(() => ({ sides: popoutSides(), moved: document.getElementById('right-panel').ownerDocument !== document }));
+    t.ok(pip2 && m.sides.join() === 'right' && m.moved, '본 창의 Top 을 누르면 그 패널이 곧바로 늘 위 창으로 간다');
+    if (pip2) await pip2.close();
+    await page.waitForTimeout(1200);
+    t.ok(await page.evaluate(() => popoutSides().length === 0 && document.getElementById('right-panel').ownerDocument === document), '닫으면 본 창으로 돌아온다');
+  }
 }
