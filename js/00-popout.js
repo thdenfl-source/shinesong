@@ -79,12 +79,13 @@
       } catch (e) { /* 닫히는 중 */ }
       const b = w.panel.querySelector('.po-btn');
       if (b) { b.textContent = '⧉ 복귀'; b.title = '이 패널을 본 창으로 되돌린다'; }
-      const tb = w.panel.querySelector('.po-top-btn'); if (tb) tb.classList.toggle('on', !!w.pip);
+      const tb = w.panel.querySelector('.po-top-btn'); if (tb) { tb.classList.toggle('on', !!w.pip); tb.textContent = w.pip ? '📌 복귀' : '📌 Top'; }
     });
     ['left', 'mid', 'right'].forEach(s => {
       if (wins.some(w => w.side === s)) return;
       const p = gid(PANEL_ID[s]); const b = p && p.querySelector('.po-btn');
       if (b) { b.textContent = '⧉ POP UP'; b.title = '이 패널을 새 창으로 띄운다(다중 모니터에 따로 배치)'; }
+      const tb = p && p.querySelector('.po-top-btn'); if (tb) { tb.classList.remove('on'); tb.textContent = '📌 Top'; }
     });
   }
   function relayout() {

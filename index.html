@@ -102,7 +102,7 @@ html, body {
 @media (orientation: landscape) { #divider-2 { width: 2px; height: 100%; } }
 @media (orientation: portrait)  { #divider-2 { height: 2px; width: 100%; } }
 /* ── 패널 새 창(00-popout.js) — 새 창으로 옮긴 패널 자리의 구분선을 감추고 남은 패널이 나눠 갖는다 ── */
-.po-btn { flex: 0 0 auto !important; padding: 0 9px !important; color: #7ab8f5 !important; }
+.po-btn { display: none !important; }   /* POP UP(보통 새 창) 버튼은 뺐다 — 📌 Top 으로 띄운다(기능은 남김) */
 #app.po-left #panel-divider { display: none; }
 #app.po-mid #divider-2, #app.po-right #divider-2 { display: none; }
 #app.po-right:not(.triple) #panel-divider, #app.po-mid.po-right #panel-divider { display: none; }
