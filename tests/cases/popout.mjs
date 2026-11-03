@@ -41,6 +41,10 @@ export async function run(page, t) {
   const lw = await page.evaluate(() => document.getElementById('left-panel').getBoundingClientRect().width / document.getElementById('app').getBoundingClientRect().width);
   t.ok(Math.abs(lw - 0.3) < 0.05, `창 하나를 띄운 뒤 남은 두 창의 비율을 끌어 바꾼다 (좌 ${(lw * 100).toFixed(0)}%)`);
 
+  const topVis = await pop.evaluate(() => getComputedStyle(document.querySelector('#mid-tabs .po-top-btn')).display);
+  const topMain = await page.evaluate(() => getComputedStyle(document.querySelector('#page-tabs .po-top-btn')).display);
+  t.ok(topVis !== 'none' && topMain === 'none', `새 창 위에는 📌 Top 버튼이 있고 본 창에는 없다 (${topVis} · ${topMain})`);
+
   await pop.click('#mid-tabs [data-sel="map"]');
   await page.waitForTimeout(500);
   const b = await page.evaluate(() => ({ sel: midSel, inPop: document.getElementById('map-wrap').ownerDocument !== document }));
@@ -68,7 +72,23 @@ export async function run(page, t) {
   });
   t.ok(pumped > 300, `본 창이 멈춰도 새 창이 시뮬을 이어 돌린다 (${pumped.toFixed(0)}ms 진행)`);
 
-  await pop.close();
+  // 📌 Top — 늘 위에 뜨는 창(문서 PIP)으로 옮긴다. 닫으면 본 창으로 돌아온다
+  if (await pop.evaluate(() => typeof documentPictureInPicture !== 'undefined')) {
+    const pp3 = ctx.waitForEvent('page', { timeout: 5000 }).catch(() => null);
+    await pop.click('#mid-tabs .po-top-btn');
+    const pip = await pp3;
+    await page.waitForTimeout(1200);
+    const tp = await page.evaluate(() => ({ sides: popoutSides(), inMain: document.getElementById('mid-panel').ownerDocument === document }));
+    t.ok(pip && tp.sides.join() === 'mid' && !tp.inMain, 'Top 을 누르면 패널이 늘 위에 뜨는 창으로 옮겨 간다');
+    if (pip) await pip.close();
+    await page.waitForTimeout(1200);
+    const tb = await page.evaluate(() => ({ sides: popoutSides(), back: document.getElementById('mid-panel').ownerDocument === document }));
+    t.ok(tb.sides.length === 0 && tb.back, 'Top 창을 닫으면 본 창으로 돌아온다');
+  } else {
+    await pop.close();
+  }
+  await page.waitForTimeout(600);
+  if (!(await page.evaluate(() => popoutSides().length === 0))) await pop.close().catch(() => {});
   await page.waitForTimeout(1200);
   const c = await page.evaluate(() => ({ sides: popoutSides(), back: document.getElementById('mid-panel').ownerDocument === document,
     order: Array.from(document.getElementById('app').children).map(x => x.id).filter(Boolean).join(','),
