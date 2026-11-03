@@ -102,7 +102,7 @@ html, body {
 @media (orientation: landscape) { #divider-2 { width: 2px; height: 100%; } }
 @media (orientation: portrait)  { #divider-2 { height: 2px; width: 100%; } }
 /* ── 패널 새 창(00-popout.js) — 새 창으로 옮긴 패널 자리의 구분선을 감추고 남은 패널이 나눠 갖는다 ── */
-.po-btn { display: none !important; }   /* POP UP(보통 새 창) 버튼은 뺐다 — 📌 Top 으로 띄운다(기능은 남김) */
+.po-btn { flex: 0 0 auto !important; padding: 0 9px !important; color: #7ab8f5 !important; }   /* POP UP — 모니터마다 창 하나씩 띄울 때 */
 #app.po-left #panel-divider { display: none; }
 #app.po-mid #divider-2, #app.po-right #divider-2 { display: none; }
 #app.po-right:not(.triple) #panel-divider, #app.po-mid.po-right #panel-divider { display: none; }
@@ -114,6 +114,15 @@ html, body {
 /* Top(늘 위 창) 버튼 — 본 창에서 누르면 그 패널을 곧바로 늘 위 창으로, 새 창에서 누르면 새 창의 패널을 늘 위 창으로 */
 .po-top-btn { display: inline-block !important; flex: 0 0 auto !important; padding: 0 9px !important; color: #ffd200 !important; }
 .po-top-btn.on { background: #3a3000 !important; }
+/* ── 4분할 — 위에 PFD · 3D · MAP, 아래에 CDU ── */
+#bot-panel { display: none; flex-direction: column; overflow: hidden; }
+#bot-tabs { display: flex; background: #080808; border-bottom: 1px solid #1e1e1e; flex-shrink: 0; }
+#app.quad { display: grid !important; grid-template-columns: 1.3fr 1fr 1fr; grid-template-rows: minmax(0, 1fr) minmax(0, 42%); gap: 2px; background: #2a2a2a; }
+#app.quad > #panel-divider, #app.quad > #divider-2 { display: none !important; }
+#app.quad > #left-panel  { grid-area: 1 / 1; min-width: 0; min-height: 0; }
+#app.quad > #mid-panel   { grid-area: 1 / 2; min-width: 0; min-height: 0; display: flex; }
+#app.quad > #right-panel { grid-area: 1 / 3; min-width: 0; min-height: 0; }
+#app.quad > #bot-panel   { grid-area: 2 / 1 / 3 / 4; display: flex; min-width: 0; min-height: 0; }
 /* 분할 전환 버튼 */
 .split-tab { margin-left: auto; color: #7ab8f5 !important; }
 #left-panel {
@@ -2455,7 +2464,7 @@ body.gate-open #gate-overlay { display: none; }
       <button class="page-tab active" data-sel="pfd" data-act="selectPanel" data-arg='["left", "pfd"]'>PFD</button>
       <button class="page-tab split-tab" id="pfd-solo-btn" data-act="pfdSolo" title="PFD 단독 — PFD 만 화면 가득(한 번 더 누르면 원래 배치)">⛶ PFD 단독</button>
       <button class="page-tab split-tab" id="m3d-solo-btn" data-act="panelSolo" data-arg='["m3d"]' title="3D 단독 — 3D 지도를 화면 가득, PFD(계기만)를 왼쪽 위에 겹쳐(한 번 더 누르면 원래 배치)">⛶ 3D 단독</button>
-      <button class="page-tab split-tab" id="split-toggle" data-act="toggleTriple" title="2분할 ⇄ 3분할">⿲ 3분할</button>
+      <button class="page-tab split-tab" id="split-toggle" data-act="cycleSplit" title="분할 바꾸기 — 2 → 3 → 4 분할">⿲ 3분할</button>
       <button class="page-tab po-btn" data-act="popoutToggle" data-arg='["left"]' title="이 패널을 새 창으로 띄운다(다중 모니터에 따로 배치)">⧉ POP UP</button>
       <button class="page-tab po-top-btn" data-act="popoutTop" data-arg='["left", "$el"]' title="Top — 이 창을 다른 창들보다 늘 위에 띄운다(한 번 더 누르면 본 창으로)">📌 Top</button>
     </div>
@@ -3074,6 +3083,17 @@ body.gate-open #gate-overlay { display: none; }
     </div>
 
   </div><!-- end #right-panel -->
+
+  <!-- 4분할일 때만 보이는 아래 창(기본 CDU) -->
+  <div id="bot-panel">
+    <div id="bot-tabs" class="panel-tabs">
+      <button class="page-tab" data-sel="cdu" data-act="selectPanel" data-arg='["bot", "cdu"]'>CDU</button>
+      <button class="page-tab" data-sel="map" data-act="selectPanel" data-arg='["bot", "map"]'>MAP</button>
+      <button class="page-tab" data-sel="m3d" data-act="selectPanel" data-arg='["bot", "m3d"]' title="3D — SIM 이 꺼져 있으면 지형 정찰(우하단 조작 버튼), SIM 이면 조종석 시야">3D</button>
+      <button class="page-tab po-btn" data-act="popoutToggle" data-arg='["bot"]' title="이 패널을 새 창으로 띄운다(다중 모니터에 따로 배치)">⧉ POP UP</button>
+      <button class="page-tab po-top-btn" data-act="popoutTop" data-arg='["bot", "$el"]' title="Top — 이 창을 다른 창들보다 늘 위에 띄운다(한 번 더 누르면 본 창으로)">📌 Top</button>
+    </div>
+  </div>
 </div><!-- end #app -->
 
 <!-- 앱 코드 — 클래식 스크립트(모듈 아님)라 전역 스코프를 공유한다.

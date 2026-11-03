@@ -764,12 +764,21 @@ let leftSel = 'pfd', rightSel = 'map';   // 'pfd' | 'map' | 'cdu' | (우측 한�
 let midSel  = 'map';                    // 3분할일 때만 사용하는 중앙 패널
 // 처음 켜면 3분할 — 좌 PFD · 중 CDU · 우 MAP 이 기본 구성이다(2분할이면 PFD · MAP).
 // 사용자가 2분할을 골라 뒀으면(저장값 '0') 그 뜻을 따른다(배치를 바꾼 뒤로는 새 키로 본다).
-let tripleMode = true;                  // 3분할(PFD·CDU·MAP) 여부
+let tripleMode = true;                  // 3분할(PFD·CDU·MAP) 여부 — 4분할도 가운데 창을 쓰므로 함께 참
+// 4분할 — 위에 PFD · 3D · MAP, 아래에 CDU(아래 창 botSel)
+let quadMode = false, botSel = 'cdu';
 try {
   const v = localStorage.getItem('tripleMode2');
   if (v !== null) tripleMode = (v === '1');
+  const m = localStorage.getItem('splitMode');
+  if (m === '4') { quadMode = true; tripleMode = true; }
+  else if (m === '3') tripleMode = true;
+  else if (m === '2') tripleMode = false;
 } catch(e) { _swallow(e); }
-if (tripleMode) { leftSel = 'pfd'; midSel = 'cdu'; rightSel = 'map'; }
+if (quadMode) { leftSel = 'pfd'; midSel = 'm3d'; rightSel = 'map'; botSel = 'cdu'; }
+else if (tripleMode) { leftSel = 'pfd'; midSel = 'cdu'; rightSel = 'map'; }
+// 지금 쓰는 패널들(4분할이면 아래 창까지)
+function panelSides() { return quadMode ? ['left', 'mid', 'right', 'bot'] : tripleMode ? ['left', 'mid', 'right'] : ['left', 'right']; }
 
 // 3분할 분할 비율 [좌%, 중%] — null 이면 기본 배분(PFD 호스트 1.4배)
 const TRI_MIN = 12;                     // 한 창의 최소 비율(%)
@@ -798,19 +807,25 @@ function saveTriRatio() {
 
 // 3분할 ⇄ 2분할 전환. 3분할 진입 시 PFD·MAP·CDU를 좌·중·우로 배치한다.
 function toggleTriple(on) {
-  tripleMode = (on === undefined) ? !tripleMode : !!on;
-  try { localStorage.setItem('tripleMode2', tripleMode ? '1' : '0'); } catch(e) { _swallow(e); }
-  // 3분할은 PFD · CDU · MAP, 2분할은 PFD · MAP 이 기본이다
-  if (tripleMode) { leftSel = 'pfd'; midSel = 'cdu'; rightSel = 'map'; }
+  setSplitMode(((on === undefined) ? !tripleMode : !!on) ? 3 : 2);
+}
+// 2 · 3 · 4 분할. 기본 배치 — 2분할 PFD · MAP / 3분할 PFD · CDU · MAP / 4분할 위 PFD · 3D · MAP · 아래 CDU
+function setSplitMode(n) {
+  quadMode = n === 4; tripleMode = n >= 3;
+  try { localStorage.setItem('splitMode', String(n)); localStorage.setItem('tripleMode2', tripleMode ? '1' : '0'); } catch(e) { _swallow(e); }
+  if (quadMode) { leftSel = 'pfd'; midSel = 'm3d'; rightSel = 'map'; botSel = 'cdu'; }
+  else if (tripleMode) { leftSel = 'pfd'; midSel = 'cdu'; rightSel = 'map'; }
   else { leftSel = 'pfd'; rightSel = 'map'; }
   applyPanels();
 }
+// 분할 버튼 — 2 → 3 → 4 → 2 분할로 돌아간다
+function cycleSplit() { setSplitMode(quadMode ? 2 : tripleMode ? 4 : 3); }
 
 // ── 3D 지도의 자리 옮기기 ──
 // 3D 지도(#map3d)는 한 벌뿐이다. 평소에는 2D 지도 위에 겹쳐 쓰고(지도 툴바의 3D 버튼),
 // 탭에서 '3D' 를 고르면 그 창으로 통째로 옮겨 간다. 그러면 2D 와 3D 를 나란히 볼 수 있다.
 function map3dPanelOn() {
-  return leftSel === 'm3d' || (tripleMode && midSel === 'm3d') || rightSel === 'm3d';
+  return leftSel === 'm3d' || (tripleMode && midSel === 'm3d') || rightSel === 'm3d' || (quadMode && botSel === 'm3d');
 }
 // 3D 지도가 지금 화면에 떠 있는가(겹쳐 쓰든, 제 창을 쓰든) — 카메라 추종 판단에 쓴다
 function syncMap3dHost(toPanel) {
@@ -848,19 +863,20 @@ function syncMap3dHost(toPanel) {
 // 같은 창으로 치는 묶음 — PLAN 은 CDU 창의 한 화면이다.
 // 2D 지도(map)와 3D 지도(m3d)는 서로 다른 창이라 나란히 둘 수 있다.
 function panelFam(sel) { return sel === 'plan' ? 'cdu' : sel; }
-function panelGet(k) { return k === 'left' ? leftSel : k === 'mid' ? midSel : rightSel; }
-function panelSet(k, v) { if (k === 'left') leftSel = v; else if (k === 'mid') midSel = v; else rightSel = v; }
+function panelGet(k) { return k === 'left' ? leftSel : k === 'mid' ? midSel : k === 'bot' ? botSel : rightSel; }
+function panelSet(k, v) { if (k === 'left') leftSel = v; else if (k === 'mid') midSel = v; else if (k === 'bot') botSel = v; else rightSel = v; }
 // 두 창이 같은 것을 가리키고 있으면 바로잡는다. 저장된 배치를 되살릴 때처럼
 // selectPanel 을 거치지 않는 길도 있어서, 그릴 때 한 번 더 본다.
 // (지도는 2D·3D 가 서로 다른 창이라 나란히 둘 수 있다)
 function fixPanelDupes() {
-  const sides = tripleMode ? ['left', 'mid', 'right'] : ['left', 'right'];
+  const sides = panelSides();
   // 화면 배치 — 좌측은 늘 PFD 창이고, 가운데·우측은 CDU·MAP·3D 중에서 고른다(단독 화면 중은 빼고)
   const solo = document.body.classList.contains('solo-mode');
   if (!solo) {
     leftSel = 'pfd';
     if (midSel === 'pfd') midSel = 'cdu';
     if (rightSel === 'pfd') rightSel = 'map';
+    if (botSel === 'pfd') botSel = 'cdu';
   }
   const seen = new Set();
   sides.forEach(k => {
@@ -874,9 +890,8 @@ function fixPanelDupes() {
 }
 
 function selectPanel(side, sel, force) {
-  const get = k => k === 'left' ? leftSel : k === 'mid' ? midSel : rightSel;
-  const set = (k, v) => { if (k === 'left') leftSel = v; else if (k === 'mid') midSel = v; else rightSel = v; };
-  const sides = tripleMode ? ['left', 'mid', 'right'] : ['left', 'right'];
+  const get = panelGet, set = panelSet;
+  const sides = panelSides();
   if (!sides.includes(side)) side = 'right';
   // 같은 창을 이미 다른 패널이 갖고 있으면 서로 맞바꾼다(창이 사라지지 않게).
   // CDU 와 PLAN 은 '한 창의 두 화면' 이므로 같은 것으로 친다 — 따로 보면
@@ -892,21 +907,23 @@ function applyPanels() {
   const L = document.getElementById('left-panel');
   const M = document.getElementById('mid-panel');
   const R = document.getElementById('right-panel');
+  const B = document.getElementById('bot-panel');
   const app = document.getElementById('app');
   app.classList.toggle('triple', tripleMode);
+  app.classList.toggle('quad', quadMode);
   try { applyPoRatio(); } catch (e) { _swallow(e); }
   // 새로고침은 CDU 창(3분할의 가운데) 탭에 — 2분할에는 가운데가 없으니 우측 탭 끝에
   try {
     const rb = document.getElementById('reload-btn');
-    const tabs = document.getElementById(tripleMode ? 'mid-tabs' : 'page-tabs');
+    const tabs = document.getElementById(quadMode ? 'bot-tabs' : tripleMode ? 'mid-tabs' : 'page-tabs');
     if (rb && tabs && rb.parentElement !== tabs) tabs.appendChild(rb);
   } catch (e) { _swallow(e); }
   const btn = document.getElementById('split-toggle');
-  if (btn) btn.textContent = tripleMode ? '⿰ 2분할' : '⿲ 3분할';
+  if (btn) btn.textContent = quadMode ? '⿰ 2분할' : tripleMode ? '▦ 4분할' : '⿲ 3분할';
 
   const wrapIds = { pfd: 'pfd-wrap', map: 'map-wrap', cdu: 'cdu-wrap', m3d: 'map3d-wrap',
                     plan: 'fp-wrap' };
-  const hostOf = k => (leftSel === k ? L : (tripleMode && midSel === k ? M : (rightSel === k ? R : null)));
+  const hostOf = k => (leftSel === k ? L : (tripleMode && midSel === k ? M : (rightSel === k ? R : (quadMode && botSel === k ? B : null))));
   ['pfd', 'map', 'cdu', 'm3d', 'plan'].forEach(k => {
     const el = document.getElementById(wrapIds[k]);
     if (!el) return;
@@ -932,6 +949,8 @@ function applyPanels() {
     b.classList.toggle('active', b.dataset.sel === tabSel(midSel)));
   document.querySelectorAll('#page-tabs [data-sel]').forEach(b =>
     b.classList.toggle('active', b.dataset.sel === tabSel(rightSel)));
+  document.querySelectorAll('#bot-tabs [data-sel]').forEach(b =>
+    b.classList.toggle('active', b.dataset.sel === tabSel(botSel)));
 
   // 레거시 상태 동기화(솔로 모드 진입 판단 등에서 사용)
   leftPage = (leftSel === 'map' || leftSel === 'm3d') ? 1 : 0;
@@ -966,6 +985,7 @@ let poRatio = 50;
 function poRemaining() {
   const sides = (typeof popoutSides === 'function') ? popoutSides() : [];
   if (!sides.length) return [];
+  if (quadMode) return [];   // 4분할은 경계 끌기를 쓰지 않는다
   return ['left', 'mid', 'right'].filter(k => !sides.includes(k) && (k !== 'mid' || tripleMode))
     .map(k => document.getElementById(k + '-panel')).filter(el => el && el.ownerDocument === document);
 }
@@ -1219,7 +1239,8 @@ function _rulerRender() {
 // 들어가기 전 창 배치를 적어 둔다. 나올 때 그대로 되돌리기 위해서다
 // (종전에는 나오면 무조건 2분할 PFD|MAP 이 되어 3분할 배치가 흐트러졌다).
 function enterSolo(screen) {
-  if (!_soloActive) _soloSaved = { l: leftSel, m: midSel, r: rightSel, tri: tripleMode };
+  if (!_soloActive) _soloSaved = { l: leftSel, m: midSel, r: rightSel, tri: tripleMode, q: quadMode, b: botSel };
+  if (quadMode) { quadMode = false; try { document.getElementById('app').classList.remove('quad'); } catch (e) { _swallow(e); } }   // 단독 화면은 4분할 격자를 접고 본다
   _soloActive = true;
   document.getElementById('solo-bar').style.display = 'flex';
   setSolo(screen);
@@ -1257,8 +1278,8 @@ function toggleMapFull() {
 // 종전에는 늘 우측이어서, CDU 를 좌측에 둔 3분할에서 FPL 을 누르면
 // 엉뚱하게 우측(PFD) 창이 Flight Plan 으로 바뀌었다.
 function cduSide(want) {
-  const sides = tripleMode ? ['left', 'mid', 'right'] : ['left', 'right'];
-  const get = k => (k === 'left' ? leftSel : k === 'mid' ? midSel : rightSel);
+  const sides = panelSides();
+  const get = panelGet;
   return sides.find(k => get(k) === want)
       || sides.find(k => get(k) === 'cdu' || get(k) === 'plan')
       || 'right';
@@ -1505,6 +1526,7 @@ function exitSolo() {
   // 들어가기 전 배치로 되돌린다(없으면 종전대로 좌 PFD · 우 MAP)
   if (_soloSaved) {
     tripleMode = _soloSaved.tri; leftSel = _soloSaved.l;
+    quadMode = !!_soloSaved.q; botSel = _soloSaved.b || botSel;
     midSel = _soloSaved.m; rightSel = _soloSaved.r;
     _soloSaved = null;
     applyPanels();
