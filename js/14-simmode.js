@@ -702,7 +702,8 @@ function simOnDeck() { return simModeOn && _simOnDeck && !!shipVisible; }
 function simDeckHandoff(toDeck) {
   if (typeof shipSpd !== 'number' || !shipSpd) return;
   const k = toDeck ? -1 : 1, rel = (shipHdg - S.hdg) * D2R;
-  const f = k * shipSpd * Math.cos(rel), l = k * shipSpd * Math.sin(rel);
+  const sp = (typeof shipSpdNow === 'function') ? shipSpdNow() : shipSpd;
+  const f = k * sp * Math.cos(rel), l = k * sp * Math.sin(rel);
   if (gspdOn) { gspdActFwd += f; gspdActLat += l; }
   else {
     S.spd = Math.max(SIM_SPD_BACK, Math.min(SIM_SPD_MAX, S.spd + f));
@@ -869,7 +870,12 @@ function simFly(dt) {
   simTerrainFt();                       // 발밑 높이를 새로 읽어 둔다
   const deck = simDeckFt();             // 함정 위면 갑판(윗면) 높이
   const gnd = (deck == null) ? simGroundFt() : Math.max(simGroundFt(), deck);
+  // 흔들리는 갑판에 앉아 있으면(바퀴가 떨어질 만큼 레버를 올리지 않았으면) 갑판을 따라 오르내린다
+  if (_simOnDeck && deck != null && typeof shipMotionOn === 'function' && shipMotionOn() &&
+      S.alt - gnd < 3 && S.tq < hoverPowerTq() + LOW_BAND[1]) { S.alt = gnd; if (S.vs < 0) S.vs = 0; }
   const onGnd = S.alt <= gnd + 0.5;
+  // 갑판에 앉은 헬기가 느끼는 갑판 자세(롤·피칭)
+  const deckAtt = (onGnd && _simOnDeck && typeof shipDeckAttitude === 'function') ? shipDeckAttitude(S.hdg) : { pitch: 0, bank: 0 };
   // 막 땅에 닿았다 — 그 순간의 강하율·속도를 알린다(오토로테이션 착지 연습)
   if (onGnd && !_simOnGnd && S.running) {
     simTouchdown(S.vs, S.spd);
@@ -907,7 +913,7 @@ function simFly(dt) {
     // ── 사이클릭 좌우 → 뱅크 ──
     // HDG·NAV 가 걸려 있으면 뱅크는 AFCS 가 잡는다(07-sim.js) — 조종간 좌우는 무시한다.
     if (!simAfcsLat()) {
-      const bTgt = gnd3 ? 0 : roll * SIM_BANK_MAX;
+      const bTgt = (gnd3 ? 0 : roll * SIM_BANK_MAX) + deckAtt.bank;
       const dB = bTgt - S.bnk;
       S.bnk += Math.sign(dB) * Math.min(Math.abs(dB), SIM_ROLL_RATE * dt);
       bankTarget = S.bnk;           // 모드를 빠져나가도 자세가 튀지 않게
@@ -926,6 +932,7 @@ function simFly(dt) {
     // 블로우 백(flapback) — 전이 비행(10~30kt, 20kt 에서 가장 셈) 에서 원판이 뒤로 젖혀져 기수가 들린다
     if (rcOn('blowback') && !onGnd && !simAfcsPitch()) pTgt += RC_BLOWBACK * Math.max(0, 1 - Math.abs(Math.abs(S.spd) - 20) / 10);
     if (gnd3) pTgt = -a.pitch * SIM_PITCH_MAX;
+    pTgt += deckAtt.pitch;               // 흔들리는 갑판 위에서는 갑판 자세를 따른다
     // 땅 위에서는 바퀴가 받치므로 위아래 10° 까지만 기운다
     if (onGnd) pTgt = Math.max(-GND_PITCH_MAX, Math.min(GND_PITCH_MAX, pTgt));
     const dP = pTgt - S.pit;
