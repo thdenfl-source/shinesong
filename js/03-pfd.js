@@ -1417,60 +1417,19 @@ function drawHsiHoverPage(x, y, w, h, cx, cy, rFull) {
   }
   ctx.restore(); // end clip
 
-  // ── SHIP 상대 위치 지시자 (지도 SHIP 기능 연동) ──
-  // 로즈가 heading-up이므로 상대방위 = 화면 각도. 선박 방향으로 포인터를 그린다.
-  let _shipRel = null, _shipDistNM = null, _shipBrgT = null, _shipDistFt = null, _shipNear = false;
-  if (typeof shipVisible !== 'undefined' && shipVisible && shipLat !== null && shipLon !== null) {
-    _shipDistNM = distance(S.lat, S.lon, shipLat, shipLon);
-    _shipBrgT   = bearing(S.lat, S.lon, shipLat, shipLon);
-    _shipRel    = normA(_shipBrgT - S.hdg);
-
-    // 호버 위치 지시자와 동일 축척(전 반경 = HOVER_FT)으로 기체 기준 상대위치 산출
-    const b = bodyRelFt(shipLat, shipLon);
-    _shipDistFt = b.dist;
-    _shipNear   = _shipDistFt <= HOVER_FT;
-
-    // 선체 심볼(원점 기준, 이물이 -Y 방향)
-    const hull = sz => {
-      ctx.beginPath();
-      ctx.moveTo(0, -sz);
-      ctx.lineTo(sz * 0.55, sz * 0.35);
-      ctx.lineTo(sz * 0.35, sz * 0.75);
-      ctx.lineTo(-sz * 0.35, sz * 0.75);
-      ctx.lineTo(-sz * 0.55, sz * 0.35);
-      ctx.closePath();
-      ctx.fillStyle = 'rgba(0,229,255,0.35)'; ctx.fill();
-      ctx.strokeStyle = '#00e5ff'; ctx.lineWidth = 1.6; ctx.stroke();
-    };
-
-    if (_shipNear) {
-      // ── 반경 내: 실제 축척 위치에 표시(호버 위치 지시자와 동일 축척) ──
-      const pxPerFt = r / HOVER_FT;
-      const sx =  b.lat * pxPerFt, sy = -b.fwd * pxPerFt;
-      ctx.save();
-      ctx.beginPath(); ctx.arc(0, 0, r * 0.94, 0, Math.PI*2); ctx.clip();
-      ctx.translate(sx, sy);
-      ctx.rotate(normA(shipHdg - S.hdg) * D2R);   // 선박 침로 방향으로 정렬
-      hull(Math.max(9, r * 0.13));
-      ctx.restore();
-    } else {
-      // ── 반경 밖: 로즈 가장자리 니들 + 중심→선박 점선 ──
-      const rad = _shipRel * D2R;
-      const pr  = r * 0.70;
-      const px  = Math.sin(rad) * pr, py = -Math.cos(rad) * pr;
-      ctx.save();
-      ctx.strokeStyle = 'rgba(0,229,255,0.55)'; ctx.lineWidth = 1; ctx.setLineDash([4, 4]);
-      ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(px, py); ctx.stroke(); ctx.setLineDash([]);
-      ctx.translate(px, py); ctx.rotate(rad);     // 바깥쪽(선박 방향)을 향함
-      hull(Math.max(7, r * 0.10));
-      ctx.restore();
-    }
-  }
-
+  // ── SHIP 상대 위치 지시자 — 따로 그리지 않는다 ──
+  // 함정은 TACAN(I-SHP)으로 잡는다. 그 무선이 NAV 소스면 아래 붉은 지시(FMS 웨이포인트와 같은 표시)가
+  // 함정을 가리킨다 — FMS · 붉은 표시 · 함정이 한 묶음이다.
+  let _shipRel = null;
   // ── 활성 비행계획 웨이포인트 상대 위치 (SHIP과 동일 방식, 빨간 삼각형) ──
   let _wpRel = null, _wpDistNM = null, _wpBrgT = null, _wpDistFt = null, _wpNear = false, _wpName = '';
-  if (S.awp >= 0 && S.awp < S.wps.length) {
-    const wp = S.wps[S.awp];
+  // 붉은 지시의 표적 — NAV 소스가 함정 TACAN(I-SHP)이면 함정, 아니면 활성 비행계획 웨이포인트
+  const _tac = (typeof navRadios !== 'undefined' && navRadios[navSrc] && navRadios[navSrc].ship &&
+                navRadios[navSrc].lat !== null && navRadios[navSrc].lat !== undefined) ? navRadios[navSrc] : null;
+  const _tgt = _tac ? { ident: 'I-SHP', lat: _tac.lat, lon: _tac.lon }
+             : (S.awp >= 0 && S.awp < S.wps.length) ? S.wps[S.awp] : null;
+  if (_tgt) {
+    const wp = _tgt;
     _wpName   = wp.ident || 'WPT';
     _wpDistNM = distance(S.lat, S.lon, wp.lat, wp.lon);
     _wpBrgT   = bearing(S.lat, S.lon, wp.lat, wp.lon);
@@ -1536,27 +1495,8 @@ function drawHsiHoverPage(x, y, w, h, cx, cy, rFull) {
     ctx.restore();
   }
 
-  // ── 하단 SHIP 판독: 상대방위 · 자방위 · 거리 ──
-  if (_shipRel !== null) {
-    const fs = Math.max(9, r * 0.115);
-    const magB = ((Math.round(_shipBrgT - RULER_VAR) % 360) + 360) % 360;
-    const relTxt = String(Math.round(_shipRel) % 360).padStart(3,'0');   // 360 → 000
-    // 근접(반경 내)에서는 NM 대신 ft/m로 표기
-    const distTxt = _shipNear ? uAlt(_shipDistFt) : uDist(_shipDistNM, 2);
-    const txt = `SHIP  R${relTxt}°  ${String(magB % 360).padStart(3,'0')}°M  ${distTxt}`;
-    ctx.save();
-    ctx.font = `bold ${fs}px Helvetica Neue, Arial, sans-serif`;
-    ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
-    const ty = Math.min(y + h - 3, cy + r + fs * 1.6);
-    const tw = ctx.measureText(txt).width;
-    ctx.fillStyle = 'rgba(0,10,16,0.75)';
-    ctx.fillRect(cx - tw/2 - 5, ty - fs - 2, tw + 10, fs + 6);
-    ctx.strokeStyle = '#00e5ff66'; ctx.lineWidth = 1;
-    ctx.strokeRect(cx - tw/2 - 5, ty - fs - 2, tw + 10, fs + 6);
-    ctx.fillStyle = '#00e5ff';
-    ctx.fillText(txt, cx, ty);
-    ctx.restore();
-  }
+  // (하단 SHIP 판독은 없앴다 — 함정은 I-SHP 로 붉은 판독에 나온다)
+
 
   // ── Side panels: speed readouts left (actual) / right (reference) ──
   if (sideW < 20) return;

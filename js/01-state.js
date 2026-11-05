@@ -1187,7 +1187,35 @@ let navRadios = {
 // VOR 목록에서 먼저 찾고, 없으면 로컬라이저 목록에서 찾는다 — ILS 주파수를
 // 넣었는데 국을 못 찾아 NAV 가 조용히 아무 일도 하지 않는 일이 없도록.
 // LOC 는 방향을 가진 시설이라 접근 코스(crs)를 함께 돌려준다.
+// ── 함정 TACAN(I-SHP · 110X) ──
+// 움직이는 함정이 국이다 — 위치·거리 기준은 함정(shipLat/shipLon)을 따라 매 순간 옮겨 가고,
+// 접근 코스는 함정 침로(함미에서 함수 쪽으로 다가가는 로컬라이저 꼴)다. 함정을 띄우지 않았으면 신호가 없다.
+// 주파수 대신 고정 채널 '110X' 하나로 부른다(입력·버튼을 늘리지 않으려고).
+const SHIP_TACAN = { id: 'I-SHP', freq: '110X', name: '함정 TACAN' };
+function _shipTacan() {
+  const on = (typeof shipVisible !== 'undefined') && shipVisible && shipLat !== null;
+  return { id: SHIP_TACAN.id, name: SHIP_TACAN.name, freq: SHIP_TACAN.freq, ship: true, loc: true,
+           lat: on ? shipLat : null, lon: on ? shipLon : null, elev: 0,
+           crs: on ? toMag(shipHdg) : undefined };
+}
+function _isShipTacan(freq, id) {
+  return id === SHIP_TACAN.id || String(freq || '').toUpperCase() === SHIP_TACAN.freq;
+}
+// 매 프레임 — 함정 TACAN 을 잡고 있는 무선은 함정을 따라 국 위치·코스를 옮긴다
+function shipTacanSync() {
+  ['NAV1', 'NAV2'].forEach(k => {
+    const r = navRadios[k];
+    if (!r || !r.ship) return;
+    const t = _shipTacan();
+    r.lat = t.lat; r.lon = t.lon; r.crs = t.crs;
+    if (navSrc === k) {
+      navLat = r.lat; navLon = r.lon;
+      if (Number.isFinite(r.crs)) vorObsCrs = toTrue(r.crs);
+    }
+  });
+}
 function _resolveVor(freq, id) {
+  if (_isShipTacan(freq, id)) return _shipTacan();
   const vors = () => { try { return ENR_VORS || []; } catch(e) { return []; } };   // 로드 중 TDZ 대비
   const locs = () => { try { return (typeof LOC_STATIONS !== 'undefined' && LOC_STATIONS) || []; }
                        catch(e) { return []; } };
@@ -1233,12 +1261,12 @@ function setNavRadio(navId, freq, id) {
   // (버리지 않으면 _resolveVor가 ident를 먼저 맞춰 이전 국으로 되돌아가고 입력 주파수까지 덮어쓴다)
   if (freq != null && r.id) {
     const byId = _resolveVor(null, r.id);
-    if (!byId || Math.abs(parseFloat(byId.freq) - parseFloat(r.freq)) >= 0.001) r.id = '';
+    if (!byId || (byId.ship ? !_isShipTacan(r.freq, null) : Math.abs(parseFloat(byId.freq) - parseFloat(r.freq)) >= 0.001)) r.id = '';
   }
   const v = _resolveVor(r.freq, r.id);
   if (v) { r.lat = v.lat; r.lon = v.lon; r.id = v.id; r.freq = v.freq; r.elev = v.elev || 0;
-           r.loc = !!v.loc; r.crs = v.crs; }
-  else   { r.lat = null; r.lon = null; r.elev = 0; r.loc = false; r.crs = undefined; }
+           r.loc = !!v.loc; r.crs = v.crs; r.ship = !!v.ship; }
+  else   { r.lat = null; r.lon = null; r.elev = 0; r.loc = false; r.crs = undefined; r.ship = false; }
   if (navSrc === navId) applyNavRadioToPfd();
 }
 // 현재 navSrc(NAV1/NAV2)의 튜닝 VOR를 PFD 항법 상태로 반영

@@ -373,6 +373,7 @@ let _pfdDrawLast = 0;   // GPS 모드 PFD 10fps 제한용
 function simStep(ts, noLoop){   // noLoop — 새 창이 대신 한 프레임을 돌릴 때(00-popout.js), 본 창의 rAF 를 또 걸지 않는다
   _simLastTick = performance.now();
   try {
+  try { shipTacanSync(); } catch (e) { _swallow(e); }   // 함정 TACAN — 국이 함정을 따라 움직인다
   if(S.running && !gpsMode && !_fdrPlaying && S.lastT!==null){
     const _raw=(ts-S.lastT)/1000;
     // 배속: 한 프레임에 흐르게 할 시뮬 시간 = 실제 경과시간 × simSpeed.
@@ -653,10 +654,16 @@ function simStep(ts, noLoop){   // noLoop — 새 창이 대신 한 프레임을
   }
 
   // Ship movement (wind-independent)
+  // 롤·피칭(흔들리는 갑판) — 시뮬이 도는 동안만 흐른다
+  if (shipVisible && S.running && S.lastT !== null) {
+    const mdt = (ts - S.lastT) / 1000 * simSpeed;
+    if (mdt > 0 && mdt < 0.5 * simSpeed) { try { shipMotionStep(mdt); } catch (e) { _swallow(e); } }
+  }
   if (shipVisible && shipMarker && shipSpd > 0 && S.lastT !== null) {
     const sdt = (ts - S.lastT) / 1000 * simSpeed;   // 배가 항공기와 같은 시간을 흐르게
     if (sdt > 0 && sdt < 0.5 * simSpeed) {
-      const [nLat, nLon] = destPoint(shipLat, shipLon, shipHdg, shipSpd * sdt / 3600);
+      shipVarStep(sdt);                               // 난이도만큼 속도가 흔들린다
+      const [nLat, nLon] = destPoint(shipLat, shipLon, shipHdg, shipSpdNow() * sdt / 3600);
       // 갑판에 앉아 있는 헬기는 함정과 함께 간다(일시정지 중에도 — 함정은 계속 가므로)
       if (typeof simOnDeck === 'function' && simOnDeck()) {
         S.lat += nLat - shipLat; S.lon += nLon - shipLon;

@@ -559,4 +559,45 @@ export async function run(page, t) {
     return o;
   });
   t.ok(sc.open && sc.panel === 'block' && !sc.after.open && sc.after.panel === 'none', 'SHIP 버튼으로 메뉴를 닫으면 배 설정창도 함께 닫힌다');
+
+  // 함정 TACAN(I-SHP · 110X) — 국이 함정을 따라 움직이고, 코스는 함정 침로
+  const tac = await page.evaluate(async () => {
+    if (simModeOn) toggleSimMode(false);
+    if (!shipVisible) shipToggleOn();
+    shipLat = 37.0; shipLon = 126.0; shipHdg = 90; shipSpd = 0; updateShipMarker();
+    setNavRadio('NAV1', '110X', null); setNavSrc('NAV1');
+    const o = { id: navRadios.NAV1.id, ship: navRadios.NAV1.ship, lat0: navLat - shipLat };
+    shipLat += 0.01; shipHdg = 120; shipTacanSync();
+    o.follow = Math.abs(navLat - shipLat) < 1e-9 && Math.abs(normAS(vorObsCrs - 120)) < 0.01;
+    // 붉은 판독이 I-SHP 를 가리킨다
+    const texts = [], orig = ctx.fillText;
+    ctx.fillText = function (t, ...a) { texts.push(String(t)); return orig.call(this, t, ...a); };
+    const hp0 = hoverPageOn; hoverPageOn = true;                       // 붉은 지시는 HOVER PAGE 에 있다
+    try { drawPFD(); } finally { ctx.fillText = orig; hoverPageOn = hp0; }
+    o.red = texts.some(t => /^I-SHP\s+R\d{3}/.test(t)); o.noShip = !texts.some(t => /^SHIP\s+R/.test(t));
+    setNavSrc('FMS'); setNavRadio('NAV1', '115.50', 'SEL');
+    return o;
+  });
+  t.ok(tac.id === 'I-SHP' && tac.ship && Math.abs(tac.lat0) < 1e-9, `110X 로 함정 TACAN(I-SHP)이 잡힌다 (${tac.id})`);
+  t.ok(tac.follow, '함정이 움직이고 돌면 국 위치와 코스(함정 침로)가 따라간다');
+  t.ok(tac.red && tac.noShip, 'HSI 의 따로 그리던 함정 표시는 없고, 붉은 판독이 I-SHP 를 가리킨다');
+
+  // 롤·피칭 · 난이도
+  const mot = await page.evaluate(() => {
+    shipLat = 37.0; shipLon = 126.0; shipHdg = 0; shipSpd = 10; updateShipMarker();
+    const n0 = SHIP3D_PARTS.length;
+    shipRollAmp = 10; shipPitchAmp = 5; shipMotT = SHIP_ROLL_T / 4;      // 롤이 우현으로 다 기운 때
+    const m = shipMotion();
+    const at = (x, f) => shipDeckTopM(shipLat + f / 111320, shipLon + x / (111320 * Math.cos(shipLat * Math.PI / 180)));
+    const o = { roll: m.roll, right: at(8, -30), left: at(-8, -30), n: _ship3dGeo().features.length, n0 };
+    shipRollAmp = 0; shipPitchAmp = 0; shipMotT = 0;
+    shipSetLvl('HI'); let k = 0; const rnd = () => (k++ % 2 ? 0.9 : 0.1);
+    for (let i = 0; i < 400; i++) shipVarStep(0.5, rnd);
+    o.var = shipSpdNow(); shipSetLvl('LO'); o.lo = shipSpdNow(); shipSpd = 0;
+    return o;
+  });
+  t.ok(Math.abs(mot.roll - 10) < 0.01 && mot.left - mot.right > 2.5,
+    `롤 10° 면 우현 갑판이 내려간다 (좌 ${mot.left.toFixed(1)} · 우 ${mot.right.toFixed(1)}m)`);
+  t.ok(mot.n > mot.n0 + 50, `흔들리는 동안 3D 선체·갑판을 칸으로 잘라 기울여 그린다 (${mot.n0} → ${mot.n}면)`);
+  t.ok(Math.abs(mot.var - 10) > 0.5 && Math.abs(mot.var - 10) <= 2 && mot.lo === 10, `난이도 상은 ±2kt 안에서 속도가 흔들리고 하는 그대로 (${mot.var.toFixed(1)} · ${mot.lo}kt)`);
 }

@@ -271,6 +271,70 @@ let shipHdg = 0, shipSpd = 0;
 let shipMarker = null, shipVisible = false, shipDragging = false;
 let shipInputMode = 'SPD', shipInput = '';
 
+// ── 난이도(상·중·하) — 배 속도의 흔들림(Flightsimulator 와 같다) ──
+// 실제 배는 설정 속도를 그대로 지키지 못하고 너울·조타로 조금씩 빨라졌다 느려졌다 한다.
+//   하: 흔들림 없음 · 중: ±1kt · 상: ±2kt — 15~40초마다 새 목표를 골라 0.1kt/s 로 천천히 다가간다.
+const SHIP_LVL_KT = { HI: 2, MID: 1, LO: 0 };
+const SHIP_VAR_RATE = 0.1;
+let shipLvl = 'LO';
+try { const v = localStorage.getItem('shipLvl'); if (v && SHIP_LVL_KT[v] !== undefined) shipLvl = v; } catch (e) { _swallow(e); }
+let shipVar = 0, shipVarTgt = 0, shipVarNext = 0;
+function shipSpdNow() { return shipSpd > 0 ? Math.max(0, shipSpd + shipVar) : 0; }
+function shipVarStep(dt, rnd) {
+  const A = SHIP_LVL_KT[shipLvl] || 0;
+  if (!A) { shipVar = shipVarTgt = shipVarNext = 0; return; }
+  rnd = rnd || Math.random;
+  shipVarNext -= dt;
+  if (shipVarNext <= 0) {
+    shipVarTgt = (rnd() < 0.5 ? -1 : 1) * A * (0.5 + 0.5 * rnd());
+    shipVarNext = 15 + 25 * rnd();
+  }
+  const d = shipVarTgt - shipVar, m = SHIP_VAR_RATE * dt;
+  shipVar = Math.abs(d) <= m ? shipVarTgt : shipVar + Math.sign(d) * m;
+  shipVar = Math.max(-A, Math.min(A, shipVar));
+}
+function shipSetLvl(lvl) {
+  if (SHIP_LVL_KT[lvl] === undefined) return;
+  shipLvl = lvl;
+  try { localStorage.setItem('shipLvl', lvl); } catch (e) { _swallow(e); }
+  const A = SHIP_LVL_KT[lvl];
+  shipVar = Math.max(-A, Math.min(A, shipVar)); shipVarTgt = shipVar; shipVarNext = 0;
+  if (!A) shipVar = shipVarTgt = 0;
+  updateShipStatus();
+}
+
+// ── 롤·피칭(너울에 흔들리는 갑판) — 설정창 ROLL(최대 10°) · PITCH(최대 5°) ──
+// 롤은 9초, 피칭은 6.5초 주기로 흔든다. 갑판 높이(착함 바닥)와 3D 모형이 함께 기울고,
+// 갑판에 앉은 헬기도 그 자세로 기운다.
+const SHIP_ROLL_MAX = 10, SHIP_PITCH_MAX = 5, SHIP_ROLL_T = 9, SHIP_PITCH_T = 6.5;
+let shipRollAmp = 0, shipPitchAmp = 0, shipMotT = 0;
+try {
+  const a = JSON.parse(localStorage.getItem('shipMotion') || 'null');
+  if (a && Number.isFinite(a.r) && Number.isFinite(a.p)) {
+    shipRollAmp = Math.max(0, Math.min(SHIP_ROLL_MAX, a.r)); shipPitchAmp = Math.max(0, Math.min(SHIP_PITCH_MAX, a.p));
+  }
+} catch (e) { _swallow(e); }
+function shipMotionOn() { return shipRollAmp > 0 || shipPitchAmp > 0; }
+// 지금 함정의 롤(°, 우현이 내려가면 +) · 피치(°, 함수가 들리면 +)
+function shipMotion() {
+  return { roll: shipRollAmp * Math.sin(2 * Math.PI * shipMotT / SHIP_ROLL_T),
+           pitch: shipPitchAmp * Math.sin(2 * Math.PI * shipMotT / SHIP_PITCH_T + 1) };
+}
+// 함정 좌표 [오른쪽 +, 함미 쪽 +](m)에서 갑판이 오르내린 높이(m)
+function shipHeaveAt(x, y) {
+  if (!shipMotionOn()) return 0;
+  const m = shipMotion();
+  return -x * Math.sin(m.roll * D2R) + (-y) * Math.sin(m.pitch * D2R);
+}
+let _shipMot3dT = 0;
+// 시뮬 시간만큼 흔들림을 진행한다(07-sim.js — 일시정지 중에는 멈춘다)
+function shipMotionStep(dt) {
+  if (!shipVisible || !shipMotionOn() || !(dt > 0)) return;
+  shipMotT += dt;
+  const now = performance.now();
+  if (now - _shipMot3dT > 66) { _shipMot3dT = now; try { updateShip3d(); } catch (e) { _swallow(e); } }
+}
+
 function shipIcon() {
   return L.divIcon({
     html: `<div data-act="openShipPanel" style="transform:rotate(${shipHdg}deg);transform-origin:12px 20px;line-height:0;cursor:pointer;"><svg width="24" height="40" viewBox="0 0 24 40" xmlns="http://www.w3.org/2000/svg"><path d="M12 1 Q20 7 21 17 L21 33 Q21 39 12 39 Q3 39 3 33 L3 17 Q4 7 12 1Z" fill="#2f7d4a" stroke="#f2f3f4" stroke-width="1.5"/><rect x="8" y="13.8" width="8" height="10" rx="2" fill="#fafafa" stroke="#23418f" stroke-width="0.7"/><circle cx="12" cy="5" r="2.5" fill="#e3e5e7" opacity="0.9"/><line x1="12" y1="1" x2="12" y2="39" stroke="#88ccff" stroke-width="0.5" stroke-dasharray="2,3" opacity="0.4"/></svg></div>`,
@@ -375,6 +439,12 @@ function shipPlaceHeli() {
   try { const m = document.getElementById('ship-menu'); if (m) m.classList.remove('open'); } catch (e) { _swallow(e); }
   try { uiToast('헬기를 함정 갑판(착함 원)에 앉혔습니다', '', 2500); } catch (e) { _swallow(e); }
 }
+// 함정이 흔들리는 동안 그 위 헬기가 느끼는 갑판 자세(헬기 기수 기준) — 피치(기수 들림 +) · 뱅크(오른쪽 내림 +)
+function shipDeckAttitude(hdg) {
+  if (!shipMotionOn()) return { pitch: 0, bank: 0 };
+  const m = shipMotion(), rel = normAS(hdg - shipHdg) * D2R;
+  return { pitch: m.pitch * Math.cos(rel) - m.roll * Math.sin(rel), bank: m.roll * Math.cos(rel) + m.pitch * Math.sin(rel) };
+}
 function createShipMarker() {
   shipMarker = L.marker([shipLat, shipLon], { icon: shipIcon(), draggable: true, zIndexOffset: 500 }).addTo(leafMap);
   shipMarker.on('drag', e => { shipLat = e.latlng.lat; shipLon = e.latlng.lng; shipDragging = true; updateShip3d(); });
@@ -405,22 +475,27 @@ function openShipPanel() {
 
 function shipSetMode(mode) {
   shipInputMode = mode; shipInput = '';
-  ['SPD','CRS'].forEach(m => {
-    document.getElementById('ship-tab-' + m.toLowerCase()).classList.toggle('ship-tab-active', m === mode);
+  ['SPD','CRS','ROLL','PITCH'].forEach(m => {
+    const b = document.getElementById('ship-tab-' + m.toLowerCase());
+    if (b) b.classList.toggle('ship-tab-active', m === mode);
   });
-  const units = { SPD: 'kt · max 50', CRS: '° · 000–359' };
+  const units = { SPD: 'kt · max 50', CRS: '° · 000–359', ROLL: '° · 롤 max 10', PITCH: '° · 피칭 max 5' };
   document.getElementById('ship-unit').textContent = units[mode];
   updateShipDisplay();
 }
 
 function updateShipDisplay() {
-  const cur = shipInputMode === 'SPD' ? String(shipSpd) : fmtA(toMag(shipHdg));
+  const cur = shipInputMode === 'SPD' ? String(shipSpd) : shipInputMode === 'ROLL' ? String(shipRollAmp)
+            : shipInputMode === 'PITCH' ? String(shipPitchAmp) : fmtA(toMag(shipHdg));
   document.getElementById('ship-display').textContent = shipInput || cur;
 }
 
 function updateShipStatus() {
-  document.getElementById('ship-stat-spd').textContent = shipSpd + 'kt';
+  document.getElementById('ship-stat-spd').textContent = shipSpd + 'kt' + (shipVar ? ` (${shipSpdNow().toFixed(1)})` : '');
   document.getElementById('ship-stat-crs').textContent = fmtA(toMag(shipHdg)) + '°';
+  const mo = document.getElementById('ship-stat-mot');
+  if (mo) mo.textContent = `±${shipRollAmp}° / ±${shipPitchAmp}°`;
+  document.querySelectorAll('.ship-lvl').forEach(b => b.classList.toggle('ship-tab-active', b.dataset.lvl === shipLvl));
 }
 
 function shipKey(k) {
@@ -429,6 +504,12 @@ function shipKey(k) {
     const v = parseInt(shipInput, 10);
     if (!isNaN(v)) {
       if (shipInputMode === 'SPD')      shipSpd = Math.min(50, Math.max(0, v));
+      else if (shipInputMode === 'ROLL' || shipInputMode === 'PITCH') {
+        if (shipInputMode === 'ROLL') shipRollAmp = Math.min(SHIP_ROLL_MAX, Math.max(0, v));
+        else shipPitchAmp = Math.min(SHIP_PITCH_MAX, Math.max(0, v));
+        try { localStorage.setItem('shipMotion', JSON.stringify({ r: shipRollAmp, p: shipPitchAmp })); } catch (e) { _swallow(e); }
+        try { updateShip3d(); } catch (e) { _swallow(e); }
+      }
       else if (shipInputMode === 'CRS') {
         const was = shipHdg;
         shipHdg = toTrue(v);                         // 입력은 자북 → 내부는 진북
@@ -643,16 +724,55 @@ function _ship3dLngLat([xr, ya]) {
   const east = -ya * sh + xr * ch, north = -ya * ch - xr * sh;
   return [shipLon + east / (111320 * Math.cos(shipLat * D2R)), shipLat + north / 111320];
 }
+// 볼록 다각형을 축에 나란한 사각형으로 자른다(Sutherland–Hodgman)
+function _ship3dClip(ring, x0, x1, y0, y1) {
+  let out = ring.slice(0, -1);
+  const edge = (inside, cut) => {
+    const res = [];
+    for (let i = 0; i < out.length; i++) {
+      const a = out[i], b = out[(i + 1) % out.length], ia = inside(a), ib = inside(b);
+      if (ia) res.push(a);
+      if (ia !== ib) res.push(cut(a, b));
+    }
+    out = res;
+  };
+  const lx = (a, b, x) => [x, a[1] + (b[1] - a[1]) * (x - a[0]) / (b[0] - a[0])];
+  const ly = (a, b, y) => [a[0] + (b[0] - a[0]) * (y - a[1]) / (b[1] - a[1]), y];
+  edge(p => p[0] >= x0, (a, b) => lx(a, b, x0)); if (out.length < 3) return null;
+  edge(p => p[0] <= x1, (a, b) => lx(a, b, x1)); if (out.length < 3) return null;
+  edge(p => p[1] >= y0, (a, b) => ly(a, b, y0)); if (out.length < 3) return null;
+  edge(p => p[1] <= y1, (a, b) => ly(a, b, y1)); if (out.length < 3) return null;
+  out.push(out[0]);
+  return out;
+}
+const SHIP3D_GRID = ['hull', 'boot', 'deck'];   // 롤·피칭 때 칸으로 잘라 기울여 보이는 부분(넓은 판)
 function _ship3dGeo() {
   if (!shipVisible || shipLat === null) return { type: 'FeatureCollection', features: [] };
-  return {
-    type: 'FeatureCollection',
-    features: SHIP3D_PARTS.map(p => ({
-      type: 'Feature', properties: { h: p.h, b: p.b || 0, c: p.c, k: p.k },
-      geometry: { type: 'Polygon',
-                  coordinates: [p.ring.map(_ship3dLngLat)].concat(p.hole ? [p.hole.map(_ship3dLngLat)] : []) },
-    })),
-  };
+  const feat = (ring, hole, h, b, c, k) => ({
+    type: 'Feature', properties: { h, b: Math.max(0, b), c, k },
+    geometry: { type: 'Polygon', coordinates: [ring.map(_ship3dLngLat)].concat(hole ? [hole.map(_ship3dLngLat)] : []) } });
+  if (!shipMotionOn()) return { type: 'FeatureCollection', features: SHIP3D_PARTS.map(p => feat(p.ring, p.hole, p.h, p.b || 0, p.c, p.k)) };
+  // 롤·피칭 — 넓은 판(선체·선저·갑판)은 칸(앞뒤 10 · 좌우 4)으로 잘라 칸마다 오르내리고,
+  // 나머지는 제 한가운데 높이만큼 통째로 오르내린다(지도 돌출은 기울일 수 없어 계단처럼 기운다)
+  const out = [];
+  SHIP3D_PARTS.forEach(p => {
+    const b0 = p.b || 0;
+    if (SHIP3D_GRID.includes(p.k)) {
+      const NX = 4, NY = 10, X = SHIP3D_BEAM / 2 + 0.5, Y = SHIP3D_LEN / 2 + 0.5;
+      for (let i = 0; i < NX; i++) for (let j = 0; j < NY; j++) {
+        const x0 = -X + 2 * X * i / NX, x1 = -X + 2 * X * (i + 1) / NX, y0 = -Y + 2 * Y * j / NY, y1 = -Y + 2 * Y * (j + 1) / NY;
+        const c = _ship3dClip(p.ring, x0, x1, y0, y1);
+        if (!c) continue;
+        const hv = shipHeaveAt((x0 + x1) / 2, (y0 + y1) / 2);
+        out.push(feat(c, null, p.h + hv, b0 ? b0 + hv : 0, p.c, p.k));
+      }
+      return;
+    }
+    let cx = 0, cy = 0; p.ring.forEach(q => { cx += q[0]; cy += q[1]; }); cx /= p.ring.length; cy /= p.ring.length;
+    const hv = shipHeaveAt(cx, cy);
+    out.push(feat(p.ring, p.hole, p.h + hv, b0 ? b0 + hv : 0, p.c, p.k));
+  });
+  return { type: 'FeatureCollection', features: out };
 }
 // 그 자리 바로 아래에 있는 함정 부분의 윗면 높이(m, 수면 위) — 갑판 7m · 함수
 // 구조물 10m · 함교 17m. 함정 밖이면 null. 착함(14-simmode.js)이 이것을 바닥으로 쓴다.
@@ -676,7 +796,7 @@ function shipDeckTopM(lat, lon) {
     if (p.line || p.deco || !inside(p.ring)) return;    // 중심선·비행갑판 표시·꾸밈은 바닥이 아니다
     if (top === null || p.h > top) top = p.h;
   });
-  return top;
+  return top === null ? null : top + shipHeaveAt(x, y);   // 롤·피칭으로 오르내린 만큼
 }
 // 함정이 침로를 바꾸면 갑판에 앉아 있는 헬기도 함정 중심을 축으로 같이 돈다
 function _shipCarryTurn(d) {
@@ -4075,7 +4195,9 @@ function act(name, ...args) {
         // 로컬라이저는 공항끼리 주파수가 겹친다 — 이름으로 고르면 그 국이 확실히 잡힌다.
         const locs = (typeof LOC_STATIONS !== 'undefined' ? LOC_STATIONS : []);
         const locRows = locs.map(v => row(v.id, `${v.name} RWY ${v.rwy} LOC`, v.freq, '#f06292')).join('');
-        const rows = grp('VOR · VORTAC') + vorRows +
+        // 함정 TACAN — 움직이는 함정이 국(로컬라이저 꼴 · 고정 채널 110X)
+        const shipRow = row('I-SHP', '함정 TACAN (함정 따라 움직임)', '110X', '#ff5a5a');
+        const rows = grp('함정 TACAN') + shipRow + grp('VOR · VORTAC') + vorRows +
                      (locRows ? grp(`로컬라이저(LOC) — ${locs.length}개소`) + locRows : '');
         container.innerHTML = `<div style="padding:8px 6px;overflow-y:auto;height:100%;">
             <div style="color:#9fb4c8;font-size:10px;margin-bottom:8px;">현재: <b style="color:#00e5ff;">${cur.id||'----'} ${cur.act||''}</b>
