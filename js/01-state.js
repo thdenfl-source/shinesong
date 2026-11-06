@@ -172,10 +172,16 @@ const TQ_LIMIT   = 100;        // 연속 사용 한계 — 여기까지 녹색
 const TQ_RED     = 113;        // 이 위는 빨강 — 오버토크
 const TQ_RATE    = 2000;        // 토크가 따라가는 최대 빠르기(%/s) — 종전 60 의 2배
 const TQ_PER_FPM = 55;         // 남는 토크 1% 당 상승률(fpm)
-const TQ_BANK    = 22;         // 뱅크로 더 드는 토크(1/cosφ−1 에 곱한다)
-const TQ_TLIFT   = 9;          // 전진 양력으로 덜 드는 토크(최대 %)
-const TLIFT_KT0  = 20;         // 이 속도까지는 전진 양력 몫이 없다
-const TLIFT_KT   = 55;         // 그 효과가 다 차는 속도(kt)
+// ── 필요 동력 곡선(U 자) ── 호버 동력 H 를 유도(induced) 몫과 그 밖(형상·꼬리로터·보기)으로 나눈다.
+//   유도 몫  = H·PW_IND · (vi/vi0) · n²   — 운동량 이론: 앞으로 날수록 내리흐름이 줄어 덜 든다(ETL).
+//                                            선회(하중배수 n = 1/cosφ)에는 추력² 로 는다.
+//   그 밖    = H·(1−PW_IND) · n
+//   유해 항력 = PW_PAR · V³               — 빨라질수록 세제곱으로 는다(최대 수평속도는 그날의 MTA 가 정한다)
+// 기준(H 77%)에서 호버 77% → 70kt 최소 약 48%(호버의 0.62) → 150kt 약 95% → 160kt 약 108%.
+const PW_IND  = 0.70;          // 호버 동력 가운데 유도 동력 몫
+const PW_VI0  = 25;            // 호버 유도속도(kt, H 77% 기준 — 무게가 늘면 √ 로 는다)
+const PW_PAR  = 1.874e-5;      // 유해 동력(% / kt³)
+const PW_ETL0 = 12, PW_ETL1 = 24;   // 회전익 특성 '속도·TQ 효율' — 이 사이(전이양력 지대)에서 유도 동력이 한꺼번에 준다
 
 // ── 제자리 호버에 필요한 토크 ──
 // CDU 의 PERF 화면이 고도·온도·중량으로 뽑아 주는 바로 그 값을 쓴다.
@@ -227,20 +233,19 @@ function hoverTqRef() {
 }
 
 // 지금 '수평 비행' 에 필요한 토크(%)
-function tqRequired() { return tqRequiredAt(S.spd, S.bnk); }
-// 그 속도·뱅크로 수평 비행할 때 필요한 토크(%) — 계기의 Vy 선도 이것으로 긋는다
+// (SIM 은 대기속도 — 옆걸음과 바람까지 담는다. simAirspeed · 14-simmode.js)
+function tqRequired() { return tqRequiredAt((simModeOn && typeof simAirspeed === 'function') ? simAirspeed() : S.spd, S.bnk); }
+// 운동량 이론의 유도속도 비(vi/vi0) — 전진 속도 V(kt), 호버 유도속도 vi0(kt)
+function pwViRatio(V, vi0) { const v = V / vi0; return Math.sqrt(Math.sqrt(v ** 4 / 4 + 1) - v * v / 2); }
+// 그 '대기속도'·뱅크로 수평 비행할 때 필요한 토크(%) — 계기의 Vy 선도 이것으로 긋는다
 function tqRequiredAt(spd, bnk) {
-  const bank = Math.min(60, Math.abs(bnk));
-  const lift = (1 / Math.cos(bank * D2R) - 1) * TQ_BANK;      // 선회 중 더 필요
-  // 전진 양력 — 20kt 까지는 호버와 같은 출력이 든다(같은 파워·같은 고도). 20kt 를 넘어 Vy 로 갈수록
-  // 드는 토크가 줄어, 같은 레버면 그만큼 상승률로 나타난다
-  let vy = TLIFT_KT;
-  try { const v = (typeof perfVy === 'function') ? perfVy() : null; if (Number.isFinite(v) && v > TLIFT_KT0 + 5) vy = v; } catch (e) { _swallow(e); }
-  // (SIM 회전익 특성 '속도·TQ 효율' 을 끄면 종전처럼 0kt 부터 고르게 준다)
-  const rcSpd = (typeof rcOn === 'function') && simModeOn && rcOn('spdTq');
-  const tl   = rcSpd ? Math.max(0, Math.min(1, (Math.abs(spd) - TLIFT_KT0) / (vy - TLIFT_KT0))) * TQ_TLIFT
-                     : Math.min(1, Math.abs(spd) / TLIFT_KT) * TQ_TLIFT;
-  return hoverTqRef() + lift - tl;
+  const H = hoverTqRef(), V = Math.abs(spd);
+  const n = 1 / Math.cos(Math.min(60, Math.abs(bnk)) * D2R);
+  let r = pwViRatio(V, PW_VI0 * Math.sqrt(Math.max(0.3, H / 77)));
+  // 회전익 특성 '속도·TQ 효율' — 전이양력(ETL)은 12~24kt 에서 한꺼번에 나타난다(그 아래는 호버와 같다)
+  if ((typeof rcOn === 'function') && simModeOn && rcOn('spdTq'))
+    r = 1 + (r - 1) * Math.max(0, Math.min(1, (V - PW_ETL0) / (PW_ETL1 - PW_ETL0)));
+  return H * (PW_IND * r * n * n + (1 - PW_IND) * n) + PW_PAR * V * V * V;
 }
 // 그날의 MTA(최대 가용 토크, %) — CDU PERF 의 MTA(30)(09-cdu.js perfMta).
 // PERF 의 고도·온도를 기준으로 지금 고도에서 셈한다. PERF 를 못 읽으면 계기 끝.
@@ -464,8 +469,10 @@ function toggleGspd() {
     // snaps the controlled state to (0, S.spd); the GSPD slew loop then
     // decelerates from there to refs=(0,0).
     if (!gspdCoasting) {
-      gspdActLat = simModeOn ? simLat : 0;   // SIM 모드는 옆걸음도 이어 받는다
-      gspdActFwd = S.spd;
+      // SIM 모드는 옆걸음도 이어 받는다. GSPD 는 땅에 대한 속도라, 대기속도에서 바람 몫을 뺀다
+      const w = (simModeOn && typeof simWindRel === 'function') ? simWindRel(!_simOnGnd) : { fwd: 0, lat: 0 };
+      gspdActLat = simModeOn ? simLat - w.lat : 0;
+      gspdActFwd = S.spd - w.fwd;
     }
     simIasOn = false;   // SIM 의 IAS 도 기수 자세를 쓰는 모드다 — GSPD 가 넘겨 받는다
     // References default to 0,0; the slew loop will decelerate.
@@ -483,7 +490,8 @@ function toggleGspd() {
     if (simModeOn) {
       // SIM 모드는 옆·뒤로 가는 것도 그대로 몬다 — 타력 비행 없이 바로 넘겨 받고,
       // 트림을 지금 속도에 맞춰 둬 조종간을 가운데 두면 그 속도로 계속 난다.
-      S.spd = gspdActFwd; simLat = gspdActLat; gspdCoasting = false;
+      const w = (typeof simWindRel === 'function') ? simWindRel(!_simOnGnd) : { fwd: 0, lat: 0 };   // 땅 → 대기속도
+      S.spd = gspdActFwd + w.fwd; simLat = gspdActLat + w.lat; gspdCoasting = false;
       try { simTrimHoldSpeed(); } catch (e) { _swallow(e); }
     } else if (Math.abs(gspdActLat) > 0.5 || gspdActFwd < 0) {
       gspdCoasting = true;
@@ -698,6 +706,9 @@ const WIND_LO = 30;  // S.spd at or below this → no wind effect
 const WIND_HI = 60;  // S.spd at or above this → full wind effect
 function windEffectFactor() {
   if (gspdOn || gspdCoasting) return 0;
+  // SIM 모드는 공중에 뜨면 늘 바람에 실린다(호버에서도) — 속도(S.spd·simLat)는 대기속도다.
+  // 바퀴가 땅·갑판에 붙어 있으면 밀리지 않는다(14-simmode.js 가 뜨고 앉을 때 바람 몫을 넘겨 준다).
+  if (simModeOn) return (typeof _simOnGnd !== 'undefined' && _simOnGnd) ? 0 : 1;
   if (S.spd <= WIND_LO) return 0;
   if (S.spd >= WIND_HI) return 1;
   return (S.spd - WIND_LO) / (WIND_HI - WIND_LO);

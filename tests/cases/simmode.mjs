@@ -195,7 +195,7 @@ export async function run(page, t) {
       // 자리에서 출발해 수렴하는지를 본다(점진성은 아래에서 따로 잰다).
       S.spd = Math.max(-40, Math.min(160, spdFromPitch(deg) + 15)); simAcc = 0;
       fly(25);
-      return { pit: S.pit, spd: S.spd, vs: S.vs };
+      return { pit: S.pit, spd: S.spd, vs: S.vs, rbsP: simRbs.p };
     };
     const level = hold(0);
     const four  = hold(4);
@@ -220,8 +220,8 @@ export async function run(page, t) {
     `기수 7.5° 면 35kt 다 (${trimSpd.seven.pit.toFixed(1)}° · ${trimSpd.seven.spd.toFixed(1)}kt)`);
   t.ok(Math.abs(trimSpd.down.pit + 10) < 0.6 && Math.abs(trimSpd.down.spd - 140) < 8,
     `기수를 10° 숙이면 140kt 다 (${trimSpd.down.pit.toFixed(1)}° · ${trimSpd.down.spd.toFixed(0)}kt)`);
-  t.ok(Math.abs(trimSpd.max.pit + 60) < 1.5,
-    `위아래 60° 까지 잡힌다 (${trimSpd.max.pit.toFixed(1)}°)`);
+  t.ok(Math.abs(trimSpd.max.pit - trimSpd.max.rbsP + 60) < 1.5,
+    `위아래 60° 까지 잡힌다 — VNE 를 넘긴 몫(후퇴익 실속 기수 들림 ${trimSpd.max.rbsP.toFixed(0)}°)은 빼고 (${trimSpd.max.pit.toFixed(1)}°)`);
   t.ok(Math.abs(trimSpd.level.vs) < 150 && Math.abs(trimSpd.four.vs) < 150,
     `그동안 고도는 지킨다 (${trimSpd.level.vs.toFixed(0)} · ${trimSpd.four.vs.toFixed(0)}fpm)`);
 
@@ -273,10 +273,13 @@ export async function run(page, t) {
     const lever = () => _ax(3, Math.max(-1, Math.min(1, tqRequired() / SIM_LEVER_TOP * 2 - 1)));
     lever(); fly(10); lever(); fly(10);            // 수평 120kt 에 자리잡는다(레버는 고도 유지)
     const lvl = { spd: S.spd, vs: S.vs, alt: S.alt };
-    const run = (sec) => {
+    // 레버는 그 속도의 수평 비행 토크를 따라 고친다 — 필요 동력 곡선(U 자)이 내는 몫은 빼고
+    // 운동에너지 ↔ 고도만 본다(레버를 그대로 두면 70kt 언저리에서 동력이 남아 따로 오른다)
+    const run = (sec, track) => {
       let maxVs = -Infinity, minVs = Infinity, vsMid = null;
       S.running = true; let ts = 1000; S.lastT = ts;
       for (let i = 1; i <= sec * 20; i++) {
+        if (track) lever();
         ts += 50; joyPoll(ts); simStep(ts);
         maxVs = Math.max(maxVs, S.vs); minVs = Math.min(minVs, S.vs);
       }
@@ -284,9 +287,9 @@ export async function run(page, t) {
       return { spd: S.spd, vs: S.vs, alt: S.alt, maxVs, minVs };
     };
     simTrim.pitch = -pitchFromSpd(60);             // 기수를 들어 60kt 자세로 → 감속(레버는 그대로)
-    const flare = run(40);
+    const flare = run(40, true);
     simTrim.pitch = 0;                             // 다시 수평 → 120kt 로 가속
-    const accel = run(60);
+    const accel = run(60, true);
     simTrimReset();
     // 땅 위에서 미끄러지다 서는 것은 고도가 되지 않는다
     joyAxes = { pitch: { i: 1, inv: false } };
@@ -455,7 +458,7 @@ export async function run(page, t) {
   t.ok(coll.gain > 60, `그만큼 고도가 오른다 (6초에 +${coll.gain.toFixed(0)}ft)`);
   t.ok(coll.up.vs > 900, `상승률이 붙는다 (${coll.up.vs.toFixed(0)}fpm)`);
   t.ok(coll.dn.tq < coll.tq0 - 20, `내리면 토크가 내려간다 (${coll.dn.tq.toFixed(0)}%)`);
-  t.ok(coll.dn.vs < -900, `그러면 강하한다 (${coll.dn.vs.toFixed(0)}fpm)`);
+  t.ok(coll.dn.vs < -700, `그러면 강하한다 (${coll.dn.vs.toFixed(0)}fpm)`);
   t.ok(coll.dn.alt < coll.up.alt, '고도도 다시 내려온다');
 
   // ── 기준 토크는 CDU PERF 자료에서 온다 ──
@@ -548,10 +551,10 @@ export async function run(page, t) {
     const lever = tq => _ax(3, Math.max(-1, Math.min(1, tq / SIM_LEVER_TOP * 2 - 1)));
     lever(tqRequired()); fly(10);
     const pow = () => S.vs - simKeVs(false);
-    // 남는 토크 +5% — 그 속도의 상승 폭대로 오른다
+    // 남는 토크 +5% — 곧게 비례해 오른다(1% = 44fpm)
     S.spd = 70; simAcc = 0; S.vs = 0; simVsAcc = 0; S.alt = 5000;
     lever(tqRequired() + 5); fly(10);
-    const up = { pow: pow(), want: simVsForTq(5), max: simClimbMax(), span: simClimbSpan() };
+    const up = { pow: pow(), want: simVsForTq(5), max: simClimbMax() };
     // 기수를 숙이고 레버를 끝까지 내린다
     simTrim.pitch = 10; S.spd = 120; simAcc = 0; S.vs = 0; simVsAcc = 0; S.alt = 8000;
     _ax(3, -1);
@@ -562,8 +565,8 @@ export async function run(page, t) {
     simTrimReset();
     return { up, minPow, minAll };
   })()`);
-  t.ok(coll2.up.want > 150 && coll2.up.want <= 251,
-    `토크 10% = 500fpm — 5% 면 250fpm(상승 효율만큼) (+5% → ${coll2.up.want.toFixed(0)}fpm)`);
+  t.ok(Math.abs(coll2.up.want - 220) < 1,
+    `상승률은 남는 토크에 곧게 비례한다 — 1% = 44fpm (+5% → ${coll2.up.want.toFixed(0)}fpm)`);
   t.ok(Math.abs(coll2.up.pow - coll2.up.want) < coll2.up.want * 0.05,
     `레버 +5% 면 그만큼 오른다 (${coll2.up.pow.toFixed(0)} · 기대 ${coll2.up.want.toFixed(0)}fpm)`);
   t.ok(coll2.minAll < -3300 && coll2.minAll >= -4000.01,
@@ -577,7 +580,8 @@ export async function run(page, t) {
     const fly = ${FLY};
     S.bnk = 0; S.alt = 4000; _simGndFt = 0;
     const V = perfVy();
-    const at = (kt) => { S.spd = kt; return simClimbEff(); };
+    // 100% 토크로 낼 상승률 — 필요 동력 곡선(U 자)이 가장 낮은 속도에서 가장 크다
+    const at = (kt) => { S.spd = kt; simLat = 0; return simClimbMax(); };
     const eff = { hover: at(0), slow: at(V - 30), best: at(V), fast: at(V + 30),
                   cruise: at(140) };
     // 실제로 날려서도 확인한다 — 같은 여유 토크, 다른 속도.
@@ -590,8 +594,8 @@ export async function run(page, t) {
       S.spd = kt; S.alt = 4000; S.vs = 0;
       fly(20);                                        // 그 속도로 자리잡을 때까지
       const settled = S.spd;
-      joyAxes.coll = { i: 3, inv: false, abs: true }; // 이제 레버를 쥐고 25% 더 준다
-      _ax(3, Math.max(-1, Math.min(1, (tqRequired() + 25) / SIM_LEVER_TOP * 2 - 1)));
+      joyAxes.coll = { i: 3, inv: false, abs: true }; // 이제 레버를 쥐고 같은 토크(95%)로 올린다
+      _ax(3, Math.max(-1, Math.min(1, 95 / SIM_LEVER_TOP * 2 - 1)));
       S.alt = 4000; fly(10);
       return { vs: S.vs, spd: settled };
     };
@@ -599,14 +603,13 @@ export async function run(page, t) {
     return { V, eff, flewBest, flewHover };
   })()`);
   t.ok(vy.V > 40 && vy.V < 110, `PERF 가 Vy 를 준다 (${vy.V.toFixed(0)}kt)`);
-  t.ok(Math.abs(vy.eff.best - 1) < 0.01, `Vy 에서 상승 효율이 가장 높다 (${vy.eff.best.toFixed(2)})`);
-  t.ok(vy.eff.slow < 0.95 && vy.eff.fast < 0.95,
-    `그보다 느리거나 빠르면 떨어진다 (−30kt ${vy.eff.slow.toFixed(2)} · +30kt ${vy.eff.fast.toFixed(2)})`);
-  t.ok(Math.abs(vy.eff.slow - vy.eff.fast) < 0.01, '양쪽으로 고르게 떨어진다');
-  t.ok(vy.eff.hover >= 0.3 && vy.eff.hover < vy.eff.slow,
-    `제자리에서는 가장 낮다 (${vy.eff.hover.toFixed(2)})`);
-  t.ok(vy.flewBest.vs > vy.flewHover.vs + 150,
-    `같은 여유 토크라도 Vy 에서 더 잘 오른다 ` +
+  t.ok(Math.abs(vy.eff.best - 2300) < 120, `Vy 언저리에서 100% 토크면 약 2,300fpm (${vy.eff.best.toFixed(0)}fpm)`);
+  t.ok(vy.eff.slow < vy.eff.best - 200 && vy.eff.fast < vy.eff.best - 100,
+    `그보다 느리거나 빠르면 필요 동력이 늘어 덜 오른다 (−30kt ${vy.eff.slow.toFixed(0)} · +30kt ${vy.eff.fast.toFixed(0)}fpm)`);
+  t.ok(Math.abs(vy.eff.hover - 1000) < 80 && vy.eff.hover < vy.eff.slow && vy.eff.cruise < vy.eff.fast,
+    `제자리(약 1,000fpm)와 고속(140kt ${vy.eff.cruise.toFixed(0)}fpm)에서 가장 덜 오른다 (제자리 ${vy.eff.hover.toFixed(0)}fpm)`);
+  t.ok(vy.flewBest.vs > vy.flewHover.vs + 800,
+    `같은 토크(95%)라도 Vy 에서 훨씬 잘 오른다 ` +
     `(${vy.flewHover.spd.toFixed(0)}kt ${vy.flewHover.vs.toFixed(0)}fpm → ` +
     `${vy.flewBest.spd.toFixed(0)}kt ${vy.flewBest.vs.toFixed(0)}fpm)`);
 
@@ -789,7 +792,7 @@ export async function run(page, t) {
     `레버를 끝까지 당겨도 토크는 MTA 에서 멈춘다 (레버 ${mta.top.cmd.toFixed(0)}% · 토크 ${mta.top.tq.toFixed(0)}% · MTA ${mta.top.mta.toFixed(0)}%)`);
   t.ok(mta.bit.nr < 99.9 && mta.bit.vs < mta.at.vs,
     `조금 넘기면 NR 이 처지며 덜 오른다 (+3% → NR ${mta.bit.nr.toFixed(1)}% · ${mta.bit.vs.toFixed(0)}fpm · MTA 에서 ${mta.at.vs.toFixed(0)}fpm)`);
-  t.ok(mta.more.low && mta.more.vs < -1000,
+  t.ok(mta.more.low && mta.more.vs < -500,
     `더 넘기면 RPM LOW 로 가라앉는다 (+8% → NR ${mta.more.nr.toFixed(1)}% · ${mta.more.vs.toFixed(0)}fpm)`);
   t.ok(mta.top.low && mta.top.vs <= mta.more.vs && mta.top.nr < mta.more.nr,
     `더 당길수록 더 처지고 더 빨리 가라앉는다 (끝까지 → NR ${mta.top.nr.toFixed(1)}% · ${mta.top.vs.toFixed(0)}fpm)`);
@@ -820,7 +823,7 @@ export async function run(page, t) {
     const low = grab();
     simNr = 100; simTqCmd = S.tq;
     const lbl = (rows, k) => rows.find(r => r.t === k);
-    return { vy: tqAtVy(), vyKt: perfVy(), mta: mtaNow(), hov: tqRequired(),
+    return { vy: tqAtVy(), vyKt: perfVy(), vyReq: tqRequiredAt(perfVy(), 0), mta: mtaNow(), hov: tqRequired(),
              calm: ['HOV', 'Vy', 'MTA'].map(k => { const r = lbl(calm, k); return r ? { col: r.col, y: r.y } : null; }),
              rpm: !!lbl(low, 'RPM LOW'), nr: (lbl(low, 'NR 94%') || {}).t, calmRpm: !!lbl(calm, 'RPM LOW') };
   })()`);
@@ -829,7 +832,7 @@ export async function run(page, t) {
   t.eq(lines.calm[2] && lines.calm[2].col, '#00e5ff', 'MTA 선은 PERF 화면의 MTA(30) 와 같은 청록색이다');
   t.ok(lines.calm[2].y < lines.calm[0].y && lines.calm[0].y < lines.calm[1].y,
     `위에서부터 MTA · HOV · Vy 차례다(제자리에서는 Vy 가 가장 덜 든다)`);
-  t.ok(Math.abs(lines.vy - (lines.hov - 9)) < 0.5 && lines.vyKt > 60,
+  t.ok(Math.abs(lines.vy - lines.vyReq) < 0.01 && lines.vy < lines.hov * 0.7 && lines.vyKt > 60,
     `Vy 선은 Vy(${lines.vyKt.toFixed(0)}kt)로 수평 비행할 때 필요한 토크다 (${lines.vy.toFixed(0)}% · 제자리 ${lines.hov.toFixed(0)}%)`);
   t.ok(!lines.calmRpm && lines.rpm && lines.nr === 'NR 94%',
     'NR 이 처지면 계기 가운데 RPM LOW 와 NR 값이 뜬다');
@@ -1576,7 +1579,7 @@ export async function run(page, t) {
         if (i % 20 === 0) { dec.push(-simAcc); spd.push(S.spd); }
       }
       S.running = false;
-      return { dec, spd, altMax, altMin };
+      return { dec, spd, altMax, altMin, end: S.alt - alt0 };
     };
     const down = run(-40), same = run(0);  // 퀵스톱 — 기수를 들며 컬렉티브를 크게(40%) 내린다
     simTrimReset();
@@ -1591,8 +1594,8 @@ export async function run(page, t) {
     `속도가 크게 준다 (120kt → 8초 ${fd.spd[7].toFixed(0)} · 12초 ${fd.spd[11].toFixed(0)}kt)`);
   t.ok(fd.altMax < 120 && fd.altMin > -120,
     `퀵스톱 — 기수를 들며 컬렉티브를 40% 내리면 같은 고도로 감속한다 (+${fd.altMax.toFixed(0)} / ${fd.altMin.toFixed(0)}ft)`);
-  t.ok(flare.same.altMax > fd.altMax + 60,
-    `레버를 그대로 두면 줄어든 속도만큼 떠오른다 (+${flare.same.altMax.toFixed(0)}ft)`);
+  t.ok(flare.same.end > fd.end + 60,
+    `레버를 그대로 두면 더 높이 남는다 — 내린 레버는 그만큼 고도로 치른다 (12초 뒤 ${flare.same.end.toFixed(0)} · 레버 내림 ${fd.end.toFixed(0)}ft)`);
   t.ok(fd.spd[4] < 110,
     `레버를 내려도 감속 중의 속도가 덜 줄지 않는다 (5초 ${fd.spd[4].toFixed(1)} · 레버 그대로 ${flare.same.spd[4].toFixed(1)}kt)`);
 
@@ -2281,7 +2284,7 @@ export async function run(page, t) {
     })();
     return { f20: run(100, 20), f30: run(100, 30), high: run(300, 20), good: run(100, 20, 26), pow };
   })()`);
-  t.ok(auto.f20.sink < -2400 && auto.f20.sink >= -4000, `80kt 에서 컬렉티브를 끝까지 내리면 크게 강하한다 (${auto.f20.sink.toFixed(0)}fpm)`);
+  t.ok(auto.f20.sink < -1500 && auto.f20.sink >= -2400, `80kt 에서 컬렉티브를 끝까지 내리면 오토로테이션 강하 — Vy 언저리라 가장 작다 (${auto.f20.sink.toFixed(0)}fpm)`);
   t.ok(auto.f20.best > auto.f20.sink, // 강하율 감소는 종전의 반
     `100ft 에서 20° 로 들면 강하가 거의 멎는다 (${auto.f20.bestAgl.toFixed(0)}ft 에서 ${auto.f20.best.toFixed(0)}fpm)`);
   t.ok(true,
@@ -2576,6 +2579,64 @@ export async function run(page, t) {
   t.ok(rc.yawTopCCW === 3, `CCW 로터는 반대(오른쪽) (${rc.yawTopCCW})`);
   t.ok(rc.pedOppCW === 2 && rc.pedWithCW === -2 && rc.pedOppCCW === 2, 'YAW TO PITCH — 로터 반대 페달 2° 들림 · 로터 방향 페달 2° 숙임');
   t.ok(rc.btn, 'CW/CCW 버튼이 토글된다');
+
+  // ── 동력·공기역학 — 필요 동력 곡선(U 자) · 선회 · 오토로테이션(NR) · OEI · 꼬리로터 · VRS · 바람 · VNE ──
+  const aero = await page.evaluate(`(() => {
+    (${SETUP.toString()})();
+    const fly = ${FLY};
+    const o = {};
+    joyAxes = { roll: { i: 0, inv: false }, pitch: { i: 1, inv: false }, yaw: { i: 2, inv: false }, coll: { i: 3, inv: false, abs: true } };
+    const lever = tq => _ax(3, Math.max(-1, Math.min(1, tq / SIM_LEVER_TOP * 2 - 1)));
+    const hold = kt => { S.spd = kt; simLat = 0; S.pit = pitchFromSpd(kt); simTrimHoldSpeed(); };
+    const req = kt => { S.spd = kt; simLat = 0; return tqRequired(); };
+    S.alt = 3000; S.bnk = 0;
+    o.req = { 0: req(0), 40: req(40), 70: req(70), 100: req(100), 150: req(150) };
+    S.spd = 100; o.bank45 = tqRequiredAt(100, 45) - tqRequiredAt(100, 0);
+    // 오토로테이션 — 80kt 에서 두 엔진 IDLE
+    hold(80); S.alt = 4000; lever(tqRequired()); fly(2);
+    simEng = 0; fly(1.5); o.decay = simNr;
+    lever(AUTO_LREF); fly(8); o.auto = { nr: simNr, vs: S.vs, tq: S.tq };
+    lever(0); fly(6); o.high = { nr: simNr, warn: simRotorHigh() };
+    simEng = 2; lever(tqRequired()); fly(4);
+    // OEI 정격
+    simEng = 1; simOeiT = 0; o.oei25 = simEngAvail() / mtaNow(); simOeiT = 200; o.oeiCont = simEngAvail() / mtaNow(); simEng = 2; simOeiT = 0;
+    // 꼬리로터 — 제자리에서 반토크 페달을 끝까지 차면 토크가 더 든다(레버는 그대로)
+    hold(0); S.alt = 3000; lever(tqRequired()); fly(3); const tq0 = S.tq;
+    _ax(2, rotorSign()); fly(2); o.tr = { d: S.tq - tq0, vs: S.vs }; _ax(2, 0); fly(2);
+    // VRS — 제자리에서 레버를 30% 내려 빠르게 가라앉다 다시 올리면 오르지 못한다
+    hold(0); S.alt = 3000; lever(tqRequired() - 30); fly(6); o.vrsIn = { on: simVrsOn(), vs: S.vs };
+    lever(tqRequired() + 15); fly(3); o.vrsPull = { on: simVrsOn(), vs: S.vs };
+    _ax(1, 0.25); fly(8); o.vrsOut = { on: simVrsOn(), spd: S.spd, vs: S.vs }; _ax(1, 0);
+    // 바람 — 제자리 자세면 바람에 실려 간다 · 맞바람으로 버티면(대기속도 20kt) ETL 로 덜 든다
+    hold(0); S.alt = 3000; S.hdg = 0; windDir = 0; windSpd = 20; lever(tqRequired()); fly(3);
+    { const l0 = S.lat; fly(5); o.windGs = (S.lat - l0) * 60 * 3600 / 5; }
+    o.windReqHover = tqRequired(); S.spd = 20; o.windReqInto = tqRequired(); windSpd = 0;
+    // VNE — 넘기면 후퇴익 쪽으로 구르고 기수가 든다
+    hold(140); S.alt = 2000; lever(mtaNow()); _ax(1, 0.5); fly(20);
+    o.vne = { over: simOverVne(), r: simRbs.r, p: simRbs.p, bnk: S.bnk, vne: simVne(2000) };
+    _ax(1, 0); simRbs = { r: 0, p: 0 }; simEng = 2;
+    return o;
+  })()`);
+  t.ok(aero.req[70] < aero.req[40] && aero.req[70] < aero.req[100] && aero.req[150] > aero.req[100] + 25 && aero.req[0] > aero.req[40],
+    `필요 동력은 U 자 — 제자리 ${aero.req[0].toFixed(0)} · 40kt ${aero.req[40].toFixed(0)} · 70kt ${aero.req[70].toFixed(0)} · 100kt ${aero.req[100].toFixed(0)} · 150kt ${aero.req[150].toFixed(0)}%`);
+  t.ok(aero.req[70] / aero.req[0] < 0.7 && Math.abs(aero.req[150] - 95) < 6,
+    `최소 동력은 제자리의 70% 아래 · 150kt 는 MCP 언저리 (${(aero.req[70] / aero.req[0]).toFixed(2)} · ${aero.req[150].toFixed(0)}%)`);
+  t.ok(aero.bank45 > 18 && aero.bank45 < 30, `45° 선회는 100kt 에서 토크가 약 +20% 더 든다 (+${aero.bank45.toFixed(1)}%)`);
+  t.ok(aero.decay < 88, `엔진이 멎었는데 레버를 그대로 두면 NR 이 곧 처진다 (1.5초 ${aero.decay.toFixed(0)}%)`);
+  t.ok(Math.abs(aero.auto.nr - 100) < 2 && aero.auto.vs < -1500 && aero.auto.vs > -2400 && aero.auto.tq < 1,
+    `레버를 내려 오토로테이션 — NR ${aero.auto.nr.toFixed(0)}% · 강하 ${aero.auto.vs.toFixed(0)}fpm`);
+  t.ok(aero.high.nr > 105 && aero.high.warn, `레버를 다 내리면 NR 이 넘친다(NR HIGH) (${aero.high.nr.toFixed(0)}%)`);
+  t.ok(Math.abs(aero.oei25 - 0.73) < 0.01 && Math.abs(aero.oeiCont - 0.64) < 0.01,
+    `OEI — 2.5분 정격 ${Math.round(aero.oei25 * 100)}% · 그 뒤 연속 ${Math.round(aero.oeiCont * 100)}%(AEO MTA 대비)`);
+  t.ok(aero.tr.d > 4 && aero.tr.d < 7 && Math.abs(aero.tr.vs) < 60,
+    `꼬리로터 — 제자리에서 반토크 페달을 다 차면 토크 +${aero.tr.d.toFixed(1)}%(고도는 그대로 ${aero.tr.vs.toFixed(0)}fpm)`);
+  t.ok(aero.vrsIn.on && aero.vrsIn.vs < -1500, `제자리에서 출력을 건 채 빠르게 가라앉으면 VRS (${aero.vrsIn.vs.toFixed(0)}fpm)`);
+  t.ok(aero.vrsPull.on && aero.vrsPull.vs < -800, `VRS 에서는 레버를 올려도 오르지 못한다 (${aero.vrsPull.vs.toFixed(0)}fpm)`);
+  t.ok(!aero.vrsOut.on && aero.vrsOut.spd > 20, `앞으로 속도를 붙이면 빠져나온다 (${aero.vrsOut.spd.toFixed(0)}kt · ${aero.vrsOut.vs.toFixed(0)}fpm)`);
+  t.ok(Math.abs(aero.windGs + 20) < 1, `제자리 자세로 떠 있으면 바람(20kt)에 실려 간다 (남쪽으로 ${(-aero.windGs).toFixed(1)}kt)`);
+  t.ok(aero.windReqInto < aero.windReqHover - 5, `맞바람 20kt 를 받고 버티면 전이양력으로 토크가 덜 든다 (${aero.windReqHover.toFixed(0)} → ${aero.windReqInto.toFixed(0)}%)`);
+  t.ok(aero.vne.over && aero.vne.r > 5 && aero.vne.p > 3 && Math.sign(aero.vne.bnk) === 1,
+    `VNE(${aero.vne.vne}kt)를 넘기면 후퇴익 쪽(CW → 오른쪽)으로 구르고 기수가 든다 (뱅크 ${aero.vne.bnk.toFixed(0)}° · 롤 몫 ${aero.vne.r.toFixed(0)}° · 피치 몫 ${aero.vne.p.toFixed(0)}°)`);
 
   // 뒷정리 — 다음 검사가 SIM 모드·가짜 패드를 물려받지 않도록
   await page.evaluate(() => {
