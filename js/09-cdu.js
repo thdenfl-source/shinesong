@@ -320,11 +320,14 @@ function shipMotion() {
   return { roll: shipRollAmp * Math.sin(2 * Math.PI * shipMotT / SHIP_ROLL_T),
            pitch: shipPitchAmp * Math.sin(2 * Math.PI * shipMotT / SHIP_PITCH_T + 1) };
 }
-// 함정 좌표 [오른쪽 +, 함미 쪽 +](m)에서 갑판이 오르내린 높이(m)
-function shipHeaveAt(x, y) {
+// 함정 좌표 [오른쪽 +, 함미 쪽 +](m) · 높이 h(m, 기본 갑판)의 점이 롤·피칭으로 오르내린 높이(m).
+// 3D 모형(_ship3dLayer)과 똑같은 회전(갑판 높이 · 함정 가운데를 축으로)으로 셈한다 — 그래야 갑판에
+// 앉은 헬기가 그려진 갑판에서 뜨거나 묻히지 않는다.
+function shipHeaveAt(x, y, h) {
   if (!shipMotionOn()) return 0;
-  const m = shipMotion();
-  return -x * Math.sin(m.roll * D2R) + (-y) * Math.sin(m.pitch * D2R);
+  const m = shipMotion(), R = heli3dRot(0, m.pitch, m.roll);
+  const v = [-y, x, (h == null ? SHIP3D_DECK : h) - SHIP3D_DECK];
+  return R[2][0] * v[0] + R[2][1] * v[1] + R[2][2] * v[2] - v[2];
 }
 let _shipMot3dT = 0;
 // 시뮬 시간만큼 흔들림을 진행한다(07-sim.js — 일시정지 중에는 멈춘다)
@@ -745,7 +748,9 @@ function _ship3dGeo() {
 function _shipHexRgb(h) { const n = parseInt(h.slice(1), 16); return [(n >> 16 & 255) / 255, (n >> 8 & 255) / 255, (n & 255) / 255]; }
 function _ship3dBuildMesh() {
   const m = [];
-  const M = ([x, y], z) => [-y, x, z];                       // 함정 좌표(오른쪽 · 함미) → 모형(앞 X · 오른쪽 Y · 위 Z)
+  // 함정 좌표(오른쪽 · 함미) → 모형(앞 X · 오른쪽 Y · 위 Z). 원점은 함정 가운데 '갑판 높이' — 롤·피칭의 축이다
+  // (갑판 위 점이 옆으로 밀리지 않아 앉은 헬기와 어긋나지 않는다).
+  const M = ([x, y], z) => [-y, x, z - SHIP3D_DECK];
   const put = (p, n, c) => m.push(p[0], p[1], p[2], n[0], n[1], n[2], c[0], c[1], c[2], 0);
   const tri = (a, b, c, n, col) => { put(a, n, col); put(b, n, col); put(c, n, col); };
   SHIP3D_PARTS.forEach(p => {
@@ -783,6 +788,30 @@ function _ship3dBuildMesh() {
   });
   return m;
 }
+// ── 수평 지시등(HRS · Horizon Reference System) ──
+// 함교 뒷면 파란 띠 위에 전구 20개를 가로로 늘어놓은 막대. 안정화되어 함정이 롤을 해도 늘 참 수평을
+// 가리킨다 — 헬기에서 보면 막대와 함정(갑판·함교)이 어긋나는 만큼이 롤이다. 스스로 빛난다(재질 −1).
+const SHIP_HRS_N = 20, SHIP_HRS_PITCH = 0.5;                       // 전구 개수 · 간격(m)
+const SHIP_HRS_AT = [0, -SHIP3D_BRIDGE_AFT + 0.35, SHIP3D_DECK + 8.9];   // 막대 가운데(함정 좌표 x · y(함미 +) · 높이)
+function _shipBox(m, c, sz, col, mat) {
+  const [cx, cy, cz] = c, [hx, hy, hz] = sz.map(v => v / 2);
+  const P = (i, j, k) => [cx + i * hx, cy + j * hy, cz + k * hz];
+  const face = (n, a, b, cc, d) => [[a, b, cc], [a, cc, d]].forEach(t => t.forEach(p => m.push(p[0], p[1], p[2], n[0], n[1], n[2], col[0], col[1], col[2], mat)));
+  face([1, 0, 0], P(1, -1, -1), P(1, 1, -1), P(1, 1, 1), P(1, -1, 1));
+  face([-1, 0, 0], P(-1, 1, -1), P(-1, -1, -1), P(-1, -1, 1), P(-1, 1, 1));
+  face([0, 1, 0], P(1, 1, -1), P(-1, 1, -1), P(-1, 1, 1), P(1, 1, 1));
+  face([0, -1, 0], P(-1, -1, -1), P(1, -1, -1), P(1, -1, 1), P(-1, -1, 1));
+  face([0, 0, 1], P(-1, -1, 1), P(1, -1, 1), P(1, 1, 1), P(-1, 1, 1));
+  face([0, 0, -1], P(-1, 1, -1), P(1, 1, -1), P(1, -1, -1), P(-1, -1, -1));
+}
+// 막대 모형 — 원점이 막대 가운데, 모형 축(앞 X · 오른쪽 Y · 위 Z). 전구는 뒤(−X, 헬기 쪽)를 본다.
+function _shipHrsMesh() {
+  const m = [], span = (SHIP_HRS_N - 1) * SHIP_HRS_PITCH;
+  _shipBox(m, [0.05, 0, 0], [0.2, span + 0.6, 0.55], [0.08, 0.08, 0.09], 0);               // 검은 받침
+  for (let i = 0; i < SHIP_HRS_N; i++)
+    _shipBox(m, [-0.12, -span / 2 + i * SHIP_HRS_PITCH, 0], [0.16, 0.3, 0.3], [0.35, 1.0, 0.45], -1);   // 초록 전구
+  return m;
+}
 const _shipGL = new WeakMap();      // 지도(그림판)마다 그리기 준비 — 본 3D 화면 · CHIN 창
 function _shipGLInit(gl) {
   let h = _shipGL.get(gl);
@@ -800,16 +829,19 @@ function _shipGLInit(gl) {
   let vao = null;
   if (typeof gl.createVertexArray === 'function') vao = { create: () => gl.createVertexArray(), bind: v => gl.bindVertexArray(v) };
   else { const ext = gl.getExtension('OES_vertex_array_object'); if (ext) vao = { create: () => ext.createVertexArrayOES(), bind: v => ext.bindVertexArrayOES(v) }; }
-  const part = _h3Upload(gl, _ship3dBuildMesh());
-  if (vao) {
-    part.vao = vao.create(); vao.bind(part.vao);
-    gl.bindBuffer(gl.ARRAY_BUFFER, part.buf);
-    [[loc.pos, 3, 0], [loc.nrm, 3, 12], [loc.col, 3, 24], [loc.mat, 1, 36]].forEach(([l, n, o]) => {
-      if (l < 0) return; gl.enableVertexAttribArray(l); gl.vertexAttribPointer(l, n, gl.FLOAT, false, 40, o);
-    });
-    vao.bind(null);
-  }
-  h = { gl, prog, loc, vao, part };
+  const up = arr => {
+    const part = _h3Upload(gl, arr);
+    if (vao) {
+      part.vao = vao.create(); vao.bind(part.vao);
+      gl.bindBuffer(gl.ARRAY_BUFFER, part.buf);
+      [[loc.pos, 3, 0], [loc.nrm, 3, 12], [loc.col, 3, 24], [loc.mat, 1, 36]].forEach(([l, n, o]) => {
+        if (l < 0) return; gl.enableVertexAttribArray(l); gl.vertexAttribPointer(l, n, gl.FLOAT, false, 40, o);
+      });
+      vao.bind(null);
+    }
+    return part;
+  };
+  h = { gl, prog, loc, vao, part: up(_ship3dBuildMesh()), hrs: up(_shipHrsMesh()) };
   _shipGL.set(gl, h);
   return h;
 }
@@ -827,14 +859,19 @@ function _ship3dLayer() {
       let sea = 0;
       try { const z = this.map.queryTerrainElevation([shipLon, shipLat]); if (Number.isFinite(z)) sea = z; } catch (e) { _swallow(e); }
       const mo = shipMotionOn() ? shipMotion() : { roll: 0, pitch: 0 };
-      const mc = maplibregl.MercatorCoordinate.fromLngLat([shipLon, shipLat], sea);
-      const sc = mc.meterInMercatorCoordinateUnits();
+      const mc = maplibregl.MercatorCoordinate.fromLngLat([shipLon, shipLat], sea + SHIP3D_DECK);   // 축 = 갑판 높이
+      const sc = mc.meterInMercatorCoordinateUnits(), Sc = [[sc, 0, 0], [0, -sc, 0], [0, 0, sc]];
       const R = heli3dRot(shipHdg, mo.pitch, mo.roll);
-      const base = _m4Mul(main, _m4From(_m3Mul([[sc, 0, 0], [0, -sc, 0], [0, 0, sc]], R), [mc.x, mc.y, mc.z]));
-      const rot3 = new Float32Array([R[0][0], R[1][0], R[2][0], R[0][1], R[1][1], R[2][1], R[0][2], R[1][2], R[2][2]]);
+      const r3 = R => new Float32Array([R[0][0], R[1][0], R[2][0], R[0][1], R[1][1], R[2][1], R[0][2], R[1][2], R[2][2]]);
+      const SR = _m3Mul(Sc, R);
       gl.useProgram(h.prog);
       gl.uniform3fv(h.loc.light, H3_LIGHT);
-      _h3Draw(h, h.part, new Float32Array(base), rot3, 1);
+      _h3Draw(h, h.part, new Float32Array(_m4Mul(main, _m4From(SR, [mc.x, mc.y, mc.z]))), r3(R), 1);
+      // 수평 지시등 — 자리는 함정을 따라가고(함교 뒷면), 기울기는 롤을 빼고(참 수평) 그린다
+      const a = [-SHIP_HRS_AT[1], SHIP_HRS_AT[0], SHIP_HRS_AT[2] - SHIP3D_DECK];
+      const t = [0, 1, 2].map(i => [mc.x, mc.y, mc.z][i] + SR[i][0] * a[0] + SR[i][1] * a[1] + SR[i][2] * a[2]);
+      const Rh = heli3dRot(shipHdg, mo.pitch, 0);
+      _h3Draw(h, h.hrs, new Float32Array(_m4Mul(main, _m4From(_m3Mul(Sc, Rh), t))), r3(Rh), 1);
     },
   };
 }
@@ -860,7 +897,7 @@ function shipDeckTopM(lat, lon) {
     if (p.line || p.deco || !inside(p.ring)) return;    // 중심선·비행갑판 표시·꾸밈은 바닥이 아니다
     if (top === null || p.h > top) top = p.h;
   });
-  return top === null ? null : top + shipHeaveAt(x, y);   // 롤·피칭으로 오르내린 만큼
+  return top === null ? null : top + shipHeaveAt(x, y, top);   // 롤·피칭으로 오르내린 만큼
 }
 // 함정이 침로를 바꾸면 갑판에 앉아 있는 헬기도 함정 중심을 축으로 같이 돈다
 function _shipCarryTurn(d) {

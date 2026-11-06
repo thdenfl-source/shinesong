@@ -696,6 +696,19 @@ function simFloorFt() {
 }
 let _simOnDeck = false;              // 함정 갑판에 앉아 있는가
 function simOnDeck() { return simModeOn && _simOnDeck && !!shipVisible; }
+// 흔들리는 갑판에 바퀴로 앉아 있으면(레버를 LIGHT ON WHEELS 아래로) 헬기는 갑판과 한 몸이다 —
+// 자세(ADI·3D 시야·외부 모형)를 갑판 자세 그대로 두고, 높이는 갑판 높이에 붙인다.
+// AFCS·GSPD 가 자세를 만진 뒤(07-sim.js 한 걸음의 끝)에 부른다.
+function simDeckLock() {
+  if (!simOnDeck() || typeof shipMotionOn !== 'function' || !shipMotionOn()) return;
+  const deck = simDeckFt();
+  // 갑판이 내려가는 가속(최대 ~2.4m/s²)은 중력보다 작다 — 바퀴가 떨어지지 않고 따라 내려간다
+  if (deck == null || S.alt - deck > 10) return;
+  if (S.tq >= hoverPowerTq() + LOW_BAND[0]) return;      // 레버를 올려 가벼워졌다 — 조종사 몫이 섞인다
+  const d = shipDeckAttitude(S.hdg);
+  S.bnk = d.bank; S.pit = d.pitch; bankTarget = S.bnk;
+  S.alt = deck; if (S.vs < 0) S.vs = 0;
+}
 // 갑판에 내려앉으면 속도를 '갑판에 대한 속도' 로, 뜨면 다시 '땅에 대한 속도' 로 바꾼다
 // (함정 속도만큼 빼고 더한다). 그래야 움직이는 함정에 내려앉고 떠도 튀지 않는다 —
 // 함정과 나란히 날다 내려앉으면 갑판 위에서는 거의 서 있고, 뜨면 함정 속도로 날고 있다.
