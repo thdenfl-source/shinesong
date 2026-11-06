@@ -589,7 +589,8 @@ export async function run(page, t) {
     shipRollAmp = 10; shipPitchAmp = 5; shipMotT = SHIP_ROLL_T / 4;      // 롤이 우현으로 다 기운 때
     const m = shipMotion();
     const at = (x, f) => shipDeckTopM(shipLat + f / 111320, shipLon + x / (111320 * Math.cos(shipLat * Math.PI / 180)));
-    const o = { roll: m.roll, right: at(8, -30), left: at(-8, -30), n: _ship3dGeo().features.length, n0 };
+    const o = { roll: m.roll, right: at(8, -30), left: at(-8, -30), n: _ship3dGeo().features.length, n0,
+                layer: !!(_ml3d && _ml3d.getLayer('ship-3d-model')), tri: _ship3dBuildMesh().length / 30 };
     shipRollAmp = 0; shipPitchAmp = 0; shipMotT = 0;
     shipSetLvl('HI'); let k = 0; const rnd = () => (k++ % 2 ? 0.9 : 0.1);
     for (let i = 0; i < 400; i++) shipVarStep(0.5, rnd);
@@ -598,6 +599,7 @@ export async function run(page, t) {
   });
   t.ok(Math.abs(mot.roll - 10) < 0.01 && mot.left - mot.right > 2.5,
     `롤 10° 면 우현 갑판이 내려간다 (좌 ${mot.left.toFixed(1)} · 우 ${mot.right.toFixed(1)}m)`);
-  t.ok(mot.n > mot.n0 + 50, `흔들리는 동안 3D 선체·갑판을 칸으로 잘라 기울여 그린다 (${mot.n0} → ${mot.n}면)`);
+  t.ok(mot.layer && mot.tri > 100 && mot.n === mot.n0,
+    `흔들려도 칸으로 자르지 않고 한 덩어리 3D 모형(${mot.tri}삼각형)을 통째로 기울여 그린다 (면 ${mot.n0} 그대로)`);
   t.ok(Math.abs(mot.var - 10) > 0.5 && Math.abs(mot.var - 10) <= 2 && mot.lo === 10, `난이도 상은 ±2kt 안에서 속도가 흔들리고 하는 그대로 (${mot.var.toFixed(1)} · ${mot.lo}kt)`);
 }
