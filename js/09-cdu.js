@@ -639,7 +639,8 @@ const SHIP3D_DECK_MARKS = (() => {
     // 노란 정렬선 — 갑판 중심선(함교 뒷면 → 함미), 함교 뒷면의 세로선(갑판 → 함교 꼭대기)
     { ring: rect(0, (SHIP3D_BRIDGE_AFT + stern) / 2, 0.15, (SHIP3D_BRIDGE_AFT - stern) / 2),
       h: paint, c: YEL, k: 'lineup' },
-    { ring: rect(0, SHIP3D_BRIDGE_AFT - 0.04, 0.3, 0.04), h: SHIP3D_DECK + 10, c: YEL, k: 'lineup-wall' },
+    // 함교 뒷면에 붙은 세로선 — 갑판에서 함교 꼭대기까지(뒷면보다 20cm 나와 파란 띠 위로도 보인다)
+    { ring: rect(0, SHIP3D_BRIDGE_AFT - 0.1, 0.3, 0.1), b: SHIP3D_DECK, h: SHIP3D_DECK + 10, c: YEL, k: 'lineup-wall' },
     // 착함 원과 X
     { ring: circle(0, td.fwd, td.r, true), hole: circle(0, td.fwd, td.r - td.w, false),
       h: paint, c: WHT, k: 'td' },
@@ -752,7 +753,7 @@ function _ship3dBuildMesh() {
     // 위면이 서로 겹치는 칠(갑판 · 표시)은 조금씩 띄워 깜빡이지 않게
     let top = p.h; const lift = p.line ? 0.10 : p.k === 'deck' ? 0.05 : 0;
     top += lift;
-    const bot = p.line ? top - 0.06 : (p.b || 0);
+    const bot = p.b != null ? p.b : p.line ? top - 0.06 : 0;   // 세로로 선 표시(함교 뒷면 선)는 제 바닥부터
     const ring = p.ring.slice(0, -1);
     const n = ring.length;
     let cx = 0, cy = 0; ring.forEach(q => { cx += q[0]; cy += q[1]; }); cx /= n; cy /= n;
