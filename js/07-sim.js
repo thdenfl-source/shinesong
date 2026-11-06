@@ -374,6 +374,12 @@ function simStep(ts, noLoop){   // noLoop — 새 창이 대신 한 프레임을
   _simLastTick = performance.now();
   try {
   try { shipTacanSync(); } catch (e) { _swallow(e); }   // 함정 TACAN — 국이 함정을 따라 움직인다
+  // 롤·피칭(흔들리는 갑판) — 시뮬이 도는 동안만 흐른다. 헬기 운동보다 먼저 흘려야 갑판에 앉은
+  // 헬기의 높이·자세가 이번에 그려질 갑판과 같은 순간이 된다(한 박자 늦으면 갑판에서 떠 보인다).
+  if (shipVisible && S.running && S.lastT !== null) {
+    const mdt = (ts - S.lastT) / 1000 * simSpeed;
+    if (mdt > 0 && mdt < 0.5 * simSpeed) { try { shipMotionStep(mdt); } catch (e) { _swallow(e); } }
+  }
   if(S.running && !gpsMode && !_fdrPlaying && S.lastT!==null){
     const _raw=(ts-S.lastT)/1000;
     // 배속: 한 프레임에 흐르게 할 시뮬 시간 = 실제 경과시간 × simSpeed.
@@ -644,6 +650,7 @@ function simStep(ts, noLoop){   // noLoop — 새 창이 대신 한 프레임을
         _spdPrev = S.spd;
       }
       slipUpdate(dt);
+      try { simDeckLock(); } catch (e) { _swallow(e); }   // 갑판에 앉아 있으면 자세 = 갑판 자세(계기도 그대로)
     }
     }
   } else if(!S.running){
@@ -654,11 +661,6 @@ function simStep(ts, noLoop){   // noLoop — 새 창이 대신 한 프레임을
   }
 
   // Ship movement (wind-independent)
-  // 롤·피칭(흔들리는 갑판) — 시뮬이 도는 동안만 흐른다
-  if (shipVisible && S.running && S.lastT !== null) {
-    const mdt = (ts - S.lastT) / 1000 * simSpeed;
-    if (mdt > 0 && mdt < 0.5 * simSpeed) { try { shipMotionStep(mdt); } catch (e) { _swallow(e); } }
-  }
   if (shipVisible && shipMarker && shipSpd > 0 && S.lastT !== null) {
     const sdt = (ts - S.lastT) / 1000 * simSpeed;   // 배가 항공기와 같은 시간을 흐르게
     if (sdt > 0 && sdt < 0.5 * simSpeed) {

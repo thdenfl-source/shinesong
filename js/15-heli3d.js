@@ -332,6 +332,7 @@ vec3 livery(vec3 p, vec3 n) {
   return WHITE;
 }
 void main() {
+  if (v_mat < -0.5) { gl_FragColor = vec4(v_col * u_alpha, u_alpha); return; }   // 스스로 빛나는 등(함정 수평 지시등)
   vec3 c = v_mat > 0.5 ? livery(v_pos, normalize(v_nm)) : v_col;
   vec3 nw = normalize(v_nw);
   float d = max(dot(nw, u_light), 0.0);

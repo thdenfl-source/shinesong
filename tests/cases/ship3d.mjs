@@ -611,5 +611,33 @@ export async function run(page, t) {
     `롤 10° 면 우현 갑판이 내려간다 (좌 ${mot.left.toFixed(1)} · 우 ${mot.right.toFixed(1)}m)`);
   t.ok(mot.layer && mot.tri > 100 && mot.n === mot.n0,
     `흔들려도 칸으로 자르지 않고 한 덩어리 3D 모형(${mot.tri}삼각형)을 통째로 기울여 그린다 (면 ${mot.n0} 그대로)`);
+  // 갑판에 앉은 헬기 — 자세(계기)·높이가 갑판과 한 몸으로 흔들린다 · 수평 지시등
+  const dk = await page.evaluate(async () => {
+    if (!shipVisible) shipToggleOn();
+    shipLat = 37.0; shipLon = 126.0; shipHdg = 90; shipSpd = 0; updateShipMarker();
+    shipRollAmp = 10; shipPitchAmp = 5; shipMotT = 0;               // 흔들리는 함정에 앉힌다
+    toggleSimMode(true);
+    document.getElementById('ship-menu-heli').click();
+    await new Promise(r => setTimeout(r, 200));
+    S.running = true; let ts = performance.now(); S.lastT = ts;
+    let worst = { bank: 0, pitch: 0, alt: 0 }, minB = 0, maxB = 0;
+    for (let i = 0; i < 300; i++) {
+      ts += 50; simStep(ts);
+      const d = shipDeckAttitude(S.hdg);
+      worst.bank = Math.max(worst.bank, Math.abs(S.bnk - d.bank));
+      worst.pitch = Math.max(worst.pitch, Math.abs(S.pit - d.pitch));
+      worst.alt = Math.max(worst.alt, Math.abs(S.alt - simDeckFt()) * 0.3048);
+      minB = Math.min(minB, S.bnk); maxB = Math.max(maxB, S.bnk);
+    }
+    S.running = false;
+    const o = { worst, minB, maxB, deck: simOnDeck(), hrs: _shipHrsMesh().length / 360, n: SHIP_HRS_N };
+    shipRollAmp = 0; shipPitchAmp = 0; shipMotT = 0;
+    toggleSimMode(false);
+    return o;
+  });
+  t.ok(dk.deck && dk.worst.bank < 0.01 && dk.worst.pitch < 0.01 && dk.minB < -9 && dk.maxB > 9,
+    `갑판에 앉아 있으면 자세(ADI)가 갑판 롤·피칭 그대로 흔들린다 (뱅크 ${dk.minB.toFixed(1)}~${dk.maxB.toFixed(1)}° · 어긋남 ${dk.worst.bank.toFixed(3)}°)`);
+  t.ok(dk.worst.alt < 0.01, `갑판이 오르내려도 헬기 높이가 갑판에 붙어 있다 (최대 어긋남 ${dk.worst.alt.toFixed(3)}m)`);
+  t.ok(dk.n === 20 && dk.hrs === 21, `함교 뒷면 수평 지시등 — 전구 ${dk.n}개 + 받침 (${dk.hrs}상자)`);
   t.ok(Math.abs(mot.var - 10) > 0.5 && Math.abs(mot.var - 10) <= 2 && mot.lo === 10, `난이도 상은 ±2kt 안에서 속도가 흔들리고 하는 그대로 (${mot.var.toFixed(1)} · ${mot.lo}kt)`);
 }
