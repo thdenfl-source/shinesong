@@ -1583,7 +1583,7 @@ export async function run(page, t) {
     };
     const down = run(-40), same = run(0);  // 퀵스톱 — 기수를 들며 컬렉티브를 크게(40%) 내린다
     simTrimReset();
-    return { down, same, decMax: SPD_DEC_MAX };
+    return { down, same, decMax: SPD_DEC_MAX * simAccPitchK(true, 12) };   // 12° 로 들면 감속 ×2
   })()`);
   const fd = flare.down;
   t.ok(fd.dec[0] > 2,
@@ -2579,6 +2579,25 @@ export async function run(page, t) {
   t.ok(rc.yawTopCCW === 3, `CCW 로터는 반대(오른쪽) (${rc.yawTopCCW})`);
   t.ok(rc.pedOppCW === 2 && rc.pedWithCW === -2 && rc.pedOppCCW === 2, 'YAW TO PITCH — 로터 반대 페달 2° 들림 · 로터 방향 페달 2° 숙임');
   t.ok(rc.btn, 'CW/CCW 버튼이 토글된다');
+
+  // ── 자세에 따른 가감속 배율 ──
+  const accK = await page.evaluate(`(() => {
+    (${SETUP.toString()})();
+    const fly = ${FLY};
+    const K = (d, p) => simAccPitchK(d, p);
+    const tbl = { up: [K(false, 0), K(false, -5), K(false, -10), K(false, -15), K(false, 2), K(false, 4), K(false, 6), K(false, 7.5)],
+                  dn: [K(true, 2), K(true, 4), K(true, 8), K(true, 12), K(true, -3)] };
+    // 실제로 — 120kt 에서 기수 10° 숙여 가속할 때와 수평 자세에서의 가속 한계
+    S.spd = 100; S.pit = -10; const a10 = simAccLimit(10).max; S.pit = 0; const a0 = simAccLimit(10).max;
+    S.pit = 12; const d12 = simAccLimit(-10).max; S.pit = 2; const d2 = simAccLimit(-10).max;
+    return { tbl, a10, a0, d12, d2 };
+  })()`);
+  t.eq(accK.tbl.up.map(v => +v.toFixed(2)).join('/'), '1/1.2/1.4/1.4/0.8/0.6/0.5/0.5',
+    '증속 배율 — 수평 1.0 · 숙임 5° 1.2 · 10° 1.4 · 들림 0~3° 0.8 · 3~5° 0.6 · 5~7.5° 0.5');
+  t.eq(accK.tbl.dn.map(v => +v.toFixed(2)).join('/'), '1.2/1.3/1.5/2/1',
+    '감속 배율 — 들림 0~3° 1.2 · 3~5° 1.3 · 5~10° 1.5 · 10° 초과 2.0');
+  t.ok(Math.abs(accK.a10 / accK.a0 - 1.4) < 1e-6 && Math.abs(accK.d12 / accK.d2 - 2 / 1.2) < 1e-6,
+    `가감속 한계에 그대로 곱해진다 (숙임 10° ${accK.a10.toFixed(2)} · 수평 ${accK.a0.toFixed(2)} · 들림 12° 감속 ${accK.d12.toFixed(2)}kt/s)`);
 
   // ── 동력·공기역학 — 필요 동력 곡선(U 자) · 선회 · 오토로테이션(NR) · OEI · 꼬리로터 · VRS · 바람 · VNE ──
   const aero = await page.evaluate(`(() => {

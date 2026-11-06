@@ -330,11 +330,31 @@ function simJerkStep(d, acc, dt, aMax, jerk, d0, jb) {
 }
 // 지금 속도에서 낼 수 있는 가감속(max, kt/s)과 그것이 붙는 빠르기(jerk, kt/s²) —
 // 줄이는 쪽(감속)인가, 늘리는 쪽(가속)인가
+// 자세에 따른 가감속 배율 — 원판을 많이 기울일수록 앞뒤로 미는 힘이 커진다(S.pit: 기수 올림 +)
+//   증속: 기수 내림 0° ×1.0 → 5° ×1.2 → 10° ×1.4(그 아래도 1.4) · 기수 올림 0~3° ×0.8 · 3~5° ×0.6 · 5~7.5°(그 위도) ×0.5
+//   감속: 기수 올림 0~3° ×1.2 · 3~5° ×1.3 · 5~10° ×1.5 · 10° 초과 ×2.0 (기수를 숙인 채 줄 때는 ×1.0)
+function simAccPitchK(decel, pit = S.pit) {
+  if (decel) {
+    if (pit <= 0) return 1;
+    if (pit <= 3) return 1.2;
+    if (pit <= 5) return 1.3;
+    if (pit <= 10) return 1.5;
+    return 2;
+  }
+  if (pit <= 0) return 1 + 0.4 * Math.min(1, -pit / 10);
+  if (pit <= 3) return 0.8;
+  if (pit <= 5) return 0.6;
+  return 0.5;
+}
 function simAccLimit(ds) {
   const v = S.spd;
-  if (v && Math.sign(ds) !== Math.sign(v)) return { max: SPD_DEC_MAX, jerk: SPD_DEC_JERK };
-  return { max: SPD_ACC_UP0 + (SPD_ACC_UP - SPD_ACC_UP0) * Math.min(1, Math.abs(v) / SPD_ETL_KT),
-           jerk: SPD_JERK };
+  if (v && Math.sign(ds) !== Math.sign(v)) {
+    const k = simAccPitchK(true);
+    return { max: SPD_DEC_MAX * k, jerk: SPD_DEC_JERK * k };
+  }
+  const k = simAccPitchK(false);
+  return { max: (SPD_ACC_UP0 + (SPD_ACC_UP - SPD_ACC_UP0) * Math.min(1, Math.abs(v) / SPD_ETL_KT)) * k,
+           jerk: SPD_JERK * k };
 }
 let simAcc = 0;               // 지금의 가감속(kt/s)
 let simVsAcc = 0;             // 지금 상승률이 바뀌는 빠르기(fpm/s)
