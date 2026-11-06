@@ -464,6 +464,14 @@ export async function run(page, t) {
                tilt: getComputedStyle(document.getElementById('tilt-ctrl')).display };
     toggleCtl3d(); out.ui.fold = getComputedStyle(document.getElementById('ctl3d-body')).display;
     toggleCtl3d(); out.ui.unfold = getComputedStyle(document.getElementById('ctl3d-body')).display;
+    // 창이 낮으면 묶음 안에서 스크롤해 아래 버튼까지 누른다
+    { const box = document.getElementById('ctl3d'), body = document.getElementById('ctl3d-body');
+      const h0 = box.style.maxHeight; box.style.maxHeight = '200px';
+      body.scrollTop = 0; body.scrollTop = 9999;
+      const last = [...body.children].reverse().find(e => e.offsetParent), r = last.getBoundingClientRect(), br = box.getBoundingClientRect();
+      out.ui.scroll = { ov: getComputedStyle(body).overflowY, over: body.scrollHeight > body.clientHeight, top: body.scrollTop,
+                        inBox: r.bottom <= br.bottom + 1 && r.top >= br.top };
+      body.scrollTop = 0; box.style.maxHeight = h0; }
     // SIM 을 끄면 닫힌다
     toggleSimMode(false); await wait(50);
     out.exit = { n: _chinMaps.length, cls: document.getElementById('map3d').classList.contains('chin-on'),
@@ -478,6 +486,8 @@ export async function run(page, t) {
   t.eq(chin.lr.none, 0, 'L·R CHIN 을 모두 끄면 CHIN 창이 닫힌다');
   t.ok(chin.ui.scale === 'none' && chin.ui.tilt === 'none', `SIM 에서는 축척·3D 확대/기울기 버튼이 없다 (${chin.ui.scale} · ${chin.ui.tilt})`);
   t.ok(chin.ui.fold === 'none' && chin.ui.unfold === 'flex', '3D 버튼 묶음을 접고 편다');
+  t.ok(chin.ui.scroll.ov === 'auto' && chin.ui.scroll.over && chin.ui.scroll.top > 0 && chin.ui.scroll.inBox,
+    `창이 낮아 버튼이 넘치면 묶음 안에서 스크롤해 맨 아래 버튼까지 보인다 (${JSON.stringify(chin.ui.scroll)})`);
   const M = chin.main, mBot = M.y + M.h;
   t.ok(Math.abs(chin.mainH - M.h) < 2 && Math.abs(chin.off.main.h - M.h) < 1,
     `정면 시야는 창 가득 그대로다 — CHIN 을 켜도 줄지 않는다 (${M.h.toFixed(0)}px · 끄면 ${chin.off.main.h.toFixed(0)}px)`);
