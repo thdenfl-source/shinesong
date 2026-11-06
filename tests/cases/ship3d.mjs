@@ -49,7 +49,7 @@ export async function run(page, t) {
       const p = f.geometry.coordinates[0].map(local);
       const fw = p.map(q => q[0]), rt = p.map(q => q[1]);
       return { len: Math.max(...fw) - Math.min(...fw), beam: Math.max(...rt) - Math.min(...rt),
-               fwdMax: Math.max(...fw), fwdMin: Math.min(...fw), h: f.properties.h, c: f.properties.c };
+               fwdMax: Math.max(...fw), fwdMin: Math.min(...fw), h: f.properties.h, b: f.properties.b, c: f.properties.c };
     };
     const fs = await feats();
     const of = k => fs.filter(f => f.properties.k === k);
@@ -97,7 +97,7 @@ export async function run(page, t) {
   t.ok(m.lineup.c === '#ffd200' && m.lineup.beam < 0.5 && Math.abs(m.lineup.fwdMax + 10) < 0.1
        && m.lineup.fwdMin < -48 && m.lineup.h > 7 && m.lineup.h < 7.1,
     `노란 정렬선이 함교 뒷면에서 함미까지 갑판 중심선을 따라간다 (${m.lineup.fwdMax.toFixed(1)} → ${m.lineup.fwdMin.toFixed(1)}m)`);
-  t.ok(m.wall.c === '#ffd200' && m.wall.h === 17 && Math.abs(m.wall.fwdMax + 10) < 0.1 && m.wall.len < 0.2,
+  t.ok(m.wall.c === '#ffd200' && m.wall.h === 17 && Math.abs(m.wall.fwdMax + 10) < 0.1 && m.wall.len < 0.25 && m.wall.b === 7,
     `함교 뒷면 한가운데를 위에서 갑판까지 노란 세로선이 내려온다 (높이 ${m.wall.h}m)`);
   t.ok(m.td.c === '#ffffff' && m.tdRings === 2 && Math.abs(m.td.len - 10) < 0.1 && Math.abs(m.td.beam - 10) < 0.1
        && Math.abs(m.holeR - 4.4) < 0.05,
