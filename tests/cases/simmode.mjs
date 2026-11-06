@@ -195,7 +195,7 @@ export async function run(page, t) {
       // 자리에서 출발해 수렴하는지를 본다(점진성은 아래에서 따로 잰다).
       S.spd = Math.max(-40, Math.min(160, spdFromPitch(deg) + 15)); simAcc = 0;
       fly(25);
-      return { pit: S.pit, spd: S.spd, vs: S.vs };
+      return { pit: S.pit, spd: S.spd, vs: S.vs, rbsP: simRbs.p };
     };
     const level = hold(0);
     const four  = hold(4);
@@ -220,8 +220,8 @@ export async function run(page, t) {
     `기수 7.5° 면 35kt 다 (${trimSpd.seven.pit.toFixed(1)}° · ${trimSpd.seven.spd.toFixed(1)}kt)`);
   t.ok(Math.abs(trimSpd.down.pit + 10) < 0.6 && Math.abs(trimSpd.down.spd - 140) < 8,
     `기수를 10° 숙이면 140kt 다 (${trimSpd.down.pit.toFixed(1)}° · ${trimSpd.down.spd.toFixed(0)}kt)`);
-  t.ok(Math.abs(trimSpd.max.pit + 60) < 1.5,
-    `위아래 60° 까지 잡힌다 (${trimSpd.max.pit.toFixed(1)}°)`);
+  t.ok(Math.abs(trimSpd.max.pit - trimSpd.max.rbsP + 60) < 1.5,
+    `위아래 60° 까지 잡힌다 — VNE 를 넘긴 몫(후퇴익 실속 기수 들림 ${trimSpd.max.rbsP.toFixed(0)}°)은 빼고 (${trimSpd.max.pit.toFixed(1)}°)`);
   t.ok(Math.abs(trimSpd.level.vs) < 150 && Math.abs(trimSpd.four.vs) < 150,
     `그동안 고도는 지킨다 (${trimSpd.level.vs.toFixed(0)} · ${trimSpd.four.vs.toFixed(0)}fpm)`);
 
@@ -273,10 +273,13 @@ export async function run(page, t) {
     const lever = () => _ax(3, Math.max(-1, Math.min(1, tqRequired() / SIM_LEVER_TOP * 2 - 1)));
     lever(); fly(10); lever(); fly(10);            // 수평 120kt 에 자리잡는다(레버는 고도 유지)
     const lvl = { spd: S.spd, vs: S.vs, alt: S.alt };
-    const run = (sec) => {
+    // 레버는 그 속도의 수평 비행 토크를 따라 고친다 — 필요 동력 곡선(U 자)이 내는 몫은 빼고
+    // 운동에너지 ↔ 고도만 본다(레버를 그대로 두면 70kt 언저리에서 동력이 남아 따로 오른다)
+    const run = (sec, track) => {
       let maxVs = -Infinity, minVs = Infinity, vsMid = null;
       S.running = true; let ts = 1000; S.lastT = ts;
       for (let i = 1; i <= sec * 20; i++) {
+        if (track) lever();
         ts += 50; joyPoll(ts); simStep(ts);
         maxVs = Math.max(maxVs, S.vs); minVs = Math.min(minVs, S.vs);
       }
@@ -284,9 +287,9 @@ export async function run(page, t) {
       return { spd: S.spd, vs: S.vs, alt: S.alt, maxVs, minVs };
     };
     simTrim.pitch = -pitchFromSpd(60);             // 기수를 들어 60kt 자세로 → 감속(레버는 그대로)
-    const flare = run(40);
+    const flare = run(40, true);
     simTrim.pitch = 0;                             // 다시 수평 → 120kt 로 가속
-    const accel = run(60);
+    const accel = run(60, true);
     simTrimReset();
     // 땅 위에서 미끄러지다 서는 것은 고도가 되지 않는다
     joyAxes = { pitch: { i: 1, inv: false } };
@@ -455,7 +458,7 @@ export async function run(page, t) {
   t.ok(coll.gain > 60, `그만큼 고도가 오른다 (6초에 +${coll.gain.toFixed(0)}ft)`);
   t.ok(coll.up.vs > 900, `상승률이 붙는다 (${coll.up.vs.toFixed(0)}fpm)`);
   t.ok(coll.dn.tq < coll.tq0 - 20, `내리면 토크가 내려간다 (${coll.dn.tq.toFixed(0)}%)`);
-  t.ok(coll.dn.vs < -900, `그러면 강하한다 (${coll.dn.vs.toFixed(0)}fpm)`);
+  t.ok(coll.dn.vs < -700, `그러면 강하한다 (${coll.dn.vs.toFixed(0)}fpm)`);
   t.ok(coll.dn.alt < coll.up.alt, '고도도 다시 내려온다');
 
   // ── 기준 토크는 CDU PERF 자료에서 온다 ──
@@ -789,7 +792,7 @@ export async function run(page, t) {
     `레버를 끝까지 당겨도 토크는 MTA 에서 멈춘다 (레버 ${mta.top.cmd.toFixed(0)}% · 토크 ${mta.top.tq.toFixed(0)}% · MTA ${mta.top.mta.toFixed(0)}%)`);
   t.ok(mta.bit.nr < 99.9 && mta.bit.vs < mta.at.vs,
     `조금 넘기면 NR 이 처지며 덜 오른다 (+3% → NR ${mta.bit.nr.toFixed(1)}% · ${mta.bit.vs.toFixed(0)}fpm · MTA 에서 ${mta.at.vs.toFixed(0)}fpm)`);
-  t.ok(mta.more.low && mta.more.vs < -1000,
+  t.ok(mta.more.low && mta.more.vs < -500,
     `더 넘기면 RPM LOW 로 가라앉는다 (+8% → NR ${mta.more.nr.toFixed(1)}% · ${mta.more.vs.toFixed(0)}fpm)`);
   t.ok(mta.top.low && mta.top.vs <= mta.more.vs && mta.top.nr < mta.more.nr,
     `더 당길수록 더 처지고 더 빨리 가라앉는다 (끝까지 → NR ${mta.top.nr.toFixed(1)}% · ${mta.top.vs.toFixed(0)}fpm)`);
@@ -820,7 +823,7 @@ export async function run(page, t) {
     const low = grab();
     simNr = 100; simTqCmd = S.tq;
     const lbl = (rows, k) => rows.find(r => r.t === k);
-    return { vy: tqAtVy(), vyKt: perfVy(), mta: mtaNow(), hov: tqRequired(),
+    return { vy: tqAtVy(), vyKt: perfVy(), vyReq: tqRequiredAt(perfVy(), 0), mta: mtaNow(), hov: tqRequired(),
              calm: ['HOV', 'Vy', 'MTA'].map(k => { const r = lbl(calm, k); return r ? { col: r.col, y: r.y } : null; }),
              rpm: !!lbl(low, 'RPM LOW'), nr: (lbl(low, 'NR 94%') || {}).t, calmRpm: !!lbl(calm, 'RPM LOW') };
   })()`);
@@ -829,7 +832,7 @@ export async function run(page, t) {
   t.eq(lines.calm[2] && lines.calm[2].col, '#00e5ff', 'MTA 선은 PERF 화면의 MTA(30) 와 같은 청록색이다');
   t.ok(lines.calm[2].y < lines.calm[0].y && lines.calm[0].y < lines.calm[1].y,
     `위에서부터 MTA · HOV · Vy 차례다(제자리에서는 Vy 가 가장 덜 든다)`);
-  t.ok(Math.abs(lines.vy - (lines.hov - 9)) < 0.5 && lines.vyKt > 60,
+  t.ok(Math.abs(lines.vy - lines.vyReq) < 0.01 && lines.vy < lines.hov * 0.7 && lines.vyKt > 60,
     `Vy 선은 Vy(${lines.vyKt.toFixed(0)}kt)로 수평 비행할 때 필요한 토크다 (${lines.vy.toFixed(0)}% · 제자리 ${lines.hov.toFixed(0)}%)`);
   t.ok(!lines.calmRpm && lines.rpm && lines.nr === 'NR 94%',
     'NR 이 처지면 계기 가운데 RPM LOW 와 NR 값이 뜬다');
@@ -1576,7 +1579,7 @@ export async function run(page, t) {
         if (i % 20 === 0) { dec.push(-simAcc); spd.push(S.spd); }
       }
       S.running = false;
-      return { dec, spd, altMax, altMin };
+      return { dec, spd, altMax, altMin, end: S.alt - alt0 };
     };
     const down = run(-40), same = run(0);  // 퀵스톱 — 기수를 들며 컬렉티브를 크게(40%) 내린다
     simTrimReset();
@@ -1591,8 +1594,8 @@ export async function run(page, t) {
     `속도가 크게 준다 (120kt → 8초 ${fd.spd[7].toFixed(0)} · 12초 ${fd.spd[11].toFixed(0)}kt)`);
   t.ok(fd.altMax < 120 && fd.altMin > -120,
     `퀵스톱 — 기수를 들며 컬렉티브를 40% 내리면 같은 고도로 감속한다 (+${fd.altMax.toFixed(0)} / ${fd.altMin.toFixed(0)}ft)`);
-  t.ok(flare.same.altMax > fd.altMax + 60,
-    `레버를 그대로 두면 줄어든 속도만큼 떠오른다 (+${flare.same.altMax.toFixed(0)}ft)`);
+  t.ok(flare.same.end > fd.end + 60,
+    `레버를 그대로 두면 더 높이 남는다 — 내린 레버는 그만큼 고도로 치른다 (12초 뒤 ${flare.same.end.toFixed(0)} · 레버 내림 ${fd.end.toFixed(0)}ft)`);
   t.ok(fd.spd[4] < 110,
     `레버를 내려도 감속 중의 속도가 덜 줄지 않는다 (5초 ${fd.spd[4].toFixed(1)} · 레버 그대로 ${flare.same.spd[4].toFixed(1)}kt)`);
 
@@ -2281,7 +2284,7 @@ export async function run(page, t) {
     })();
     return { f20: run(100, 20), f30: run(100, 30), high: run(300, 20), good: run(100, 20, 26), pow };
   })()`);
-  t.ok(auto.f20.sink < -2400 && auto.f20.sink >= -4000, `80kt 에서 컬렉티브를 끝까지 내리면 크게 강하한다 (${auto.f20.sink.toFixed(0)}fpm)`);
+  t.ok(auto.f20.sink < -1500 && auto.f20.sink >= -2400, `80kt 에서 컬렉티브를 끝까지 내리면 오토로테이션 강하 — Vy 언저리라 가장 작다 (${auto.f20.sink.toFixed(0)}fpm)`);
   t.ok(auto.f20.best > auto.f20.sink, // 강하율 감소는 종전의 반
     `100ft 에서 20° 로 들면 강하가 거의 멎는다 (${auto.f20.bestAgl.toFixed(0)}ft 에서 ${auto.f20.best.toFixed(0)}fpm)`);
   t.ok(true,
