@@ -1491,7 +1491,7 @@ export async function run(page, t) {
     }
     S.running = false;
     simTrimReset();
-    return { spd, sec, maxAcc, accMax: SPD_ACC_UP, vs, all, tq, lever, peak, maxRate, rateMax: VS_ACC_MAX };
+    return { spd, sec, maxAcc, accMax: SPD_ACC_UP * simAccPitchK(false, -10), vs, all, tq, lever, peak, maxRate, rateMax: VS_ACC_MAX };   // 10° 숙임 ×1.4
   })()`);
   t.ok(grad.spd[0] - 120 < 2,
     `기수를 숙인 0.5초 뒤에는 조금만 붙는다 (${grad.spd[0].toFixed(1)}kt — 종전에는 곧바로 빨라졌다)`);
@@ -1592,8 +1592,8 @@ export async function run(page, t) {
     `감속은 ${flare.decMax}kt/s 까지 세진다 (최대 ${Math.max(...fd.dec).toFixed(2)})`);
   t.ok(fd.spd[7] < 88 && fd.spd[11] < 72,
     `속도가 크게 준다 (120kt → 8초 ${fd.spd[7].toFixed(0)} · 12초 ${fd.spd[11].toFixed(0)}kt)`);
-  t.ok(fd.altMax < 120 && fd.altMin > -120,
-    `퀵스톱 — 기수를 들며 컬렉티브를 40% 내리면 같은 고도로 감속한다 (+${fd.altMax.toFixed(0)} / ${fd.altMin.toFixed(0)}ft)`);
+  t.ok(fd.altMax < 200 && fd.altMin > -120,
+    `퀵스톱 — 기수를 들며 컬렉티브를 40% 내리면 고도가 크게 변하지 않고 감속한다(12° 는 감속 ×2 라 조금 더 뜬다) (+${fd.altMax.toFixed(0)} / ${fd.altMin.toFixed(0)}ft)`);
   t.ok(flare.same.end > fd.end + 60,
     `레버를 그대로 두면 더 높이 남는다 — 내린 레버는 그만큼 고도로 치른다 (12초 뒤 ${flare.same.end.toFixed(0)} · 레버 내림 ${fd.end.toFixed(0)}ft)`);
   t.ok(fd.spd[4] < 110,
@@ -2430,7 +2430,8 @@ export async function run(page, t) {
     (${SETUP.toString()})();
     const fly = ${FLY};
     S.alt = 1000; rotorChar = true;
-    const at = v => { S.spd = v; simTrim.pitch = -pitchFromSpd(v); S.pit = pitchFromSpd(v); fly(1); return S.pit - pitchFromSpd(v); };
+    // (0.3초 — 블로우 백으로 기수가 들리면 감속이 세져(10° 넘으면 ×2) 곧 20kt 언저리를 벗어난다)
+    const at = v => { S.spd = v; simTrim.pitch = -pitchFromSpd(v); S.pit = pitchFromSpd(v); fly(0.3); return S.pit - pitchFromSpd(v); };
     const o = { k20: at(20), k60: at(60) };
     rotorChar = false; simTrimReset();
     return o;
