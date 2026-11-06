@@ -478,6 +478,30 @@ function drawAI(x, y, w, h) {
     ctx.fillStyle = col; ctx.textAlign = 'center';
     ctx.fillText(txt, cx, ty + th * 0.72);
   }
+  // SIM 경고(위쪽 가운데) — 엔진 · VRS · VNE
+  {
+    const warns = [];
+    try {
+      if (typeof simEng !== 'undefined' && simModeOn) {
+        if (simEng === 1) {
+          const left = Math.max(0, OEI_25_SEC - simOeiT);
+          warns.push([left > 0 ? `OEI 2.5MIN ${Math.floor(left / 60)}:${String(Math.floor(left % 60)).padStart(2, '0')}` : 'OEI CONT', '#ffb000']);
+        } else if (simEng === 0) warns.push(['ENG IDLE', '#ff3030']);
+        if (simVrsOn()) warns.push(['VRS', '#ff3030']);
+        if (simOverVne()) warns.push(['VNE', '#ff3030']);
+      }
+    } catch (e) { _swallow(e); }
+    ctx.font = `bold ${Math.max(10, w * 0.032)}px Helvetica Neue, Arial, sans-serif`;
+    const th = Math.max(16, w * 0.045);
+    warns.forEach(([txt, col], i) => {
+      const tw = ctx.measureText(txt).width + 14, ty = aiY + 8 + i * (th + 4);
+      const blink = col === '#ff3030' && Math.floor(performance.now() / 400) % 2 === 0;
+      ctx.fillStyle = blink ? 'rgba(200,20,20,0.85)' : 'rgba(0,0,0,0.75)'; ctx.fillRect(cx - tw / 2, ty, tw, th);
+      ctx.strokeStyle = col; ctx.lineWidth = 1.5; ctx.strokeRect(cx - tw / 2, ty, tw, th);
+      ctx.fillStyle = blink ? '#ffffff' : col; ctx.textAlign = 'center';
+      ctx.fillText(txt, cx, ty + th * 0.72);
+    });
+  }
   ctx.restore();  // end inner clip (AI content area)
 
   // AFCS strip drawn last in outer clip — sky/horizon cannot overwrite it
@@ -595,7 +619,15 @@ function drawTqGauge(x, y, w, h) {
   // RPM LOW(SIM) — 레버를 MTA 넘게 당겨 로터 회전이 처졌다. 막대 가운데에 띄우고
   // 바탕을 붉게 깜박인다(글자는 늘 보인다)
   let rpmLow = false;
-  try { rpmLow = (typeof simRpmLow === 'function') && simRpmLow(); } catch (e) { _swallow(e); }
+  let rotorHigh = false;
+  try { rpmLow = (typeof simRpmLow === 'function') && simRpmLow(); rotorHigh = !rpmLow && (typeof simRotorHigh === 'function') && simRotorHigh(); } catch (e) { _swallow(e); }
+  if (rotorHigh) {                       // 오토로테이션에서 레버를 너무 내려 NR 이 넘쳤다 — 노랑
+    const cy = y + h * 0.5;
+    ctx.fillStyle = 'rgba(0,0,0,0.85)'; ctx.fillRect(x + 2, cy - 15, w - 4, 26);
+    ctx.font = 'bold 8px Helvetica, Arial'; ctx.fillStyle = '#ffb000';
+    ctx.fillText('NR HIGH', x + w / 2, cy - 4);
+    ctx.fillStyle = '#ffffff'; ctx.fillText('NR ' + simNr.toFixed(0) + '%', x + w / 2, cy + 7);
+  }
   if (rpmLow) {
     const cy = y + h * 0.5, blink = Math.floor(performance.now() / 400) % 2 === 0;
     ctx.fillStyle = blink ? 'rgba(220,30,30,0.9)' : 'rgba(0,0,0,0.85)';
