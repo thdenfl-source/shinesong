@@ -332,7 +332,7 @@ function shipMotionStep(dt) {
   if (!shipVisible || !shipMotionOn() || !(dt > 0)) return;
   shipMotT += dt;
   const now = performance.now();
-  if (now - _shipMot3dT > 66) { _shipMot3dT = now; try { updateShip3d(); } catch (e) { _swallow(e); } }
+  if (now - _shipMot3dT > 30) { _shipMot3dT = now; try { _ship3dMaps().forEach(m => m.triggerRepaint()); } catch (e) { _swallow(e); } }
 }
 
 function shipIcon() {
@@ -724,55 +724,118 @@ function _ship3dLngLat([xr, ya]) {
   const east = -ya * sh + xr * ch, north = -ya * ch - xr * sh;
   return [shipLon + east / (111320 * Math.cos(shipLat * D2R)), shipLat + north / 111320];
 }
-// 볼록 다각형을 축에 나란한 사각형으로 자른다(Sutherland–Hodgman)
-function _ship3dClip(ring, x0, x1, y0, y1) {
-  let out = ring.slice(0, -1);
-  const edge = (inside, cut) => {
-    const res = [];
-    for (let i = 0; i < out.length; i++) {
-      const a = out[i], b = out[(i + 1) % out.length], ia = inside(a), ib = inside(b);
-      if (ia) res.push(a);
-      if (ia !== ib) res.push(cut(a, b));
-    }
-    out = res;
-  };
-  const lx = (a, b, x) => [x, a[1] + (b[1] - a[1]) * (x - a[0]) / (b[0] - a[0])];
-  const ly = (a, b, y) => [a[0] + (b[0] - a[0]) * (y - a[1]) / (b[1] - a[1]), y];
-  edge(p => p[0] >= x0, (a, b) => lx(a, b, x0)); if (out.length < 3) return null;
-  edge(p => p[0] <= x1, (a, b) => lx(a, b, x1)); if (out.length < 3) return null;
-  edge(p => p[1] >= y0, (a, b) => ly(a, b, y0)); if (out.length < 3) return null;
-  edge(p => p[1] <= y1, (a, b) => ly(a, b, y1)); if (out.length < 3) return null;
-  out.push(out[0]);
-  return out;
-}
-const SHIP3D_GRID = ['hull', 'boot', 'deck'];   // 롤·피칭 때 칸으로 잘라 기울여 보이는 부분(넓은 판)
+// 지도 데이터(채움 돌출) — 함정을 누르고 끌기(이벤트)·CHIN 창·검사가 쓴다. 눈에 보이는 함정은
+// 아래 _ship3dLayer(진짜 3D 모형 — 롤·피칭을 회전으로 기울인다)가 그린다.
 function _ship3dGeo() {
   if (!shipVisible || shipLat === null) return { type: 'FeatureCollection', features: [] };
-  const feat = (ring, hole, h, b, c, k) => ({
-    type: 'Feature', properties: { h, b: Math.max(0, b), c, k },
-    geometry: { type: 'Polygon', coordinates: [ring.map(_ship3dLngLat)].concat(hole ? [hole.map(_ship3dLngLat)] : []) } });
-  if (!shipMotionOn()) return { type: 'FeatureCollection', features: SHIP3D_PARTS.map(p => feat(p.ring, p.hole, p.h, p.b || 0, p.c, p.k)) };
-  // 롤·피칭 — 넓은 판(선체·선저·갑판)은 칸(앞뒤 10 · 좌우 4)으로 잘라 칸마다 오르내리고,
-  // 나머지는 제 한가운데 높이만큼 통째로 오르내린다(지도 돌출은 기울일 수 없어 계단처럼 기운다)
-  const out = [];
+  return {
+    type: 'FeatureCollection',
+    features: SHIP3D_PARTS.map(p => ({
+      type: 'Feature', properties: { h: p.h, b: p.b || 0, c: p.c, k: p.k },
+      geometry: { type: 'Polygon',
+                  coordinates: [p.ring.map(_ship3dLngLat)].concat(p.hole ? [p.hole.map(_ship3dLngLat)] : []) },
+    })),
+  };
+}
+// ── 함정 3D 모형(WebGL) ──
+// 지도 돌출(fill-extrusion)은 기울일 수 없어 롤·피칭을 칸으로 잘라 계단처럼 보였다. 같은 부분들(SHIP3D_PARTS)을
+// 한 번 입체로 지어 두고(위면 · 옆면), 흰수리 모형과 같은 그리기(15-heli3d.js)로 함정 자리 · 침로 · 롤 · 피칭만큼
+// 돌려 그린다 — 매끈하게 기울고, 매 프레임 지을 것도 없다.
+function _shipHexRgb(h) { const n = parseInt(h.slice(1), 16); return [(n >> 16 & 255) / 255, (n >> 8 & 255) / 255, (n & 255) / 255]; }
+function _ship3dBuildMesh() {
+  const m = [];
+  const M = ([x, y], z) => [-y, x, z];                       // 함정 좌표(오른쪽 · 함미) → 모형(앞 X · 오른쪽 Y · 위 Z)
+  const put = (p, n, c) => m.push(p[0], p[1], p[2], n[0], n[1], n[2], c[0], c[1], c[2], 0);
+  const tri = (a, b, c, n, col) => { put(a, n, col); put(b, n, col); put(c, n, col); };
   SHIP3D_PARTS.forEach(p => {
-    const b0 = p.b || 0;
-    if (SHIP3D_GRID.includes(p.k)) {
-      const NX = 4, NY = 10, X = SHIP3D_BEAM / 2 + 0.5, Y = SHIP3D_LEN / 2 + 0.5;
-      for (let i = 0; i < NX; i++) for (let j = 0; j < NY; j++) {
-        const x0 = -X + 2 * X * i / NX, x1 = -X + 2 * X * (i + 1) / NX, y0 = -Y + 2 * Y * j / NY, y1 = -Y + 2 * Y * (j + 1) / NY;
-        const c = _ship3dClip(p.ring, x0, x1, y0, y1);
-        if (!c) continue;
-        const hv = shipHeaveAt((x0 + x1) / 2, (y0 + y1) / 2);
-        out.push(feat(c, null, p.h + hv, b0 ? b0 + hv : 0, p.c, p.k));
-      }
-      return;
+    const col = _shipHexRgb(p.c);
+    // 위면이 서로 겹치는 칠(갑판 · 표시)은 조금씩 띄워 깜빡이지 않게
+    let top = p.h; const lift = p.line ? 0.10 : p.k === 'deck' ? 0.05 : 0;
+    top += lift;
+    const bot = p.line ? top - 0.06 : (p.b || 0);
+    const ring = p.ring.slice(0, -1);
+    const n = ring.length;
+    let cx = 0, cy = 0; ring.forEach(q => { cx += q[0]; cy += q[1]; }); cx /= n; cy /= n;
+    // 옆면
+    for (let i = 0; i < n; i++) {
+      const a = ring[i], b = ring[(i + 1) % n];
+      const A0 = M(a, bot), B0 = M(b, bot), A1 = M(a, top), B1 = M(b, top);
+      let nx = B0[1] - A0[1], ny = -(B0[0] - A0[0]);                // 모형 평면에서 변에 수직
+      const mx = (A0[0] + B0[0]) / 2 - (-cy), my = (A0[1] + B0[1]) / 2 - cx;
+      if (nx * mx + ny * my < 0) { nx = -nx; ny = -ny; }             // 바깥쪽으로
+      const l = Math.hypot(nx, ny) || 1, N = [nx / l, ny / l, 0];
+      tri(A0, B0, B1, N, col); tri(A0, B1, A1, N, col);
     }
-    let cx = 0, cy = 0; p.ring.forEach(q => { cx += q[0]; cy += q[1]; }); cx /= p.ring.length; cy /= p.ring.length;
-    const hv = shipHeaveAt(cx, cy);
-    out.push(feat(p.ring, p.hole, p.h + hv, b0 ? b0 + hv : 0, p.c, p.k));
+    // 위면 — 구멍이 있으면(착함 원) 고리, 없으면 가운데서 부채꼴(모두 볼록한 꼴이다)
+    const up = [0, 0, 1];
+    if (p.hole) {
+      const ho = p.hole.slice(0, -1), k = ho.length;
+      for (let i = 0; i < n; i++) {
+        const o0 = ring[i], o1 = ring[(i + 1) % n];
+        const h0 = ho[(k - i) % k], h1 = ho[(k - i - 1 + k) % k];
+        tri(M(o0, top), M(o1, top), M(h1, top), up, col); tri(M(o0, top), M(h1, top), M(h0, top), up, col);
+      }
+    } else {
+      const C = M([cx, cy], top);
+      for (let i = 0; i < n; i++) tri(C, M(ring[i], top), M(ring[(i + 1) % n], top), up, col);
+    }
   });
-  return { type: 'FeatureCollection', features: out };
+  return m;
+}
+const _shipGL = new WeakMap();      // 지도(그림판)마다 그리기 준비 — 본 3D 화면 · CHIN 창
+function _shipGLInit(gl) {
+  let h = _shipGL.get(gl);
+  if (h) return h;
+  const prog = gl.createProgram();
+  gl.attachShader(prog, _h3Shader(gl, gl.VERTEX_SHADER, H3_VS));
+  gl.attachShader(prog, _h3Shader(gl, gl.FRAGMENT_SHADER, H3_FS));
+  gl.linkProgram(prog);
+  const loc = {
+    pos: gl.getAttribLocation(prog, 'a_pos'), nrm: gl.getAttribLocation(prog, 'a_nrm'),
+    col: gl.getAttribLocation(prog, 'a_col'), mat: gl.getAttribLocation(prog, 'a_mat'),
+    mvp: gl.getUniformLocation(prog, 'u_mvp'), rot: gl.getUniformLocation(prog, 'u_rot'),
+    light: gl.getUniformLocation(prog, 'u_light'), alpha: gl.getUniformLocation(prog, 'u_alpha'),
+  };
+  let vao = null;
+  if (typeof gl.createVertexArray === 'function') vao = { create: () => gl.createVertexArray(), bind: v => gl.bindVertexArray(v) };
+  else { const ext = gl.getExtension('OES_vertex_array_object'); if (ext) vao = { create: () => ext.createVertexArrayOES(), bind: v => ext.bindVertexArrayOES(v) }; }
+  const part = _h3Upload(gl, _ship3dBuildMesh());
+  if (vao) {
+    part.vao = vao.create(); vao.bind(part.vao);
+    gl.bindBuffer(gl.ARRAY_BUFFER, part.buf);
+    [[loc.pos, 3, 0], [loc.nrm, 3, 12], [loc.col, 3, 24], [loc.mat, 1, 36]].forEach(([l, n, o]) => {
+      if (l < 0) return; gl.enableVertexAttribArray(l); gl.vertexAttribPointer(l, n, gl.FLOAT, false, 40, o);
+    });
+    vao.bind(null);
+  }
+  h = { gl, prog, loc, vao, part };
+  _shipGL.set(gl, h);
+  return h;
+}
+function _ship3dLayer() {
+  return {
+    id: 'ship-3d-model', type: 'custom', renderingMode: '3d',
+    onAdd(map) { this.map = map; },
+    render(gl, args) {
+      if (!shipVisible || shipLat === null) return;
+      let h;
+      try { h = _shipGLInit(gl); } catch (e) { _swallow(e); return; }
+      const main = (args && args.defaultProjectionData && args.defaultProjectionData.mainMatrix)
+                || (args && args.modelViewProjectionMatrix) || args;
+      if (!main || main.length !== 16) return;
+      let sea = 0;
+      try { const z = this.map.queryTerrainElevation([shipLon, shipLat]); if (Number.isFinite(z)) sea = z; } catch (e) { _swallow(e); }
+      const mo = shipMotionOn() ? shipMotion() : { roll: 0, pitch: 0 };
+      const mc = maplibregl.MercatorCoordinate.fromLngLat([shipLon, shipLat], sea);
+      const sc = mc.meterInMercatorCoordinateUnits();
+      const R = heli3dRot(shipHdg, mo.pitch, mo.roll);
+      const base = _m4Mul(main, _m4From(_m3Mul([[sc, 0, 0], [0, -sc, 0], [0, 0, sc]], R), [mc.x, mc.y, mc.z]));
+      const rot3 = new Float32Array([R[0][0], R[1][0], R[2][0], R[0][1], R[1][1], R[2][1], R[0][2], R[1][2], R[2][2]]);
+      gl.useProgram(h.prog);
+      gl.uniform3fv(h.loc.light, H3_LIGHT);
+      _h3Draw(h, h.part, new Float32Array(base), rot3, 1);
+    },
+  };
 }
 // 그 자리 바로 아래에 있는 함정 부분의 윗면 높이(m, 수면 위) — 갑판 7m · 함수
 // 구조물 10m · 함교 17m. 함정 밖이면 null. 착함(14-simmode.js)이 이것을 바닥으로 쓴다.
@@ -817,9 +880,11 @@ function _ship3dAddTo(map) {
     layout: { 'line-cap': 'round', 'line-join': 'round' },
     paint: { 'line-color': '#ff3333', 'line-width': 2, 'line-opacity': 0.75 } });
   map.addSource('ship-3d', { type: 'geojson', data: _ship3dGeo() });
+  // 채움 돌출은 보이지 않게(누르기·끌기에만) 두고, 눈에 보이는 함정은 3D 모형이 그린다
   map.addLayer({ id: 'ship-3d', type: 'fill-extrusion', source: 'ship-3d',
     paint: { 'fill-extrusion-color': ['get', 'c'], 'fill-extrusion-height': ['get', 'h'],
-             'fill-extrusion-base': ['get', 'b'], 'fill-extrusion-opacity': 1 } });
+             'fill-extrusion-base': ['get', 'b'], 'fill-extrusion-opacity': 0 } });
+  try { map.addLayer(_ship3dLayer()); } catch (e) { console.warn('[3D] ship model:', e); }
 }
 // 3D 지도가 다 뜨면(04-map.js 의 load) 함정·항적 레이어를 한 번 얹는다
 function _ship3dEnsure() {

@@ -655,9 +655,15 @@ html, body {
 
 /* ── 3D 조작 버튼 묶음(#ctl3d) — 오른쪽 한 줄, 너비는 가장 넓은 버튼(MG (Slaved)·회전익 특성)에 맞춘다 ── */
 #ctl3d { position: absolute; top: 8px; right: 8px; z-index: 900; width: 96px;
-         display: flex; flex-direction: column; gap: 3px; }
-#map-wrap #ctl3d { top: 48px; }
-#ctl3d-body { display: flex; flex-direction: column; gap: 3px; }
+         display: flex; flex-direction: column; gap: 3px;
+         max-height: calc(100% - 16px); box-sizing: border-box; }
+#map-wrap #ctl3d { top: 48px; max-height: calc(100% - 56px); }
+/* 창이 낮아 버튼이 아래로 넘치면 묶음 안에서 위아래로 밀어 올려 누른다(터치 · 휠) */
+#ctl3d-body { display: flex; flex-direction: column; gap: 3px;
+              flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden;
+              overscroll-behavior: contain; -webkit-overflow-scrolling: touch; touch-action: pan-y;
+              scrollbar-width: thin; }
+#ctl3d-body > * { flex-shrink: 0; }
 #ctl3d.collapsed #ctl3d-body { display: none; }
 #ctl3d-tog { padding: 3px 4px; font-size: 11px; color: #9aa4ae; }
 #ctl3d .sim-btn, #ctl3d #chin-btn, #ctl3d .hdgref, #ctl3d #rotor-3d, #ctl3d #ase-3d {

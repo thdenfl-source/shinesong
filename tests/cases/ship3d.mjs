@@ -464,6 +464,14 @@ export async function run(page, t) {
                tilt: getComputedStyle(document.getElementById('tilt-ctrl')).display };
     toggleCtl3d(); out.ui.fold = getComputedStyle(document.getElementById('ctl3d-body')).display;
     toggleCtl3d(); out.ui.unfold = getComputedStyle(document.getElementById('ctl3d-body')).display;
+    // 창이 낮으면 묶음 안에서 스크롤해 아래 버튼까지 누른다
+    { const box = document.getElementById('ctl3d'), body = document.getElementById('ctl3d-body');
+      const h0 = box.style.maxHeight; box.style.maxHeight = '200px';
+      body.scrollTop = 0; body.scrollTop = 9999;
+      const last = [...body.children].reverse().find(e => e.offsetParent), r = last.getBoundingClientRect(), br = box.getBoundingClientRect();
+      out.ui.scroll = { ov: getComputedStyle(body).overflowY, over: body.scrollHeight > body.clientHeight, top: body.scrollTop,
+                        inBox: r.bottom <= br.bottom + 1 && r.top >= br.top };
+      body.scrollTop = 0; box.style.maxHeight = h0; }
     // SIM 을 끄면 닫힌다
     toggleSimMode(false); await wait(50);
     out.exit = { n: _chinMaps.length, cls: document.getElementById('map3d').classList.contains('chin-on'),
@@ -478,6 +486,8 @@ export async function run(page, t) {
   t.eq(chin.lr.none, 0, 'L·R CHIN 을 모두 끄면 CHIN 창이 닫힌다');
   t.ok(chin.ui.scale === 'none' && chin.ui.tilt === 'none', `SIM 에서는 축척·3D 확대/기울기 버튼이 없다 (${chin.ui.scale} · ${chin.ui.tilt})`);
   t.ok(chin.ui.fold === 'none' && chin.ui.unfold === 'flex', '3D 버튼 묶음을 접고 편다');
+  t.ok(chin.ui.scroll.ov === 'auto' && chin.ui.scroll.over && chin.ui.scroll.top > 0 && chin.ui.scroll.inBox,
+    `창이 낮아 버튼이 넘치면 묶음 안에서 스크롤해 맨 아래 버튼까지 보인다 (${JSON.stringify(chin.ui.scroll)})`);
   const M = chin.main, mBot = M.y + M.h;
   t.ok(Math.abs(chin.mainH - M.h) < 2 && Math.abs(chin.off.main.h - M.h) < 1,
     `정면 시야는 창 가득 그대로다 — CHIN 을 켜도 줄지 않는다 (${M.h.toFixed(0)}px · 끄면 ${chin.off.main.h.toFixed(0)}px)`);
@@ -589,7 +599,8 @@ export async function run(page, t) {
     shipRollAmp = 10; shipPitchAmp = 5; shipMotT = SHIP_ROLL_T / 4;      // 롤이 우현으로 다 기운 때
     const m = shipMotion();
     const at = (x, f) => shipDeckTopM(shipLat + f / 111320, shipLon + x / (111320 * Math.cos(shipLat * Math.PI / 180)));
-    const o = { roll: m.roll, right: at(8, -30), left: at(-8, -30), n: _ship3dGeo().features.length, n0 };
+    const o = { roll: m.roll, right: at(8, -30), left: at(-8, -30), n: _ship3dGeo().features.length, n0,
+                layer: !!(_ml3d && _ml3d.getLayer('ship-3d-model')), tri: _ship3dBuildMesh().length / 30 };
     shipRollAmp = 0; shipPitchAmp = 0; shipMotT = 0;
     shipSetLvl('HI'); let k = 0; const rnd = () => (k++ % 2 ? 0.9 : 0.1);
     for (let i = 0; i < 400; i++) shipVarStep(0.5, rnd);
@@ -598,6 +609,7 @@ export async function run(page, t) {
   });
   t.ok(Math.abs(mot.roll - 10) < 0.01 && mot.left - mot.right > 2.5,
     `롤 10° 면 우현 갑판이 내려간다 (좌 ${mot.left.toFixed(1)} · 우 ${mot.right.toFixed(1)}m)`);
-  t.ok(mot.n > mot.n0 + 50, `흔들리는 동안 3D 선체·갑판을 칸으로 잘라 기울여 그린다 (${mot.n0} → ${mot.n}면)`);
+  t.ok(mot.layer && mot.tri > 100 && mot.n === mot.n0,
+    `흔들려도 칸으로 자르지 않고 한 덩어리 3D 모형(${mot.tri}삼각형)을 통째로 기울여 그린다 (면 ${mot.n0} 그대로)`);
   t.ok(Math.abs(mot.var - 10) > 0.5 && Math.abs(mot.var - 10) <= 2 && mot.lo === 10, `난이도 상은 ±2kt 안에서 속도가 흔들리고 하는 그대로 (${mot.var.toFixed(1)} · ${mot.lo}kt)`);
 }
