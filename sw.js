@@ -1,6 +1,6 @@
 // VFR Flight Sim — Service Worker
 // 버전을 올리면 캐시가 갱신됩니다
-const CACHE = 'vfr-flight-v499';
+const CACHE = 'vfr-flight-v500';
 const CORE  = [
   './index.html',
   './manifest.json',
@@ -140,6 +140,6 @@ self.addEventListener('fetch', e => {
         caches.open(CACHE).then(c => c.put(e.request, clone));
         return res;
       })
-      .catch(() => caches.match(e.request).then(r => r || caches.match('./index.html')))
+      .catch(() => caches.match(e.request, { ignoreSearch: true }).then(r => r || caches.match('./index.html')))
   );
 });
