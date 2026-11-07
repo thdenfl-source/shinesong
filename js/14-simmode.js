@@ -689,10 +689,9 @@ function simModeAxes() {
   const ax = r => { try { return joyAxVal(r); } catch (e) { return 0; } };
   const o = { roll: ax('roll'), pitch: ax('pitch'), yaw: ax('yaw'), coll: ax('coll') };
   // 화면 조종간(3D 단독) — 쥐고 있는 동안은 그 값을 쓴다(실물 조종간과 함께 쓸 수 있다)
-  if (vStickActive()) {
-    if (vStick.yaw) o.yaw = vStick.yaw;
-    if (vStick.roll || vStick.pitch) { const c = vStickCyclic(); o.roll = c.roll; o.pitch = c.pitch; }
-  }
+  const vsa = vStickActive(), ga = gyroActive();
+  if (vsa && vStick.yaw) o.yaw = vStick.yaw;
+  if ((vsa || ga) && (vStick.roll || vStick.pitch)) { const c = vStickCyclic(); o.roll = c.roll; o.pitch = c.pitch; }
   return o;
 }
 
@@ -769,6 +768,7 @@ function vStickRender() {
 }
 function syncVStick() {
   const avail = vStickAvail(), want = vStickOn && avail;
+  try { syncGyro(); } catch (e) { _swallow(e); }
   const b = document.getElementById('vstick-btn');
   if (b) { b.textContent = vStickOn ? 'STICK ON' : 'STICK OFF'; b.classList.toggle('on', want); b.classList.toggle('dim', !avail); }
   const box = want ? _vStickBox() : document.getElementById('vstick');
@@ -781,6 +781,83 @@ function syncVStick() {
     vStickRender();
     if (typeof chinR !== 'undefined' && chinR) { chinR = false; chinViewOn = chinL || chinR; try { syncChinView(); } catch (e) { _swallow(e); } }
   }
+}
+// ── GYRO — 태블릿·휴대폰을 기울여 16방향 사이클릭을 몬다(3D 단독 · SIM) ──
+// GYRO ON 으로 센서를 켜고(아이폰·아이패드는 이때 허락을 묻는다), GYRO ALIGN 을 누른 그때의 기울기를 가운데로
+// 잡아 그때부터 몬다. 기기를 GYRO_FULL_DEG 기울이면 끝(화면 사이클릭과 같은 피치 ±10° · 롤 ±20°, 16방향 맞춤).
+// 화면 사이클릭을 손으로 쥐고 있는 동안은 손이 앞선다. 화면 방향(가로·세로)이 바뀌면 다시 ALIGN 해야 한다.
+const GYRO_FULL_DEG = 25, GYRO_DEAD_DEG = 1.5;
+let gyroOn = false, gyroAligned = false, _gyroZero = null, _gyroLast = null, _gyroBound = false;
+function gyroActive() { return gyroOn && gyroAligned && vStickAvail(); }
+function _gyroAngle() {
+  try { if (screen.orientation && Number.isFinite(screen.orientation.angle)) return screen.orientation.angle; } catch (e) { _swallow(e); }
+  return Number.isFinite(window.orientation) ? (window.orientation + 360) % 360 : 0;
+}
+// 기기 기울기 → 화면 기준(앞으로 숙임 + · 오른쪽 내림 +)
+function _gyroTilt(ev, ang) {
+  const b = ev.beta || 0, g = ev.gamma || 0;
+  if (ang === 90) return { fwd: g, right: b };
+  if (ang === 270) return { fwd: -g, right: -b };
+  if (ang === 180) return { fwd: b, right: -g };
+  return { fwd: -b, right: g };                       // 세로(0°): 위쪽을 앞으로 숙이면 beta 가 준다
+}
+function gyroFeed(ev) {
+  if (!ev || ev.beta == null) return;
+  const ang = _gyroAngle();
+  _gyroLast = { tilt: _gyroTilt(ev, ang), ang };
+  if (!gyroActive() || !_gyroZero) return;
+  if (_gyroZero.ang !== ang) {                         // 화면을 돌렸다 — 가운데가 어긋난다
+    gyroAligned = false; syncGyro();
+    try { uiToast('화면 방향이 바뀌었습니다 — GYRO ALIGN 을 다시 누르십시오', 'err', 2500); } catch (e) { _swallow(e); }
+    return;
+  }
+  const cyc = document.querySelector('#vstick .vs-cyc');
+  if (cyc && cyc.classList.contains('held')) return;   // 손이 쥐고 있으면 손이 앞선다
+  const d = v => Math.abs(v) < GYRO_DEAD_DEG ? 0 : (v - Math.sign(v) * GYRO_DEAD_DEG) / (GYRO_FULL_DEG - GYRO_DEAD_DEG);
+  const x = d(_gyroLast.tilt.right - _gyroZero.tilt.right), y = d(_gyroLast.tilt.fwd - _gyroZero.tilt.fwd);
+  const m = Math.min(1, Math.hypot(x, y));
+  if (m < 0.02) { vStick.roll = 0; vStick.pitch = 0; }
+  else {
+    const step = Math.PI / 8, a = Math.round(Math.atan2(y, x) / step) * step;   // 16방향
+    vStick.roll = +(m * Math.cos(a)).toFixed(4); vStick.pitch = +(m * Math.sin(a)).toFixed(4);
+  }
+  vStickRender();
+}
+function syncGyro() {
+  const avail = vStickAvail();
+  const b = document.getElementById('gyro-btn'), al = document.getElementById('gyro-align-btn');
+  if (b) { b.textContent = gyroOn ? 'GYRO ON' : 'GYRO OFF'; b.classList.toggle('on', gyroOn && avail); b.classList.toggle('dim', !avail); }
+  if (al) { al.style.display = gyroOn ? '' : 'none'; al.classList.toggle('on', gyroActive()); al.textContent = gyroAligned ? 'GYRO ALIGN ✓' : 'GYRO ALIGN'; }
+}
+async function toggleGyro() {
+  if (!vStickAvail()) {
+    try { uiToast('GYRO 는 SIM 모드의 3D 단독(3D Only) 화면에서 씁니다', '', 2500); } catch (e) { _swallow(e); }
+    return;
+  }
+  if (gyroOn) { gyroOn = false; gyroAligned = false; _gyroZero = null; vStick.roll = vStick.pitch = 0; vStickRender(); syncGyro(); return; }
+  if (typeof DeviceOrientationEvent === 'undefined') {
+    try { uiToast('이 기기에는 기울기(GYRO) 센서가 없습니다', 'err', 2500); } catch (e) { _swallow(e); }
+    return;
+  }
+  // 아이폰·아이패드(Safari·Chrome)는 누른 그 순간에 허락을 받아야 한다
+  try {
+    if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+      const r = await DeviceOrientationEvent.requestPermission();
+      // ('prompt' 는 거절이 아니다 — 크롬은 묻지 않고 그대로 준다. 'denied' 만 막는다)
+      if (r === 'denied') { try { uiToast('기울기 센서 사용을 허락하지 않았습니다 — 브라우저 설정에서 동작·방향 접근을 허용하십시오', 'err', 3000); } catch (e) { _swallow(e); } return; }
+    }
+  } catch (e) { _swallow(e); }
+  if (!_gyroBound) { window.addEventListener('deviceorientation', gyroFeed); _gyroBound = true; }
+  gyroOn = true; gyroAligned = false; _gyroZero = null;
+  syncGyro();
+  try { uiToast('기기를 편하게 잡은 자세에서 GYRO ALIGN 을 누르면 그때부터 기울기로 조종합니다', '', 3000); } catch (e) { _swallow(e); }
+}
+function gyroAlign() {
+  if (!gyroOn) return;
+  if (!_gyroLast) { try { uiToast('기울기 센서 값이 아직 없습니다 — 기기를 조금 움직인 뒤 다시 누르십시오', 'err', 2500); } catch (e) { _swallow(e); } return; }
+  _gyroZero = { tilt: { ..._gyroLast.tilt }, ang: _gyroLast.ang };
+  gyroAligned = true; vStick.roll = vStick.pitch = 0; vStickRender();
+  syncGyro();
 }
 function toggleVStick() {
   if (!vStickAvail()) {
@@ -1373,5 +1450,5 @@ function simFly(dt) {
 // 화면 버튼(data-act) 연결 — 이 파일이 11-charts.js 보다 나중에 로드되므로
 // 거기 목록에 넣으면 아직 정의되지 않은 이름이 된다. 여기서 직접 등록한다.
 // toggleFcp3d 는 04-map.js 에 있다(그 파일은 appRegister 보다 먼저 읽혀 여기서 연결한다)
-try { appRegister({ toggleSimMode, simModeBtnPress, toggleRotorChar, setRotorDir, toggleAse, toggleRcOpt, cycleSimEng, toggleFcp3d, toggleVStick }); } catch (e) { _swallow(e); }
+try { appRegister({ toggleSimMode, simModeBtnPress, toggleRotorChar, setRotorDir, toggleAse, toggleRcOpt, cycleSimEng, toggleFcp3d, toggleVStick, toggleGyro, gyroAlign }); } catch (e) { _swallow(e); }
 try { updateSimModeBtn(); } catch (e) { _swallow(e); }

@@ -311,4 +311,40 @@ export async function run(page, t) {
   t.ok(ped.held < -0.9 && ped.rel.yaw === 0, `페달 — 왼쪽 끝은 −1 언저리(${ped.held.toFixed(2)}), 놓으면 가운데로`);
   t.ok(coll.coll > 0.97 && coll.cmd > 135, `컬렉티브 — 위 끝으로 올리면 레버 ${coll.cmd.toFixed(0)}%(놓아도 그 자리)`);
   t.ok(coll.chinRefused && coll.chinBack, '조종간이 켜져 있으면 R CHIN 을 열 수 없고, 끄면 다시 열 수 있다');
+
+  // ── GYRO — 기기 기울기로 16방향 사이클릭(ALIGN 한 때부터) ──
+  const gy = await page.evaluate(async () => {
+    const wait = ms => new Promise(r => setTimeout(r, ms));
+    const ori = (beta, gamma) => window.dispatchEvent(new DeviceOrientationEvent('deviceorientation', { alpha: 0, beta, gamma }));
+    const deg = () => { const a = simModeAxes(); return { roll: +(a.roll * SIM_BANK_MAX).toFixed(3), pitch: +(a.pitch * SIM_PITCH_MAX).toFixed(3) }; };
+    toggleSimMode(true); vStickOn = false; gyroOn = false;
+    panelSolo('m3d'); await wait(500);
+    const o = { alignHidden: getComputedStyle(document.getElementById('gyro-align-btn')).display === 'none' };
+    document.getElementById('gyro-btn').click(); await wait(100);
+    o.on = { btn: document.getElementById('gyro-btn').textContent, alignShown: getComputedStyle(document.getElementById('gyro-align-btn')).display !== 'none' };
+    ori(40, 0); ori(40, 15); o.before = deg();                       // ALIGN 전에는 기울여도 듣지 않는다
+    ori(40, 5); document.getElementById('gyro-align-btn').click();     // 이 자세가 가운데
+    ori(40, 5); o.zero = deg();
+    ori(40, 30); o.right = deg();                                      // 오른쪽으로 25° → 롤 끝(20°)
+    ori(40, 60); o.over = deg();                                       // 더 기울여도 20°
+    ori(15, 5); o.fwd = deg();                                         // 앞으로 25° 숙임 → 피치 끝(10°, 기수 내림)
+    ori(40 - 9, 5 + 10); o.diag = { ...vStick };                       // 비스듬히 — 16방향으로 맞춘다
+    ori(40, 5); o.back = deg();
+    // 화면을 가로로 돌리면 다시 ALIGN 해야 한다
+    const angOrig = _gyroAngle; _gyroAngle = () => 90; ori(40, 5); o.rotated = gyroAligned; _gyroAngle = angOrig;
+    document.getElementById('gyro-btn').click(); await wait(50);
+    o.off = { btn: document.getElementById('gyro-btn').textContent, act: gyroActive() };
+    exitSolo(); toggleSimMode(false);
+    return o;
+  });
+  t.ok(gy.alignHidden && gy.on.btn === 'GYRO ON' && gy.on.alignShown, 'GYRO 를 켜면 GYRO ALIGN 버튼이 나타난다');
+  t.ok(gy.before.roll === 0 && gy.before.pitch === 0, 'GYRO ALIGN 을 누르기 전에는 기울여도 조종하지 않는다');
+  t.ok(gy.zero.roll === 0 && gy.zero.pitch === 0, 'ALIGN 한 그때의 기울기가 가운데다');
+  t.ok(Math.abs(gy.right.roll - 20) < 1e-6 && Math.abs(gy.over.roll - 20) < 1e-6 && gy.right.pitch === 0,
+    `기기를 오른쪽으로 기울이면 롤 — 끝은 20° (${gy.right.roll}° · 더 기울여도 ${gy.over.roll}°)`);
+  t.ok(Math.abs(gy.fwd.pitch - 10) < 1e-6 && gy.fwd.roll === 0, `앞으로 숙이면 피치(기수 내림) — 끝은 10° (${gy.fwd.pitch}°)`);
+  t.ok(Math.abs(gy.diag.roll - gy.diag.pitch) < 1e-3 && gy.diag.roll > 0, `비스듬히 기울이면 16방향(45°)으로 맞춘다 (${gy.diag.roll} · ${gy.diag.pitch})`);
+  t.ok(gy.back.roll === 0 && gy.back.pitch === 0, '가운데 자세로 돌아오면 가운데');
+  t.ok(gy.rotated === false, '화면 방향이 바뀌면 다시 ALIGN 해야 한다');
+  t.ok(gy.off.btn === 'GYRO OFF' && !gy.off.act, 'GYRO OFF 면 기울기로 조종하지 않는다');
 }
