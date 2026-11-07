@@ -1321,6 +1321,7 @@ function updateSoloBtn() {
     b.classList.toggle('active', on);
   });  const ob = document.getElementById('m3d-only-btn');
   if (ob) { const on = _soloActive && _soloCurrent === 'm3d'; ob.textContent = on ? '✥ 분할' : '⛶ 3D Only'; ob.classList.toggle('active', on); }
+  try { if (typeof syncFcp3d === 'function') syncFcp3d(); } catch (e) { _swallow(e); }   // 3D 단독에서만 FCP L·R
 }
 
 // MAP 상단 툴바의 FULL/HALF 토글 — 상황에 맞게 전체화면 진입/분할 복귀

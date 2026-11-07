@@ -2434,11 +2434,26 @@ export async function run(page, t) {
     S.alt = 1000; rotorChar = true;
     // (0.3초 — 블로우 백으로 기수가 들리면 감속이 세져(10° 넘으면 ×2) 곧 20kt 언저리를 벗어난다)
     const at = v => { S.spd = v; simTrim.pitch = -pitchFromSpd(v); S.pit = pitchFromSpd(v); fly(0.3); return S.pit - pitchFromSpd(v); };
-    const o = { k20: at(20), k60: at(60) };
+    const o = { k20: at(20), k60: at(60), kBack: at(-20), peak: RC_BLOWBACK };
+    // 4WAY 트림 4°(80kt 자세)로 호버 언저리에서 가속 — 블로우 백을 지나도 속도 기준은 트림 자세다
+    joyAxes = { pitch: { i: 1, inv: false } }; _ax(1, 0);
+    const accel = (rc) => {
+      rotorChar = rc; S.spd = 5; S.pit = pitchFromSpd(5); simTrimReset(); simTrim.pitch = -4; simTrimAct.pitch = -4;
+      let maxPit = -99; const spd = [];
+      for (let i = 0; i < 25; i++) { fly(1); maxPit = Math.max(maxPit, S.pit); spd.push(S.spd); }
+      return { maxPit, spd, pit: S.pit };
+    };
+    o.on = accel(true); o.off = accel(false);
     rotorChar = false; simTrimReset();
     return o;
   })()`);
-  t.ok(bb.k20 > 0.5 && Math.abs(bb.k60) < 0.5, `블로우 백 — 20kt 에서 기수가 들린다 (+${bb.k20.toFixed(1)}° · 60kt ${bb.k60.toFixed(1)}°)`);
+  t.ok(bb.k20 > 1.5 && bb.k20 <= bb.peak + 0.01 && Math.abs(bb.k60) < 0.5,
+    `블로우 백 — 20kt 에서 기수가 2.5° 안쪽으로 들린다 (+${bb.k20.toFixed(1)}° · 60kt ${bb.k60.toFixed(1)}°)`);
+  t.ok(Math.abs(bb.kBack) < 0.05, `후진 비행(20kt)에서는 블로우 백이 없다 (${bb.kBack.toFixed(2)}°)`);
+  t.ok(bb.on.maxPit > 5.5 && bb.on.maxPit < 4 + bb.peak + 0.3 && Math.abs(bb.on.pit - 4) < 0.1,
+    `트림 4° 로 가속하면 17~23kt 에서 잠깐 들렸다가(최대 ${bb.on.maxPit.toFixed(1)}°) 트림 자세로 돌아온다 (${bb.on.pit.toFixed(1)}°)`);
+  t.ok(bb.on.spd.every((v, i) => Math.abs(v - bb.off.spd[i]) < 0.5),
+    `트림이 잡고 있으면 블로우 백이 속도 기준을 흔들지 않는다 — 가속이 블로우 백 없을 때와 같다 (10초 ${bb.on.spd[9].toFixed(1)} · ${bb.off.spd[9].toFixed(1)}kt)`);
 
   // 회전익 특성 항목별 켜기/끄기
   const rcb = await page.evaluate(() => {
