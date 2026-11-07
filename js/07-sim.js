@@ -1152,6 +1152,11 @@ function applyPoRatio() {
 // 전체화면(solo)에서는 map-wrap이 숨겨진 좌측 패널에 있을 수 있어 setPage(0)로는
 // 검은 화면이 되므로, solo 모드일 때는 solo MAP 화면으로 전환한다.
 function cduOpenMap() {
+  // 3D 단독에서는 단독 화면을 바꾸지 않고 MAP 을 계기 칸 크기로 겹쳐 띄운다(MAP ON/OFF 와 같다)
+  if (_soloActive && _soloCurrent === 'm3d') {
+    if (!mapOvOn) { mapOvOn = true; try { localStorage.setItem(MAP_OV_PREF, '1'); } catch (e) { _swallow(e); } }
+    syncMapOverlay(); return;
+  }
   if (_soloActive) setSolo('map');
   else setPage(0);
 }
@@ -1323,6 +1328,7 @@ function updateSoloBtn() {
   if (ob) { const on = _soloActive && _soloCurrent === 'm3d'; ob.textContent = on ? '✥ 분할' : '⛶ 3D Only'; ob.classList.toggle('active', on); }
   try { if (typeof syncFcp3d === 'function') syncFcp3d(); } catch (e) { _swallow(e); }   // 3D 단독에서만 FCP L·R
   try { syncCduOverlay(); } catch (e) { _swallow(e); }   // 3D 단독에서만 CDU 겹치기
+  try { syncMapOverlay(); } catch (e) { _swallow(e); }   // 3D 단독에서만 MAP 겹치기
 }
 
 // MAP 상단 툴바의 FULL/HALF 토글 — 상황에 맞게 전체화면 진입/분할 복귀
@@ -1587,8 +1593,65 @@ function syncCduOverlay() {
   });
   requestAnimationFrame(() => { try { scaleCdu(); } catch (e) { _swallow(e); } });
   if (want !== _cduOvWas) { _cduOvWas = want; _refreshCduFooters(); }   // FULL/HALF 자리
+  requestAnimationFrame(() => { const m = document.getElementById('map-ov'); if (m && m.classList.contains('show')) _mapOvPlace(m); });
 }
 let _cduOvWas = false;
+// ── 3D 단독(3D Only) 화면의 MAP ── 계기 칸과 같은 크기(가로 1/4 · 높이 3/5)로 2D 지도(#map-wrap)를 겹쳐 띄운다.
+// 자리는 CDU 칸(켜져 있으면) 또는 3D 버튼 줄 바로 왼쪽. 'MAP' 버튼(CDU 아래)이나 겹친 CDU 의 MAP 으로 켠다.
+const MAP_OV_PREF = 'mapOverlay';
+let mapOvOn = false;
+try { mapOvOn = localStorage.getItem(MAP_OV_PREF) === '1'; } catch (e) { mapOvOn = false; }
+let _mapOvHome = null;
+function mapOvActive() { return mapOvOn && cduOvAvail(); }
+function _mapOvPlace(box) {
+  const host = box.parentElement; if (!host) return;
+  const hr = host.getBoundingClientRect();
+  const cdu = document.getElementById('cdu-ov');
+  const ctl = document.getElementById('ctl3d');
+  let edge = ctl ? ctl.getBoundingClientRect().left : hr.right - 104;
+  if (cdu && cdu.classList.contains('show')) edge = Math.min(edge, cdu.getBoundingClientRect().left);
+  box.style.right = Math.max(8, Math.round(hr.right - edge + 8)) + 'px';
+}
+function syncMapOverlay() {
+  const want = mapOvActive();
+  const b = document.getElementById('mapov-btn');
+  if (b) {
+    b.textContent = mapOvOn ? 'MAP ON' : 'MAP OFF';
+    b.classList.toggle('on', want);
+    b.classList.toggle('dim', !cduOvAvail());
+  }
+  const wrap = document.getElementById('map-wrap');
+  if (!wrap) return;
+  let box = document.getElementById('map-ov');
+  if (want) {
+    const host = pfdOvHost();
+    if (!box) {
+      box = document.createElement('div'); box.id = 'map-ov';
+      try { new ResizeObserver(() => { try { leafMap.invalidateSize(); } catch (e) { _swallow(e); } }).observe(box); } catch (e) { _swallow(e); }
+    }
+    if (box.parentElement !== host) host.appendChild(box);
+    if (wrap.parentElement !== box) {
+      _mapOvHome = document.createComment('map-ov'); wrap.before(_mapOvHome);
+      box.appendChild(wrap);
+    }
+    box.classList.add('show');
+    _mapOvPlace(box);
+  } else {
+    if (_mapOvHome) { _mapOvHome.replaceWith(wrap); _mapOvHome = null; }
+    if (box) box.classList.remove('show');
+  }
+  requestAnimationFrame(() => { try { leafMap.invalidateSize(); } catch (e) { _swallow(e); } if (box && want) _mapOvPlace(box); });
+}
+function toggleMapOverlay() {
+  if (!cduOvAvail()) {
+    try { uiToast('MAP 겹치기는 3D 단독(3D Only) 화면에서 씁니다', '', 2500); } catch (e) { _swallow(e); }
+    return;
+  }
+  mapOvOn = !mapOvOn;
+  try { localStorage.setItem(MAP_OV_PREF, mapOvOn ? '1' : '0'); } catch (e) { _swallow(e); }
+  syncMapOverlay();
+}
+window.addEventListener('resize', () => { const b = document.getElementById('map-ov'); if (b && b.classList.contains('show')) _mapOvPlace(b); });
 // 겹친 CDU 안에서 화면 바꾸기(setSolo 가 부른다) — 바꿨으면 true
 function cduOvRoute(screen) {
   if (!cduOvActive() || (screen !== 'cdu' && screen !== 'plan')) return false;
