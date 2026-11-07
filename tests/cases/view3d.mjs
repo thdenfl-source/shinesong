@@ -178,6 +178,7 @@ export async function run(page, t) {
     const sc = document.getElementById('cdu-scaler').getBoundingClientRect();
     o.on = { show: box.classList.contains('show'), inBox: document.getElementById('cdu-wrap').parentElement === box,
              gap: ctl.left - rc.right, w: rc.width / host.width, h: rc.height / host.height,
+             side: Math.max(sc.left - rc.left, rc.right - sc.right),   // 좌우 빈 여백(px)
              fit: sc.left >= rc.left - 1 && sc.right <= rc.right + 1 && sc.top >= rc.top - 1 && sc.bottom <= rc.bottom + 1 && sc.width > 100,
              btn: document.getElementById('cduov-btn').textContent };
     // 겹친 CDU 의 키가 그대로 듣는다
@@ -194,8 +195,8 @@ export async function run(page, t) {
   });
   t.ok(!cduov.split, '분할 화면에서는 CDU 겹치기를 쓰지 않는다(CDU 창이 따로 있다)');
   t.ok(cduov.on.show && cduov.on.inBox && cduov.on.btn === 'CDU ON' && Math.abs(cduov.on.gap - 8) < 2 &&
-       Math.abs(cduov.on.w - 0.25) < 0.06 && Math.abs(cduov.on.h - 0.6) < 0.06 && cduov.on.fit,
-    `3D 단독에서 CDU ON — 3D 버튼 줄 바로 왼쪽에 계기 칸 크기(가로 ${(cduov.on.w * 100).toFixed(0)}% · 높이 ${(cduov.on.h * 100).toFixed(0)}%)로 CDU 가 뜬다`);
+       Math.abs(cduov.on.h - 0.6) < 0.06 && cduov.on.fit && cduov.on.side < 4,
+    `3D 단독에서 CDU ON — 3D 버튼 줄 바로 왼쪽에 계기 칸 높이(${(cduov.on.h * 100).toFixed(0)}%)로, 좌우 빈 여백 없이(${cduov.on.side.toFixed(1)}px) CDU 가 뜬다`);
   t.eq(cduov.key, 'INTERCOM', '겹친 CDU 의 키가 그대로 듣는다');
   t.ok(!cduov.off.show && cduov.off.home === cduov.home0, 'CDU OFF 면 감추고 CDU 창을 제자리로 돌려놓는다');
   t.ok(!cduov.back.show && cduov.back.home === cduov.home0, '3D 단독을 나오면 CDU 가 제자리로 돌아간다');
