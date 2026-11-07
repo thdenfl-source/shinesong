@@ -71,6 +71,7 @@
     if (!window.gateLocked) return;
     const pw = el('gate-pw');
     if (pw && (e.target === pw || e.target === el('gate-ok'))) return;
+    if (e.target && e.target.classList && e.target.classList.contains('gate-mode-btn')) return;   // 화면 고르기 버튼(Enter·Tab)
     e.stopImmediatePropagation();
     if (pw && e.type === 'keydown') pw.focus();
   };
@@ -78,11 +79,24 @@
 
   const form = el('gate-box'), pw = el('gate-pw'), msg = el('gate-msg');
   if (!form || !pw) { setUnlocked(); return; }      // 덮개가 없으면 막을 것도 없다
+  // 비밀번호가 맞으면 화면을 고른다(PC 모드 · 3D 단독 모드) — 고른 뒤에 연다.
+  // 고른 화면은 그 탭에 적어 두고(vfrStartMode), 3D 단독이면 앱이 뜬 뒤 3D Only 로 바로 들어간다(14-simmode.js).
+  const chooseMode = () => {
+    form.classList.add('choose');
+    const pick = mode => {
+      try { sessionStorage.setItem('vfrStartMode', mode); } catch (e) { /* 이번만 */ }
+      window.vfrStartMode = mode;
+      setUnlocked();
+    };
+    form.querySelectorAll('.gate-mode-btn').forEach(b => b.addEventListener('click', () => pick(b.dataset.mode)));
+    const first = el('gate-mode-pc'); try { if (first) first.focus(); } catch (e) { /* 누르면 된다 */ }
+  };
   form.addEventListener('submit', e => {
     e.preventDefault();
+    if (form.classList.contains('choose')) return;
     if (window.lockCheck(pw.value)) {
-      setUnlocked();
       pw.value = '';
+      if (el('gate-mode')) chooseMode(); else setUnlocked();
       return;
     }
     if (msg) msg.textContent = '비밀번호가 맞지 않습니다';

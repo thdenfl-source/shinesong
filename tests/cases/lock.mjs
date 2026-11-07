@@ -46,6 +46,7 @@ export async function run(page, t) {
   const PW = process.env.VFR_GATE_PW;
   if (PW) {
     await tab.fill('#gate-pw', PW); await tab.click('#gate-ok');
+    await tab.click('#gate-mode-pc');                    // 비밀번호 다음 화면 고르기 — PC 모드
     const s2 = await state(tab);
     t.ok(!s2.locked && !s2.shown && s2.saved === '1', '맞는 비밀번호면 열린다');
   } else {
@@ -62,6 +63,31 @@ export async function run(page, t) {
   const s4 = await state(tab2);
   t.ok(s4.locked && s4.shown, '앱을 새로 열면 다시 묻는다');
   await tab2.close();
+
+  // 비밀번호가 맞으면 화면을 고른다 — PC 모드는 지금처럼, 3D 단독 모드는 3D Only 로 바로
+  // (맞는 비밀번호 대신 검사가 lockCheck 를 '맞음' 으로 바꿔 끼운다)
+  const pick = async (which) => {
+    const tb = await browser.newPage();
+    await tb.goto(url); await ready(tb);
+    await tb.evaluate(() => { window.lockCheck = () => true; });
+    await tb.fill('#gate-pw', 'x'); await tb.click('#gate-ok');
+    const mid = await tb.evaluate(() => ({ locked: window.gateLocked, choose: getComputedStyle(document.getElementById('gate-mode')).display !== 'none',
+                                          pwHidden: getComputedStyle(document.getElementById('gate-pw')).display === 'none' }));
+    await tb.click(which === '3d' ? '#gate-mode-3d' : '#gate-mode-pc');
+    await tb.waitForTimeout(1500);
+    const end = await tb.evaluate(() => ({ locked: window.gateLocked, shown: getComputedStyle(document.getElementById('gate-overlay')).display !== 'none',
+                                          solo: _soloActive, cur: _soloCurrent, mode: sessionStorage.getItem('vfrStartMode') }));
+    await tb.reload(); await ready(tb); await tb.waitForTimeout(1500);
+    end.reload = await tb.evaluate(() => ({ solo: _soloActive, cur: _soloCurrent }));
+    await tb.close();
+    return { mid, end };
+  };
+  const m3 = await pick('3d'), mp = await pick('pc');
+  t.ok(m3.mid.locked && m3.mid.choose && m3.mid.pwHidden, '비밀번호가 맞으면 화면 고르기(PC 모드 · 3D 단독 모드)가 뜨고, 고르기 전에는 열리지 않는다');
+  t.ok(!m3.end.locked && !m3.end.shown && m3.end.solo && m3.end.cur === 'm3d' && m3.end.mode === '3d',
+    '3D 단독 모드를 고르면 3D Only 로 바로 열린다');
+  t.ok(m3.end.reload.solo && m3.end.reload.cur === 'm3d', '같은 탭에서 새로고침해도 3D Only 로 열린다');
+  t.ok(!mp.end.locked && !mp.end.solo && mp.end.mode === 'pc', 'PC 모드를 고르면 지금처럼(분할) 열린다');
 
   // 비밀번호 글자는 앱 파일 어디에도 없다(SHA-256 값만 둔다)
   if (PW) {

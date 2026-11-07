@@ -731,7 +731,8 @@ function _init3dMap() {
     _ml3d.resize();
   });
 
-  _ml3d.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'bottom-right');
+  // 확대·나침반 버튼은 왼쪽 아래 축척 바로 위에(기울기 ▲▼ 는 그 오른쪽 · index.html #tilt-ctrl)
+  _ml3d.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'bottom-left');
   // 2D와 동일한 km+NM 이중 축척 위젯(.vfr-scale) — maplibre 컨트롤 컨테이너를
   // 거치지 않고 지도 컨테이너에 직접 절대배치(left:10px)해 2D와 픽셀 단위로 정렬
   const _sc3d = new DualScale3D();
