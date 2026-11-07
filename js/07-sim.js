@@ -1322,6 +1322,7 @@ function updateSoloBtn() {
   });  const ob = document.getElementById('m3d-only-btn');
   if (ob) { const on = _soloActive && _soloCurrent === 'm3d'; ob.textContent = on ? '✥ 분할' : '⛶ 3D Only'; ob.classList.toggle('active', on); }
   try { if (typeof syncFcp3d === 'function') syncFcp3d(); } catch (e) { _swallow(e); }   // 3D 단독에서만 FCP L·R
+  try { syncCduOverlay(); } catch (e) { _swallow(e); }   // 3D 단독에서만 CDU 겹치기
 }
 
 // MAP 상단 툴바의 FULL/HALF 토글 — 상황에 맞게 전체화면 진입/분할 복귀
@@ -1539,6 +1540,49 @@ function togglePfdOverlay() {
   try { localStorage.setItem(PFD_OV_PREF, pfdOvOn ? '1' : '0'); } catch (e) { _swallow(e); }
   updatePfdOvBtn();
   pfdOverlaySync();
+}
+// ── 3D 단독(3D Only) 화면의 CDU ── 3D 버튼 줄 바로 왼쪽에 계기 칸과 같은 크기(가로 1/4 · 높이 3/5)로
+// CDU 를 겹쳐 띄운다. CDU 창(#cdu-wrap) 그대로를 옮겨 오므로 버튼·화면이 같다(끄거나 단독을 나오면 제자리로).
+// 3D 창의 'CDU' 버튼으로 켜고 끈다(이 기기에 적어 둔다). 분할 화면에는 CDU 창이 따로 있다.
+const CDU_OV_PREF = 'cduOverlay';
+let cduOvOn = false;
+try { cduOvOn = localStorage.getItem(CDU_OV_PREF) === '1'; } catch (e) { cduOvOn = false; }
+let _cduOvHome = null;          // 제자리 표시
+function cduOvAvail() { return _soloActive && _soloCurrent === 'm3d' && !!pfdOvHost(); }
+function syncCduOverlay() {
+  const want = cduOvOn && cduOvAvail();
+  const b = document.getElementById('cduov-btn');
+  if (b) {
+    b.textContent = cduOvOn ? 'CDU ON' : 'CDU OFF';
+    b.classList.toggle('on', want);
+    b.classList.toggle('dim', !cduOvAvail());
+  }
+  const wrap = document.getElementById('cdu-wrap');
+  if (!wrap) return;
+  let box = document.getElementById('cdu-ov');
+  if (want) {
+    const host = pfdOvHost();
+    if (!box) { box = document.createElement('div'); box.id = 'cdu-ov'; }
+    if (box.parentElement !== host) host.appendChild(box);
+    if (wrap.parentElement !== box) {
+      _cduOvHome = document.createComment('cdu-ov'); wrap.before(_cduOvHome);
+      box.appendChild(wrap);
+    }
+    box.classList.add('show');
+  } else {
+    if (_cduOvHome) { _cduOvHome.replaceWith(wrap); _cduOvHome = null; }
+    if (box) box.classList.remove('show');
+  }
+  requestAnimationFrame(() => { try { scaleCdu(); } catch (e) { _swallow(e); } });
+}
+function toggleCduOverlay() {
+  if (!cduOvAvail()) {
+    try { uiToast('CDU 겹치기는 3D 단독(3D Only) 화면에서 씁니다 — 분할 화면에는 CDU 창이 따로 있습니다', '', 2500); } catch (e) { _swallow(e); }
+    return;
+  }
+  cduOvOn = !cduOvOn;
+  try { localStorage.setItem(CDU_OV_PREF, cduOvOn ? '1' : '0'); } catch (e) { _swallow(e); }
+  syncCduOverlay();
 }
 function updatePfdOvBtn() {
   const b = document.getElementById('pfdov-btn');

@@ -165,4 +165,38 @@ export async function run(page, t) {
     'FCP 둘 다 켜면 CHIN 창이 다 닫히고 FCP 전체가 좌·우로 나뉘어 뜬다');
   t.ok(fcp.chinBack, 'FCP 를 닫으면 그쪽 CHIN 을 다시 켤 수 있다');
   t.ok(fcp.back.home === fcp.back.total && !fcp.back.showL, `3D 단독을 빠져나가면 FCP 가 PFD 아래 제자리로 돌아간다 (${fcp.back.home}/${fcp.back.total})`);
+
+  // ── 3D 단독 화면의 CDU 겹치기 — 3D 버튼 줄 바로 왼쪽, 계기 칸 크기 ──
+  const cduov = await page.evaluate(async () => {
+    const wait = ms => new Promise(r => setTimeout(r, ms));
+    const o = { split: cduOvAvail(), home0: document.getElementById('cdu-wrap').parentElement.id };
+    cduOvOn = false;
+    panelSolo('m3d'); await wait(600);
+    document.getElementById('cduov-btn').click(); await wait(300);
+    const box = document.getElementById('cdu-ov'), rc = box.getBoundingClientRect();
+    const ctl = document.getElementById('ctl3d').getBoundingClientRect(), host = box.parentElement.getBoundingClientRect();
+    const sc = document.getElementById('cdu-scaler').getBoundingClientRect();
+    o.on = { show: box.classList.contains('show'), inBox: document.getElementById('cdu-wrap').parentElement === box,
+             gap: ctl.left - rc.right, w: rc.width / host.width, h: rc.height / host.height,
+             fit: sc.left >= rc.left - 1 && sc.right <= rc.right + 1 && sc.top >= rc.top - 1 && sc.bottom <= rc.bottom + 1 && sc.width > 100,
+             btn: document.getElementById('cduov-btn').textContent };
+    // 겹친 CDU 의 키가 그대로 듣는다
+    switchMode('HOME');
+    box.querySelector('[data-act="switchMode"][data-arg*="INTERCOM"]').click(); await wait(100);
+    o.key = currentMode; switchMode('HOME');
+    document.getElementById('cduov-btn').click(); await wait(100);
+    o.off = { show: box.classList.contains('show'), home: document.getElementById('cdu-wrap').parentElement.id };
+    document.getElementById('cduov-btn').click(); await wait(100);
+    exitSolo(); await wait(400);
+    o.back = { show: box.classList.contains('show'), home: document.getElementById('cdu-wrap').parentElement.id };
+    cduOvOn = false; try { localStorage.removeItem('cduOverlay'); } catch (e) {}
+    return o;
+  });
+  t.ok(!cduov.split, '분할 화면에서는 CDU 겹치기를 쓰지 않는다(CDU 창이 따로 있다)');
+  t.ok(cduov.on.show && cduov.on.inBox && cduov.on.btn === 'CDU ON' && Math.abs(cduov.on.gap - 8) < 2 &&
+       Math.abs(cduov.on.w - 0.25) < 0.06 && Math.abs(cduov.on.h - 0.6) < 0.06 && cduov.on.fit,
+    `3D 단독에서 CDU ON — 3D 버튼 줄 바로 왼쪽에 계기 칸 크기(가로 ${(cduov.on.w * 100).toFixed(0)}% · 높이 ${(cduov.on.h * 100).toFixed(0)}%)로 CDU 가 뜬다`);
+  t.eq(cduov.key, 'INTERCOM', '겹친 CDU 의 키가 그대로 듣는다');
+  t.ok(!cduov.off.show && cduov.off.home === cduov.home0, 'CDU OFF 면 감추고 CDU 창을 제자리로 돌려놓는다');
+  t.ok(!cduov.back.show && cduov.back.home === cduov.home0, '3D 단독을 나오면 CDU 가 제자리로 돌아간다');
 }
