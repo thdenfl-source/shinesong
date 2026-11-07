@@ -363,4 +363,18 @@ export async function run(page, t) {
     `가로로 쥐어도 숙이면 피치 · 오른쪽으로 내리면 롤이다 (숙임 피치 ${gy.l90fwd.pitch}° · 롤 ${gy.l90right.roll}°)`);
   t.ok(Math.abs(gy.l270fwd.pitch - 10) < 1e-6 && gy.l270fwd.roll === 0, '반대쪽 가로(−90)에서도 숙이면 피치다');
   t.ok(gy.off.btn === 'GYRO OFF' && !gy.off.act, 'GYRO OFF 면 기울기로 조종하지 않는다');
+
+  // ── 3D 지도 조작 버튼(확대·나침반 · 기울기) — 왼쪽 아래 축척 바로 위 ──
+  const ctl = await page.evaluate(async () => {
+    const wait = ms => new Promise(r => setTimeout(r, ms));
+    if (simModeOn) toggleSimMode(false);
+    panelSolo('m3d'); await wait(600);
+    const r = q => { const e = document.querySelector(q); if (!e || !e.offsetParent) return null; const x = e.getBoundingClientRect(); return { l: x.left, t: x.top, r: x.right, b: x.bottom }; };
+    const d3 = r('#map3d'), nav = r('#map3d .maplibregl-ctrl-bottom-left .maplibregl-ctrl-group'), tilt = r('#tilt-ctrl'), sc = r('#map3d .vfr-scale');
+    const o = { d3, nav, tilt, sc, right: !!document.querySelector('#map3d .maplibregl-ctrl-bottom-right .maplibregl-ctrl-group') };
+    exitSolo(); await wait(300);
+    return o;
+  });
+  t.ok(ctl.nav && ctl.sc && ctl.nav.l - ctl.d3.l < 20 && ctl.nav.b <= ctl.sc.t && ctl.tilt && ctl.tilt.l < ctl.d3.l + 100 && ctl.tilt.b <= ctl.sc.t && !ctl.right,
+    `3D 확대·나침반·기울기 버튼은 왼쪽 아래 축척 바로 위에 있다 (버튼 아래 ${Math.round(ctl.nav.b)} ≤ 축척 위 ${Math.round(ctl.sc.t)})`);
 }

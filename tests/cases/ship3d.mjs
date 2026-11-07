@@ -417,7 +417,7 @@ export async function run(page, t) {
                   rowShown: getComputedStyle(document.getElementById('chin-row')).display,
                   rowPe: getComputedStyle(document.getElementById('chin-row')).pointerEvents,
                   btn: getComputedStyle(document.getElementById('chin-btn')).display,
-                  ctrl: (() => { const e = document.querySelector('#map3d .maplibregl-ctrl-bottom-right'); if (!e) return null;
+                  ctrl: (() => { const e = document.querySelector('#map3d .maplibregl-ctrl-bottom-left'); if (!e) return null;
                                  const r = e.getBoundingClientRect(); return { b: r.bottom, h: r.height }; })(),
                   tilt: (() => { const r = document.getElementById('tilt-ctrl').getBoundingClientRect(); return { b: r.bottom, h: r.height }; })(),
                   mainPitch: _ml3d.getPitch(), mainH: _ml3d.transform.height,
