@@ -23,7 +23,7 @@ const SIM_BANK_MAX  = 45;      // 사이클릭 최대 뱅크(°)
 const SIM_ROLL_RATE = 12;      // 사이클릭에 뱅크가 따라가는 빠르기(°/s) — 종전 10 에서 20% 빠르게
 // 기수 자세의 한계 — 위아래 60° 까지. 속도는 제 한계에서 멎는다
 // (들면 16° 에 뒤로 40kt, 숙이면 −20° 에 160kt).
-const SIM_PITCH_MAX = 60;      // 사이클릭 최대 피치(°)
+const SIM_PITCH_MAX = 48;      // 사이클릭 최대 피치(°) — 종전 60° 의 80%: 같은 조종간 움직임에 자세가 덜 변해 더 정밀하다
 // ── 바퀴형 — 땅 위에서 ──
 // 흰수리는 바퀴가 달려 있다. 땅에서 토크를 20% 넘게 쓰면 원판이 앞으로 끌어 천천히
 // 굴러가기 시작하고(GND_CREEP — 토크가 클수록), 사이클릭을 민 만큼(기수를 숙인 각만큼)
@@ -232,6 +232,8 @@ const SPD_DEC_MAX = 11.25;   // 자세에 따른 증감속 — 종전보다 50% 
 // 종전보다 저크 4배 · 한계 5배(레버에 상승률이 훨씬 빨리 붙는다). 차차 맞춰 간다
 // 피치로 바뀌는 상승·강하(감속·가속이 돌려주는 운동에너지 몫)는 가감속 저크를 4배(가속 8 · 감속 24kt/s²)로 해 4배 빨리 붙는다
 const VS_JERK      = 500;   // 속도·상승률 변화 빠르기를 종전의 반으로     // 상승률의 변화가 커지는 빠르기(fpm/s²)
+// 조종(컬렉티브·사이클릭)에 따른 속도·고도 변화 빠르기 배율 — 종전보다 10% 느리게
+const SIM_RATE_K   = 0.9;
 const VS_ACC_MAX   = 1250;   // 속도·상승률 변화 빠르기를 종전의 반으로     // 상승률이 바뀌는 최대 빠르기(fpm/s)
 const VS_IGE_TAU   = 0.3;     // 지면효과 안(땅 가까이)에서 상승률이 토크를 따라가는 시간(s)
 const TQ_TAU       = 0.02;    // 토크가 레버를 따라가는 시간(s) — 엔진·로터 관성(종전 0.5 의 반 = 2배 빠르게)
@@ -350,11 +352,11 @@ function simAccLimit(ds) {
   const v = S.spd;
   if (v && Math.sign(ds) !== Math.sign(v)) {
     const k = simAccPitchK(true);
-    return { max: SPD_DEC_MAX * k, jerk: SPD_DEC_JERK * k };
+    return { max: SPD_DEC_MAX * k * SIM_RATE_K, jerk: SPD_DEC_JERK * k * SIM_RATE_K };
   }
   const k = simAccPitchK(false);
-  return { max: (SPD_ACC_UP0 + (SPD_ACC_UP - SPD_ACC_UP0) * Math.min(1, Math.abs(v) / SPD_ETL_KT)) * k,
-           jerk: SPD_JERK * k };
+  return { max: (SPD_ACC_UP0 + (SPD_ACC_UP - SPD_ACC_UP0) * Math.min(1, Math.abs(v) / SPD_ETL_KT)) * k * SIM_RATE_K,
+           jerk: SPD_JERK * k * SIM_RATE_K };
 }
 let simAcc = 0;               // 지금의 가감속(kt/s)
 let simVsAcc = 0;             // 지금 상승률이 바뀌는 빠르기(fpm/s)
@@ -1083,7 +1085,7 @@ function simFly(dt) {
       const lim = simAccLimit(ds);
       if (manual && S.tq < tqRequired() - DESC_TQ && ds < 0) {
         // 강하 파워에서 기수를 들면 — 감속이 점점 세지지 않고 남은 속도에 정비례해 곧바로 준다
-        simAcc = Math.max(-lim.max, ds * DESC_DEC_K);
+        simAcc = Math.max(-lim.max, ds * DESC_DEC_K * SIM_RATE_K);
       } else {
         simAcc = simJerkStep(ds, simAcc, dt, lim.max, lim.jerk, 1, lim.jerk * JERK_RELEASE);
       }
@@ -1095,7 +1097,7 @@ function simFly(dt) {
       const dev = Math.max(-KE_DEV_MAX, Math.min(KE_DEV_MAX, S.spd - sTgt));
       let ke = (dev > 0 ? KE_FPM_PER_KT : KE_FPM_PER_KT_ACC) * dev * Math.min(1, Math.abs(S.spd) / KE_FULL_KT);
       // 자세 배율로 가감속이 빨라진 만큼 같은 시간에 더 주고받는다 — 주고받는 고도 총량은 그대로(에너지)
-      ke *= simAccPitchK(dev > 0 && S.spd > 0);
+      ke *= simAccPitchK(dev > 0 && S.spd > 0) * SIM_RATE_K;
       if (_simKePowered && dev < 0) ke = 0;                        // 남는 출력이 낸 속도차(그 속도까지 붙는 가속)는 엔진 몫 — 감속은 그대로 고도로 돌아온다
       // 남는 출력(수평 비행 토크보다 많이)을 걸고 가속할 때는 엔진이 속도를 낸다 — 고도로 치르지 않는다
       // (남는 토크 0 → 5% 사이에서 서서히). 수평 비행 출력에서 기수를 숙여 가속하면 종전대로 고도로 치른다.
@@ -1229,13 +1231,13 @@ function simFly(dt) {
   // 12ft 아래는 빠르게, 20ft 위는 평소대로, 그 사이는 섞는다.
   const aglG = S.alt - gnd;
   const wG = Math.max(0, Math.min(1, (aglG - 12) / 8));
-  const accSlow = simJerkStep(vTgt - vsPow, simVsAcc, dt, VS_ACC_MAX, VS_JERK, 50);
+  const accSlow = simJerkStep(vTgt - vsPow, simVsAcc, dt, VS_ACC_MAX * SIM_RATE_K, VS_JERK * SIM_RATE_K, 50);
   const vsFast = vsPow + (vTgt - vsPow) * Math.min(1, dt / VS_IGE_TAU);
   const vsP = vsFast + (vsPow + accSlow * dt - vsFast) * wG;
   // 이어 받는 '변화 빠르기' 는 평소 한계(VS_ACC_MAX) 안에 둔다 — 땅 가까이의 빠른 몫까지
   // 그대로 넘기면, 20ft 위로 올라선 뒤 평소 셈이 그 큰 값을 몇십 초 동안 풀지 못해
   // 상승률이 수천 fpm 으로 치솟는다(플레어 뒤 레버를 올려 받칠 때 드러났다)
-  simVsAcc = Math.max(-VS_ACC_MAX, Math.min(VS_ACC_MAX, (vsP - vsPow) / dt));
+  simVsAcc = Math.max(-VS_ACC_MAX * SIM_RATE_K, Math.min(VS_ACC_MAX * SIM_RATE_K, (vsP - vsPow) / dt));
   // 오토로테이션 플레어 — 로터 추력이 곧(FLARE_TAU) 따라온다
   simFlareVs = onGnd ? 0 : simFlareVs + (simFlareTgt(onGnd) - simFlareVs) * Math.min(1, dt / FLARE_TAU);
   // 기수를 숙여 가속하며 레버를 내려도 강하는 4,000fpm 에서 멎는다(운동에너지 몫 포함)

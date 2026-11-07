@@ -189,7 +189,7 @@ export async function run(page, t) {
     const stick = (k) => (k === 0 ? 0 : Math.sign(k) * (Math.abs(k) * (1 - DEAD) + DEAD));
     const hold = (deg) => {
       // 그 자세가 되도록 조종간을 잡는다(앞으로 밀면 기수가 내려간다)
-      _ax(1, stick(-deg / 60));
+      _ax(1, stick(-deg / SIM_PITCH_MAX));
       // 속도는 점점 붙는다(가감속 5~6kt/s 한계) — 앞 자세에서 95kt 를 건너뛰려면
       // 20초 넘게 걸린다. 여기서는 '그 자세의 정상 속도' 를 보므로 15kt 떨어진
       // 자리에서 출발해 수렴하는지를 본다(점진성은 아래에서 따로 잰다).
@@ -201,7 +201,7 @@ export async function run(page, t) {
     const four  = hold(4);
     const seven = hold(7.5);
     const down  = hold(-10);                    // 기수 내림 10° → 140kt
-    const max   = hold(-60);                    // 끝까지 숙여도 자세는 60° 까지
+    const max   = hold(-SIM_PITCH_MAX);          // 끝까지 숙여도 자세는 48° 까지
     return { level, four, seven, down, max,
              law: [spdFromPitch(0), spdFromPitch(5), spdFromPitch(7.5), spdFromPitch(8.5), spdFromPitch(-10)],
              inv: [pitchFromSpd(120), pitchFromSpd(70), pitchFromSpd(0), pitchFromSpd(140)] };
@@ -220,8 +220,8 @@ export async function run(page, t) {
     `기수 7.5° 면 35kt 다 (${trimSpd.seven.pit.toFixed(1)}° · ${trimSpd.seven.spd.toFixed(1)}kt)`);
   t.ok(Math.abs(trimSpd.down.pit + 10) < 0.6 && Math.abs(trimSpd.down.spd - 140) < 8,
     `기수를 10° 숙이면 140kt 다 (${trimSpd.down.pit.toFixed(1)}° · ${trimSpd.down.spd.toFixed(0)}kt)`);
-  t.ok(Math.abs(trimSpd.max.pit - trimSpd.max.rbsP + 60) < 1.5,
-    `위아래 60° 까지 잡힌다 — VNE 를 넘긴 몫(후퇴익 실속 기수 들림 ${trimSpd.max.rbsP.toFixed(0)}°)은 빼고 (${trimSpd.max.pit.toFixed(1)}°)`);
+  t.ok(Math.abs(trimSpd.max.pit - trimSpd.max.rbsP + 48) < 1.5,
+    `위아래 48°(종전 60° 의 80%) 까지 잡힌다 — VNE 를 넘긴 몫(후퇴익 실속 기수 들림 ${trimSpd.max.rbsP.toFixed(0)}°)은 빼고 (${trimSpd.max.pit.toFixed(1)}°)`);
   t.ok(Math.abs(trimSpd.level.vs) < 150 && Math.abs(trimSpd.four.vs) < 150,
     `그동안 고도는 지킨다 (${trimSpd.level.vs.toFixed(0)} · ${trimSpd.four.vs.toFixed(0)}fpm)`);
 
@@ -236,7 +236,7 @@ export async function run(page, t) {
     const stick = (k) => (k === 0 ? 0 : Math.sign(k) * (Math.abs(k) * (1 - DEAD) + DEAD));
     // 1단계: 레버 없이(자동 트림) 고도를 지키게 둔다 — 그 자세의 속도로 멎는다
     joyAxes = { pitch: { i: 1, inv: false } };
-    _ax(1, stick(10 / 60));                 // 기수 10° 아래(하방)
+    _ax(1, stick(10 / SIM_PITCH_MAX));                 // 기수 10° 아래(하방)
     fly(30);
     const trim = { pit: S.pit, spd: S.spd, vs: S.vs, alt: S.alt, tq: S.tq };
     // 2단계: 같은 자세에서 레버를 쥐고 내린다
@@ -326,7 +326,7 @@ export async function run(page, t) {
 
     // ① 제자리(0kt)에서 오른쪽으로 기울인다
     S.hdg = 90; S.spd = 0; simLat = 0; S.bnk = 0;
-    _ax(1, stick(-pitchFromSpd(0) / 60));     // 호버 자세(7.5°)로 들어 속도를 0 에 둔다
+    _ax(1, stick(-pitchFromSpd(0) / SIM_PITCH_MAX));     // 호버 자세(7.5°)로 들어 속도를 0 에 둔다
     _ax(0, 1);
     fly(8);                                   // 자세·속도가 자리잡을 때까지
     const p0 = [S.lat, S.lon], h0 = S.hdg;
@@ -590,7 +590,7 @@ export async function run(page, t) {
     const stick = (k) => (k === 0 ? 0 : Math.sign(k) * (Math.abs(k) * (1 - DEAD) + DEAD));
     const run = (kt) => {
       joyAxes = { pitch: { i: 1, inv: false } };      // 레버는 자동 트림(고도 유지)
-      _ax(1, stick(-pitchFromSpd(kt) / 60));
+      _ax(1, stick(-pitchFromSpd(kt) / SIM_PITCH_MAX));
       S.spd = kt; S.alt = 4000; S.vs = 0;
       fly(20);                                        // 그 속도로 자리잡을 때까지
       const settled = S.spd;
@@ -1491,7 +1491,7 @@ export async function run(page, t) {
     }
     S.running = false;
     simTrimReset();
-    return { spd, sec, maxAcc, accMax: SPD_ACC_UP * simAccPitchK(false, -10), vs, all, tq, lever, peak, maxRate, rateMax: VS_ACC_MAX };   // 10° 숙임 ×1.4
+    return { spd, sec, maxAcc, accMax: SPD_ACC_UP * simAccPitchK(false, -10) * SIM_RATE_K, vs, all, tq, lever, peak, maxRate, rateMax: VS_ACC_MAX * SIM_RATE_K };   // 10° 숙임 ×1.4
   })()`);
   t.ok(grad.spd[0] - 120 < 2,
     `기수를 숙인 0.5초 뒤에는 조금만 붙는다 (${grad.spd[0].toFixed(1)}kt — 종전에는 곧바로 빨라졌다)`);
@@ -1583,7 +1583,7 @@ export async function run(page, t) {
     };
     const down = run(-40), same = run(0);  // 퀵스톱 — 기수를 들며 컬렉티브를 크게(40%) 내린다
     simTrimReset();
-    return { down, same, decMax: SPD_DEC_MAX * simAccPitchK(true, 12) };   // 12° 로 들면 감속 ×2
+    return { down, same, decMax: SPD_DEC_MAX * simAccPitchK(true, 12) * SIM_RATE_K };   // 12° 로 들면 감속 ×2
   })()`);
   const fd = flare.down;
   t.ok(fd.dec[0] > 2,
@@ -2546,7 +2546,7 @@ export async function run(page, t) {
     S.alt = 1000; _simGndFt = 0; rotorChar = true; rotorDir = 'CW';
     const go = (bank) => {
       S.hdg = 90; S.spd = 0; simLat = 0; S.bnk = 0;
-      _ax(1, stick(-pitchFromSpd(0) / 60)); _ax(0, stick(bank / SIM_BANK_MAX));
+      _ax(1, stick(-pitchFromSpd(0) / SIM_PITCH_MAX)); _ax(0, stick(bank / SIM_BANK_MAX));
       fly(10); return { lat: simLat, bnk: S.bnk };
     };
     const o = { none: go(0), right: go(3) };
@@ -2591,12 +2591,15 @@ export async function run(page, t) {
     // 실제로 — 120kt 에서 기수 10° 숙여 가속할 때와 수평 자세에서의 가속 한계
     S.spd = 100; S.pit = -10; const a10 = simAccLimit(10).max; S.pit = 0; const a0 = simAccLimit(10).max;
     S.pit = 12; const d12 = simAccLimit(-10).max; S.pit = 2; const d2 = simAccLimit(-10).max;
-    return { tbl, a10, a0, d12, d2 };
+    return { tbl, a10, a0, d12, d2, k: SIM_RATE_K, pmax: SIM_PITCH_MAX };
   })()`);
   t.eq(accK.tbl.up.map(v => +v.toFixed(2)).join('/'), '1/1.2/1.4/1.4/0.8/0.6/0.5/0.5',
     '증속 배율 — 수평 1.0 · 숙임 5° 1.2 · 10° 1.4 · 들림 0~3° 0.8 · 3~5° 0.6 · 5~7.5° 0.5');
   t.eq(accK.tbl.dn.map(v => +v.toFixed(2)).join('/'), '1.2/1.3/1.5/2/1',
     '감속 배율 — 들림 0~3° 1.2 · 3~5° 1.3 · 5~10° 1.5 · 10° 초과 2.0');
+  t.ok(accK.k === 0.9 && Math.abs(accK.a0 - 7.5 * 0.9) < 1e-6,
+    `조종에 따른 속도·고도 변화 빠르기는 종전보다 10% 느리다 (수평 가속 한계 ${accK.a0.toFixed(2)}kt/s)`);
+  t.eq(accK.pmax, 48, '사이클릭 피치 범위는 ±48°(종전 60° 의 80%) — 같은 조종간 움직임에 더 정밀하다');
   t.ok(Math.abs(accK.a10 / accK.a0 - 1.4) < 1e-6 && Math.abs(accK.d12 / accK.d2 - 2 / 1.2) < 1e-6,
     `가감속 한계에 그대로 곱해진다 (숙임 10° ${accK.a10.toFixed(2)} · 수평 ${accK.a0.toFixed(2)} · 들림 12° 감속 ${accK.d12.toFixed(2)}kt/s)`);
 
