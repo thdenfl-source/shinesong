@@ -218,7 +218,7 @@ function gaEngage() {
 function gaRelease() { gaOn = false; vsModeOn = false; try { tdownRelease(); } catch (e) { _swallow(e); } updateGaBtn(); }
 function updateGaBtn() {
   const b = document.getElementById('ga-btn'); if (b) b.classList.toggle('on', gaOn);
-  const t = document.getElementById('tdown-btn'); if (t) t.classList.toggle('on', typeof tdOn !== 'undefined' && tdOn);
+  const t = document.getElementById('tdh-btn'); if (t) t.classList.toggle('on', typeof tdOn !== 'undefined' && tdOn);
 }
 // simFly 가 구간마다 부른다 — 속도 기준을 목표 쪽으로 옮기고, 다 되면 VS · IAS 로 넘긴다
 function gaStep(dt) {
@@ -229,23 +229,38 @@ function gaStep(dt) {
   selSpd = _gaSpd0 + (_gaSpdTgt - _gaSpd0) * k;
   if (x >= 1) { gaOn = false; vsModeOn = true; selSpd = _gaSpdTgt; updateGaBtn(); }
 }
-// ── T/DOWN(전환 강하) ── FCP 의 T/DOWN 버튼(G/S 버튼 자리). 50kt 이상 · 전파고도 200ft 이상에서 건다.
+// ── TDOWN(제원 변경) ── FCP 의 TDOWN 버튼. 누르면 속도 80kt · 전파고도 200ft 로 기준만 바꾼다
+//   (IAS 80 · CRHT 200 을 건다 — FMA 는 CRHT · IAS). SIM 밖에서도 같은 기준으로 간다.
+const TDN_SPD = 80, TDN_AGL = 200;
+function tdownSet() {
+  try { if (tdOn) tdownRelease(); } catch (e) { _swallow(e); }
+  try { if (gspdOn) toggleGspd(); } catch (e) { _swallow(e); }
+  gaOn = false; vsModeOn = false;
+  selSpd = TDN_SPD;
+  if (simModeOn) simIasOn = true;
+  selCrht = TDN_AGL; crhtOn = true; altHoldOn = false;
+  updateGaBtn();
+  try { updateHoverBtns(); updateApInhibit(); } catch (e) { _swallow(e); }
+  const b = document.getElementById('tdown-btn');
+  if (b) { b.classList.add('flash'); setTimeout(() => b.classList.remove('flash'), 600); }
+}
+// ── T/D to H(호버로 전환 강하) ── FCP 의 T/D to H 버튼(TDOWN 아래). 50kt 이상 · 전파고도 200ft 이상에서 건다.
 //   · 지금 자리에서 3° 강하각으로 내려가 HHT(전파고도 기준 호버 높이)에 닿는다.
 //   · 속도는 0 으로 모은다 — 남은 높이에 맞춰 v = v0·√(h/h0)(일정 감속)로 기준을 줄이고,
 //     강하율은 지상속도 × tan3° 로 낸다. 그래서 속도와 높이가 같은 3° 선 위에서 함께 0·HHT 로 간다.
-//   · 다 내려오면 HHT 높이 · 0kt 로 제자리 비행을 이어 간다(FMA 는 계속 TDOWN).
+//   · 다 내려오면 HHT 높이 · 0kt 로 제자리 비행을 이어 간다(FMA 는 계속 TDH).
 //   · 롤 축은 HDG·NAV 그대로 몬다. 45kt 밑으로 줄면 FMA 가 황색(성능 감소 주의),
 //     30kt 밑이면 롤 축을 놓는다(decouple) — 그 뒤 HDG·NAV 를 다시 거는 것은 조종사 몫.
 const TD_MIN_KT = 50, TD_MIN_AGL = 200, TD_ANG = 3, TD_AMBER_KT = 45, TD_DECPL_KT = 30;
 let tdOn = false, _tdV0 = 0, _tdH0 = 1, _tdDecpl = false, _tdDone = false;
 function tdownAvail() { return simModeOn && S.spd >= TD_MIN_KT && radarAltFt() >= TD_MIN_AGL; }
-function tdownEngage() {
+function tdhEngage() {
   if (tdOn) { tdownRelease(); return; }
-  if (!simModeOn) { try { uiToast('T/DOWN 은 SIM 모드에서 씁니다', '', 2000); } catch (e) { _swallow(e); } return; }
+  if (!simModeOn) { try { uiToast('T/D to H 는 SIM 모드에서 씁니다', '', 2000); } catch (e) { _swallow(e); } return; }
   const ra = radarAltFt();
   if (S.spd < TD_MIN_KT || ra < TD_MIN_AGL || ra <= selHht + 10) {
     const why = S.spd < TD_MIN_KT ? `속도 ${TD_MIN_KT}kt 이상` : ra < TD_MIN_AGL ? `전파고도 ${TD_MIN_AGL}ft 이상` : 'HHT 보다 높은 곳';
-    try { uiToast(`T/DOWN 조건 — ${why}에서 걸 수 있습니다`, '', 2500); } catch (e) { _swallow(e); }
+    try { uiToast(`T/D to H 조건 — ${why}에서 걸 수 있습니다`, '', 2500); } catch (e) { _swallow(e); }
     return;
   }
   try { if (gspdOn) toggleGspd(); } catch (e) { _swallow(e); }
@@ -1589,5 +1604,5 @@ function simFly(dt) {
   }, 200);
 })();
 // toggleFcp3d 는 04-map.js 에 있다(그 파일은 appRegister 보다 먼저 읽혀 여기서 연결한다)
-try { appRegister({ toggleSimMode, simModeBtnPress, toggleRotorChar, setRotorDir, toggleAse, toggleRcOpt, cycleSimEng, toggleFcp3d, toggleVStick, toggleGyro, gyroAlign, gaEngage, tdownEngage }); } catch (e) { _swallow(e); }
+try { appRegister({ toggleSimMode, simModeBtnPress, toggleRotorChar, setRotorDir, toggleAse, toggleRcOpt, cycleSimEng, toggleFcp3d, toggleVStick, toggleGyro, gyroAlign, gaEngage, tdownSet, tdhEngage }); } catch (e) { _swallow(e); }
 try { updateSimModeBtn(); } catch (e) { _swallow(e); }

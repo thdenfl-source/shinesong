@@ -3,7 +3,7 @@
 // HHT 높이에서 멈춘다. 롤 축은 HDG·NAV 그대로 — 45kt 밑 황색, 30kt 밑 decouple.
 // 함께: ALT·CRHT 는 글자 버튼, HHT ▲▼.
 import { SIM_SETUP_SRC, SIM_FLY_SRC } from './simmode.mjs';
-export const name = 'T/DOWN';
+export const name = 'T/DOWN';   // TDOWN(제원 변경) · T/D to H
 
 export async function run(page, t) {
   const r = await page.evaluate(`(() => {
@@ -23,19 +23,29 @@ export async function run(page, t) {
     // FCP — ALT·CRHT 글자가 곧 버튼 · G/S 버튼 없음 · HHT ▲▼
     const altB = document.getElementById('alt-hold-btn'), crB = document.getElementById('crht-btn');
     o.lbl = { alt: altB.textContent.trim(), crht: crB.textContent.trim(), altIsLbl: altB.classList.contains('ctrl-lbl-btn'),
-              gs: !!document.getElementById('gs-btn'), td: !!document.getElementById('tdown-btn') };
+              gs: !!document.getElementById('gs-btn'), td: !!document.getElementById('tdh-btn') };
     altB.click(); o.altOn = [altHoldOn, altB.classList.contains('on')]; altB.click(); o.altOff = altHoldOn;
     crB.click(); o.crOn = crhtOn; crB.click();
     selHht = 50; applyDelta('hht', 10); o.hhtUp = selHht; applyDelta('hht', -10);
+    // TDOWN — 80kt · 전파고도 200ft 로 기준만 바꾼다(IAS 80 · CRHT 200)
+    { const tb = document.getElementById('tdown-btn'), hb = document.getElementById('tdh-btn');
+      o.order = tb.getBoundingClientRect().bottom <= hb.getBoundingClientRect().top + 1;
+      o.tdTxt = [tb.textContent.trim(), hb.textContent.trim()];
+      S.alt = 1000; S.spd = 120; S.vs = 0; S.tq = tqRequired(); hdgSelOn = false;
+      tb.click();
+      o.set = { spd: selSpd, crht: selCrht, crhtOn, ias: simIasOn, td: tdOn, f: fma().map(x => x[0]) };
+      fly(150);
+      o.setFly = { ra: radarAltFt(), spd: S.spd };
+      if (crhtOn) toggleCrht(); if (simIasOn) simIasRelease(); }
     // 조건 — 느리거나 낮으면 걸리지 않는다
-    S.alt = 1000; S.spd = 40; tdownEngage(); o.slow = tdOn;
-    S.spd = 100; S.alt = 150; tdownEngage(); o.low = tdOn;
+    S.alt = 1000; S.spd = 40; tdhEngage(); o.slow = tdOn;
+    S.spd = 100; S.alt = 150; tdhEngage(); o.low = tdOn;
     // 1000ft · 100kt · HDG 090 유지에서 누른다
     S.alt = 1000; S.spd = 100; S.hdg = 90; S.vs = 0; S.tq = tqRequired(); S.bnk = 0;
     selHdg = 90; hdgSelOn = true; rollApOn = true;
     const lat0 = S.lat, lon0 = S.lon;
-    document.getElementById('tdown-btn').click();
-    o.on = tdOn; o.btnOn = document.getElementById('tdown-btn').classList.contains('on');
+    document.getElementById('tdh-btn').click();
+    o.on = tdOn; o.btnOn = document.getElementById('tdh-btn').classList.contains('on');
     o.fma0 = fma().map(x => x[0]);
     let amber = null, decpl = null, hdgAt50 = null, maxVs = 0, path = [];
     for (let i = 0; i < 400; i++) {
@@ -53,7 +63,7 @@ export async function run(page, t) {
     o.fma1 = fma().map(x => x[0]);
     o.amber = amber; o.decpl = decpl; o.hdgAt50 = hdgAt50; o.maxVs = maxVs; o.path = path;
     // 한 번 더 누르면 풀린다
-    tdownEngage(); o.off = tdOn;
+    tdhEngage(); o.off = tdOn;
     toggleSimMode(false);
     return o;
   })()`);
@@ -61,12 +71,19 @@ export async function run(page, t) {
   t.ok(r.altOn[0] && r.altOn[1] && !r.altOff, 'ALT 글자를 누르면 걸리고(켜진 모양) 한 번 더 누르면 풀린다');
   t.eq(r.crOn, true, 'CRHT 글자를 누르면 CRHT 가 걸린다');
   t.eq(r.lbl.gs, false, 'G/S 버튼은 없다(ILS 에서 스스로 잡는다)');
-  t.eq(r.lbl.td, true, 'T/DOWN 버튼이 있다');
+  t.eq(r.lbl.td, true, 'T/D to H 버튼이 있다');
   t.eq(r.hhtUp, 60, `HHT ▲ 는 10ft 씩 올린다 (${r.hhtUp})`);
+  t.ok(r.order, 'TDOWN 아래에 T/D to H 버튼이 있다');
+  t.eq(r.tdTxt.join('|'), 'TDOWN|T/D to H', '버튼 이름');
+  t.ok(r.set.spd === 80 && r.set.crht === 200 && r.set.crhtOn && r.set.ias && !r.set.td,
+    `TDOWN 은 기준만 바꾼다 — IAS ${r.set.spd} · CRHT ${r.set.crht}`);
+  t.ok(r.set.f.includes('CRHT') && r.set.f.includes('IAS') && !r.set.f.includes('TDH'), `FMA 는 CRHT · IAS (${r.set.f.join(' ')})`);
+  t.ok(Math.abs(r.setFly.ra - 200) < 20 && Math.abs(r.setFly.spd - 80) < 6,
+    `150초 뒤(CRHT 500fpm) 전파고도 200ft · 80kt 언저리 (${r.setFly.ra.toFixed(0)}ft · ${r.setFly.spd.toFixed(0)}kt)`);
   t.eq(r.slow, false, '50kt 미만이면 걸리지 않는다');
   t.eq(r.low, false, '전파고도 200ft 미만이면 걸리지 않는다');
   t.ok(r.on && r.btnOn, 'T/DOWN 을 누르면 걸리고 버튼이 켜진다');
-  t.ok(r.fma0.filter(s => s === 'TDOWN').length >= 2, `FMA 컬렉티브·피치 축이 TDOWN (${r.fma0.join(' ')})`);
+  t.ok(r.fma0.filter(s => s === 'TDH').length >= 2, `FMA 컬렉티브·피치 축이 TDH (${r.fma0.join(' ')})`);
   t.ok(r.fma0.includes('HDG'), '롤 축은 HDG 가 그대로 몬다');
   t.ok(r.maxVs < 100, `오르지 않는다 (최대 ${r.maxVs.toFixed(0)}fpm)`);
   const p = r.path;
@@ -78,7 +95,7 @@ export async function run(page, t) {
   t.ok(r.decpl && !r.decpl.hdg && !r.decpl.roll, `30kt 밑이면 롤 축이 풀린다 (${r.decpl && r.decpl.spd.toFixed(0)}kt)`);
   t.ok(Math.abs(r.end.ra - 50) < 8, `HHT(50ft)에서 멈춘다 (RA ${r.end.ra.toFixed(0)}ft)`);
   t.ok(Math.abs(r.end.spd) < 3, `속도가 0 에 모인다 (${r.end.spd.toFixed(1)}kt · ${r.doneAt}s)`);
-  t.ok(r.end.td && r.fma1.includes('TDOWN'), '멈춘 뒤에도 TDOWN 으로 제자리 비행');
+  t.ok(r.end.td && r.fma1.includes('TDH'), '멈춘 뒤에도 TDH 로 제자리 비행');
   t.eq(r.off, false, '한 번 더 누르면 풀린다');
 
   await page.evaluate(() => {

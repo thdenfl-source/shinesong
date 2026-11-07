@@ -71,7 +71,7 @@ let _simLoopRunning = false;  // guard against double-starting the rAF loop
 // ── AFCS Preselects ──
 let selSpd  = 80;   // IAS preselect (kt)
 let selAlt  = 500;  // ALT preselect (ft) — target for ALT hold mode
-let selHht = 50;   // HHT — T/DOWN 이 내려가 멈출 호버 높이(전파고도 ft · FCP HHT ▲▼)
+let selHht = 50;   // HHT — T/D to H 가 내려가 멈출 호버 높이(전파고도 ft · FCP HHT ▲▼)
 let selCrht = 500;  // CRHT preselect (ft) — target for CRHT hold mode
 let selHdg  = 360;  // HDG preselect (°, 1-360)
 // ── HDG SEL: 선택 헤딩으로 표준선회(360°/2분 = 3°/s)로 선회 ──
@@ -284,7 +284,7 @@ function toggleGs() {
   updateGsBtn();
 }
 // ── G/S 자동 ── G/S 버튼은 없다. ILS(강하선이 있는 LOC)를 지금 NAV 소스로 맞추면 스스로 무장하고,
-// 강하각에 맞는 순간(편차 0.15° 안) 붙잡는다. 조종사가 ALT·CRHT·T/DOWN·G/A 를 걸어 놓으면
+// 강하각에 맞는 순간(편차 0.15° 안) 붙잡는다. 조종사가 ALT·CRHT·T/D to H·G/A 를 걸어 놓으면
 // 그 강하선에서 벗어날 때(편차 0.3° 밖)까지 다시 잡지 않는다 — 놓자마자 도로 붙잡지 않게.
 let _gsLatch = false;
 function gsAutoLatch() { _gsLatch = true; }
@@ -305,7 +305,7 @@ function gsCaptureCheck() {
   if (_gsLatch) { if (Math.abs(g.dev) > 0.3) _gsLatch = false; else return; }
   if (!gsArmed) { gsArmed = true; updateGsBtn(); }
   if (Math.abs(g.dev) < 0.15) {
-    // 아래로 내려가는 G/A·T/DOWN 중에는 잡지 않는다(조종사가 고른 길이 우선)
+    // 아래로 내려가는 G/A·T/D to H 중에는 잡지 않는다(조종사가 고른 길이 우선)
     if ((typeof gaOn !== 'undefined' && gaOn) || (typeof tdOn !== 'undefined' && tdOn)) return;
     gsOn = true; gsArmed = false;
     if (altHoldOn || crhtOn) { altHoldOn = false; crhtOn = false; try { updateHoverBtns(); } catch (e) { _swallow(e); } }
