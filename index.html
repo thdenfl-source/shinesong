@@ -979,9 +979,10 @@ body.solo-mode .solo-panel-visible {
 #pfd-ov canvas { display: block; width: 100%; height: 100%; }
 /* 3D 가 제 창(3D 탭 · 3D 단독) — 툴바가 없으므로 위에 붙인다 */
 #map3d-wrap > #pfd-ov { top: 8px; }
-/* 3D 단독 화면의 CDU — 3D 버튼 줄(오른쪽 8px · 너비 96px) 바로 왼쪽, 계기 칸과 같은 크기 */
-#cdu-ov { display: none; position: absolute; right: 112px; top: 8px; width: 25%; height: 60%;
-          min-width: min(240px, calc(100% - 240px)); min-height: min(380px, 85%);
+/* 3D 단독 화면의 CDU — 3D 버튼 줄(오른쪽 8px · 너비 96px) 바로 왼쪽, 높이는 계기 칸과 같고 너비는 CDU 비율 */
+#cdu-ov { display: none; position: absolute; right: 112px; top: 8px; height: 60%; width: auto;
+          aspect-ratio: 354 / 567;                 /* 높이만 계기 칸에 맞추고 너비는 CDU 비율대로 — 좌우 빈 여백 없이 */
+          min-height: min(380px, 85%);
           z-index: 950; background: #000; border: 1px solid #333; border-radius: 4px;
           overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.6); }
 #cdu-ov.show { display: block; }
@@ -2112,7 +2113,7 @@ body.gate-open #gate-overlay { display: none; }
             산 위를 지나거나 타일이 바뀌는 순간에도 위아래로 튀지 않습니다. 땅 가까이(AGL 40m 아래)에서는
             그려진 땅에 그대로 맞춰 내려앉고, 외부 시점의 카메라는 같은 프레임의 헬기 자리를 그대로 씁니다.<br>
             <b>CDU ON/OFF</b>(3D 오른쪽 버튼 묶음, 계기 버튼 아래) — <b>3D 단독(3D Only) 화면</b>에서 CDU 를 <b>3D 버튼 줄 바로 왼쪽</b>에
-            계기 칸과 같은 크기(가로 1/4 · 높이 3/5)로 겹쳐 띄웁니다. CDU 창 그대로라 키·화면이 같고, 끄거나 단독을 나오면 제자리로 돌아갑니다(이 기기에 기억).<br>
+            계기 칸과 같은 높이(3/5)로 겹쳐 띄웁니다(너비는 CDU 비율대로 — 좌우 빈 여백 없이). CDU 창 그대로라 키·화면이 같고, 끄거나 단독을 나오면 제자리로 돌아갑니다(이 기기에 기억).<br>
             <b>FCP L · FCP R</b>(3D 오른쪽 버튼 묶음, 계기 버튼 아래) — <b>3D 단독(3D Only) 화면</b>에서 PFD 아래 FCP 를 3D 화면에 띄웁니다.
             FCP 의 줄마다 <b>왼쪽 반은 FCP L</b>(IAS·HDG·CRS·VS · 바람·AP · NAV SRC…), <b>오른쪽 반은 FCP R</b>(ALT·CRHT·ALT 유지·SIM · BRG·스톱워치·HOVER · 트림…)이며,
             <b>CHIN 창 자리(아래 왼쪽·오른쪽 모서리)</b>에 뜹니다. FCP 를 켠 쪽 CHIN 창은 닫히고, 둘 다 켜면 CHIN 창이 모두 닫힙니다.
@@ -2866,7 +2867,7 @@ body.gate-open #gate-overlay { display: none; }
           <button class="sim-btn on" id="fpv-btn" data-act="toggleFpv" title="ADI 의 예상 항적(초록 원 · FPV) 보이기/감추기">FPV ON</button>
             <button class="sim-btn on" id="pfdov-btn" data-act="togglePfdOverlay" title="계기 — 3D 화면 왼쪽 위에 PFD 계기(FCP 없이)를 겹쳐 보이기/감추기">계기 ON</button>
           <!-- CDU ON/OFF — 3D 단독 화면에서 3D 버튼 줄 바로 왼쪽에 CDU 를 계기 칸 크기로 겹쳐 띄운다(07-sim.js) -->
-          <button class="sim-btn" id="cduov-btn" data-act="toggleCduOverlay" title="CDU — 3D 단독(3D Only) 화면에서 3D 버튼 줄 바로 왼쪽에 CDU 를 계기 칸 크기(가로 1/4 · 높이 3/5)로 보이기/감추기">CDU OFF</button>
+          <button class="sim-btn" id="cduov-btn" data-act="toggleCduOverlay" title="CDU — 3D 단독(3D Only) 화면에서 3D 버튼 줄 바로 왼쪽에 CDU 를 계기 칸 높이(3/5)로 보이기/감추기">CDU OFF</button>
           <!-- FCP L · FCP R — PFD 아래 FCP 의 왼쪽·오른쪽 반을 3D 화면 아래 같은 쪽 모서리(CHIN 창 자리)에(3D 단독에서만 · 04-map.js) -->
           <div id="fcp-btn" class="fcp-btn-row"><button class="sim-btn" id="fcp-l-btn" data-act="toggleFcp3d" data-arg='["L"]' title="FCP L — FCP 왼쪽 반(IAS·HDG·CRS·VS…)을 3D 화면 왼쪽 아래에(그쪽 CHIN 창은 닫힘 · 3D 단독 화면에서만)">FCP L</button><button class="sim-btn" id="fcp-r-btn" data-act="toggleFcp3d" data-arg='["R"]' title="FCP R — FCP 오른쪽 반(ALT·CRHT·SIM·AP·BRG·HOVER…)을 3D 화면 오른쪽 아래에(그쪽 CHIN 창은 닫힘 · 3D 단독 화면에서만)">FCP R</button></div>
           <!-- MG(Slaved)/DG — 방향 기준. 지도 창의 같은 버튼과 같다(07-sim.js) -->
