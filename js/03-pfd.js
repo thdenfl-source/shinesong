@@ -139,7 +139,9 @@ function drawFMA(x, y, w) {
     rightOn = !simModeOn || simIasOn;
     // G/A — 컬렉티브·피치 축이 GA, 끝나면 컬렉티브 VS(선택 상승률) · 피치 IAS
     const ga = (typeof gaOn !== 'undefined') && simModeOn && gaOn, vsm = (typeof vsModeOn !== 'undefined') && simModeOn && vsModeOn;
-    if (ga) { left = 'GA'; leftOn = true; right = 'GA'; rightOn = true; }
+    const td = (typeof tdOn !== 'undefined') && simModeOn && tdOn;
+    if (td) { left = 'TDOWN'; leftOn = true; right = 'TDOWN'; rightOn = true; }
+    else if (ga) { left = 'GA'; leftOn = true; right = 'GA'; rightOn = true; }
     else if (vsm && !altHoldOn && !crhtOn) { left = 'VS ' + Math.round(selVS); leftOn = true; }
   }
 
@@ -155,8 +157,11 @@ function drawFMA(x, y, w) {
   const active = [leftOn, midOn,  rightOn];
   const armed  = [leftArm, '',    ''      ];
 
-  const modeColor = (lbl, on) => {
+  // T/DOWN 중 45kt 밑 — 롤 축(HDG·NAV)이 성능이 줄었다는 주의(황색)
+  const midAmber = (typeof tdRollAmber === 'function') && tdRollAmber();
+  const modeColor = (lbl, on, i) => {
     if (!on) return '#3a3a3a';
+    if (i === 1 && midAmber) return '#ffcc00';
     // GS/NAV · GS/HDG = GSPD 가 축을 잡고 있어 NAV·HDG 가 조향하지 못하는 대기 상태.
     // 초록(정상 작동)과 구분되게 호박색으로 표시한다.
     // G/S 도 빗금이 있으므로 대기 상태(GS/NAV)보다 먼저 가려낸다.
@@ -189,7 +194,7 @@ function drawFMA(x, y, w) {
       const gap2 = 4, total = w1 + gap2 + w2;
       let px = bx + (cellW - total) / 2;
       ctx.textAlign = 'left';
-      ctx.font = mainF;  ctx.fillStyle = modeColor(modes[i], on);
+      ctx.font = mainF;  ctx.fillStyle = modeColor(modes[i], on, i);
       ctx.fillText(modes[i], px, ty);
       px += w1 + gap2;
       // 무장은 흰색 — 아직 잡지 않았다는 뜻이다
@@ -197,7 +202,7 @@ function drawFMA(x, y, w) {
       ctx.fillText(armed[i], px, ty);
       ctx.font = mainF; ctx.textAlign = 'center';
     } else {
-      ctx.fillStyle = modeColor(modes[i], on);
+      ctx.fillStyle = modeColor(modes[i], on, i);
       ctx.fillText(modes[i], bx + cellW / 2, ty);
     }
   }
@@ -218,10 +223,12 @@ function drawCrhtDisplay(x, y, w, h) {
   const HEAD_H = 26;
   const tapeY  = y + HEAD_H;
   const tapeH  = h - HEAD_H;
-  const target = selCrht;
+  // T/DOWN 중에는 같은 창이 HHT(내려가 멈출 호버 높이)를 보여 준다
+  const tdv    = (typeof tdOn !== 'undefined') && tdOn;
+  const target = tdv ? selHht : selCrht;
   const cy     = tapeY + tapeH / 2;
   const pp100  = tapeH / 20;
-  const on     = crhtOn;
+  const on     = crhtOn || tdv;
   const tickColor = on ? '#44ff88' : '#555';
   let ra = S.alt;
   try { ra = radarAltFt(); } catch (e) { _swallow(e); }
@@ -284,15 +291,16 @@ function drawCrhtDisplay(x, y, w, h) {
   ctx.font      = `bold ${Math.max(9, w * 0.14)}px Helvetica Neue, Arial, sans-serif`;
   ctx.textAlign = 'left';
   ctx.fillStyle = on ? '#44ff88' : '#555';
-  ctx.fillText('CRHT ' + A_LBL(), x + 4, y + 11);
+  ctx.fillText((tdv ? 'HHT ' : 'CRHT ') + A_LBL(), x + 4, y + 11);
   ctx.font      = `bold ${Math.max(10, w * 0.16)}px Helvetica Neue, Arial, sans-serif`;
   ctx.textAlign = 'right';
   ctx.fillStyle = on ? '#fff' : '#666';
-  ctx.fillText(Math.round(selCrht * ccv), x + w - 4, y + 11);
+  ctx.fillText(Math.round(target * ccv), x + w - 4, y + 11);
 
   // Line 2: VS change rate (500 fpm during convergence)
   let vsStr = '---';
-  if (on) {
+  if (tdv) vsStr = String(Math.round(S.vs || 0));
+  else if (on) {
     const d = selCrht - ra;
     vsStr = Math.abs(d) < 1 ? '0' : (d > 0 ? '+' : '−') + '500';
   }

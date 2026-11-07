@@ -71,6 +71,7 @@ let _simLoopRunning = false;  // guard against double-starting the rAF loop
 // ── AFCS Preselects ──
 let selSpd  = 80;   // IAS preselect (kt)
 let selAlt  = 500;  // ALT preselect (ft) — target for ALT hold mode
+let selHht = 50;   // HHT — T/DOWN 이 내려가 멈출 호버 높이(전파고도 ft · FCP HHT ▲▼)
 let selCrht = 500;  // CRHT preselect (ft) — target for CRHT hold mode
 let selHdg  = 360;  // HDG preselect (°, 1-360)
 // ── HDG SEL: 선택 헤딩으로 표준선회(360°/2분 = 3°/s)로 선회 ──
@@ -273,26 +274,44 @@ function tqOver() { return tqShown() > TQ_RED; }
 function tqBand(v = tqShown()) { return v > TQ_RED ? 'red' : v > TQ_LIMIT ? 'yellow' : 'green'; }
 
 function toggleGs() {
-  if (gsArmed || gsOn) { gsArmed = false; gsOn = false; }
+  if (gsArmed || gsOn) { gsArmed = false; gsOn = false; gsAutoLatch(); }
   else {
-    gsArmed = true;
+    gsArmed = true; _gsLatch = false;
     // 이미 강하선 위에 있으면 곧바로 잡는다
     const g = gsDeviation();
     if (g && Math.abs(g.dev) < 0.15) { gsOn = true; gsArmed = false; }
   }
   updateGsBtn();
 }
+// ── G/S 자동 ── G/S 버튼은 없다. ILS(강하선이 있는 LOC)를 지금 NAV 소스로 맞추면 스스로 무장하고,
+// 강하각에 맞는 순간(편차 0.15° 안) 붙잡는다. 조종사가 ALT·CRHT·T/DOWN·G/A 를 걸어 놓으면
+// 그 강하선에서 벗어날 때(편차 0.3° 밖)까지 다시 잡지 않는다 — 놓자마자 도로 붙잡지 않게.
+let _gsLatch = false;
+function gsAutoLatch() { _gsLatch = true; }
 // 매 프레임 — 무장 상태에서 강하선에 닿았는지 본다.
 // 위에서 내려오다 만나는 경우가 대부분이므로 '편차가 0 에 가까워졌을 때' 잡는다.
 function gsCaptureCheck() {
+  const g = gsDeviation();
   if (gsOn) {
-    // 신호를 잃으면(멀어짐·안테나 뒤로 지나감) 놓는다
-    if (!gsDeviation()) { gsOn = false; updateGsBtn(); }
+    // 신호를 잃으면(멀어짐·안테나 뒤로 지나감) 놓는다 · 조종사가 다른 고도 모드를 걸면 물러난다
+    if (!g) { gsOn = false; updateGsBtn(); }
+    else if (altHoldOn || crhtOn || (typeof tdOn !== 'undefined' && tdOn) || (typeof gaOn !== 'undefined' && gaOn)) {
+      gsOn = false; gsAutoLatch(); updateGsBtn();
+    }
     return;
   }
-  if (!gsArmed) return;
-  const g = gsDeviation();
-  if (g && Math.abs(g.dev) < 0.15) { gsOn = true; gsArmed = false; updateGsBtn(); }
+  // 자동 무장 — ILS 를 맞춰 강하선 신호가 들어오면
+  if (!g) { if (gsArmed) { gsArmed = false; updateGsBtn(); } _gsLatch = false; return; }
+  if (_gsLatch) { if (Math.abs(g.dev) > 0.3) _gsLatch = false; else return; }
+  if (!gsArmed) { gsArmed = true; updateGsBtn(); }
+  if (Math.abs(g.dev) < 0.15) {
+    // 아래로 내려가는 G/A·T/DOWN 중에는 잡지 않는다(조종사가 고른 길이 우선)
+    if ((typeof gaOn !== 'undefined' && gaOn) || (typeof tdOn !== 'undefined' && tdOn)) return;
+    gsOn = true; gsArmed = false;
+    if (altHoldOn || crhtOn) { altHoldOn = false; crhtOn = false; try { updateHoverBtns(); } catch (e) { _swallow(e); } }
+    try { if (typeof vsModeOn !== 'undefined') vsModeOn = false; } catch (e) { _swallow(e); }
+    updateGsBtn();
+  }
 }
 
 // ── SUSP (시퀀싱 보류) ────────────────────────────────────────────
@@ -514,7 +533,7 @@ function toggleAltHold() {
     // 다른 고도로 가려면(ALT.A) ALT ▲▼ 로 기준을 옮긴다(07-sim.js applyDelta 'alt').
     selAlt = Math.round(S.alt);
     crhtOn = false;  // mutually exclusive
-    try { gaOn = false; vsModeOn = false; updateGaBtn(); } catch (e) { /* 14-simmode 앞 */ }   // ALT 가 컬렉티브를 가져간다
+    try { gaOn = false; vsModeOn = false; tdOn = false; updateGaBtn(); } catch (e) { /* 14-simmode 앞 */ }   // ALT 가 컬렉티브를 가져간다
   } else if (!simModeOn) {
     S.vs = 0;  // prevent unintended climb/descent after disengagement
     // (SIM 모드에서는 그 상승률에서 컬렉티브가 이어 받는다 — 계기가 튀지 않게)
@@ -531,7 +550,7 @@ function toggleCrht() {
     // CRHT 는 전파고도(지면 위 높이 — 05-gps.js radarAltFt)를 지킨다.
     selCrht   = Math.round(radarAltFt());
     altHoldOn = false;
-    try { gaOn = false; vsModeOn = false; updateGaBtn(); } catch (e) { /* 14-simmode 앞 */ }
+    try { gaOn = false; vsModeOn = false; tdOn = false; updateGaBtn(); } catch (e) { /* 14-simmode 앞 */ }
   } else if (!simModeOn) {
     S.vs = 0;  // prevent unintended climb/descent after disengagement
   }

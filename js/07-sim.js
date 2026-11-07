@@ -70,6 +70,10 @@ function applyDelta(field, d){
       updateHoverBtns();
       break;
     }
+    case 'hht':
+      // HHT — T/DOWN 이 내려가 멈출 호버 높이(전파고도). 10ft 단위 · 20~1,000ft. 모드는 걸지 않는다.
+      selHht = Math.max(20, Math.min(1000, Math.round(selHht / 10) * 10 + d));
+      break;
     case 'wdir': windDir = normA(windDir + d); break;
     case 'wspd': windSpd = Math.max(0, Math.min(150, windSpd + d));    break;
   }
@@ -213,6 +217,7 @@ const btnMap={
   'coll-up':['vs',100],'coll-dn':['vs',-100],
   'alt-dn':['alt',-100],'alt-up':['alt',100],
   'crht-dn':['crht',-10],'crht-up':['crht',10],
+  'hht-dn':['hht',-10],'hht-up':['hht',10],
   'wdir-dn':['wdir',-5],'wdir-up':['wdir',5],
   'wspd-dn':['wspd',-1],'wspd-up':['wspd',1],
 };
