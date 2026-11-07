@@ -186,11 +186,21 @@ function simAfcsVert() { return simModeOn && (altHoldOn || crhtOn || (gsOn && !!
 //   · 컬렉티브: 선택 상승률(selVS, 기본 1,000fpm · VS ▲▼ 로 300fpm 까지)로 오른다 — 지금 고도 아래로는 가지 않는다
 // 시간이 다 되면 컬렉티브는 VS(그 상승률로 계속 상승), 피치는 IAS(목표 속도)로 넘어간다.
 // 롤 축은 붙이지 않는다 — 뱅크가 있었으면 그대로 간다(HDG 는 조종사가 건다).
-const GA_DUR = 25, GA_DUR_FWD = 17, GA_FWD_KT = 20, GA_VS_DEF = 1000, GA_VS_MIN = 300, GA_VS_RAMP = 4;
+const GA_DUR = 25, GA_DUR_FWD = 17, GA_FWD_KT = 20, GA_VS_DEF = 1000, GA_VS_MIN = 300, GA_VS_RAMP = 8;
 let gaOn = false, vsModeOn = false, _gaT = 0, _gaDur = GA_DUR, _gaSpd0 = 0, _gaSpdTgt = 0;
 function gaTarget(spd = S.spd) {
   const vy = simVyKt(), vne = simVne();
   return spd < vy ? vy : spd <= vne ? spd : vne;
+}
+// 속도 우선 — 목표 속도에 얼마나 다가갔는가(0→1)에 따라 상승률 몫을 준다.
+// 처음에는 출력을 가속에 먼저 쓰고(상승은 GA_VS_SHARE0 만큼), 속도가 붙을수록 상승을 늘린다.
+// 고도는 지금보다 내려가지 않는다(상승률 0 아래로는 가지 않는다).
+const GA_VS_SHARE0 = 0.15;
+function gaSpdShare() {
+  const span = _gaSpdTgt - _gaSpd0;
+  if (!(span > 5)) return 1;                       // 이미 목표 속도 언저리 — 상승을 다 준다
+  const p = Math.max(0, Math.min(1, (S.spd - _gaSpd0) / span));
+  return GA_VS_SHARE0 + (1 - GA_VS_SHARE0) * p * p * (3 - 2 * p);
 }
 function gaEngage() {
   if (!simModeOn) { try { uiToast('G/A 는 SIM 모드에서 씁니다', '', 2000); } catch (e) { _swallow(e); } return; }
@@ -293,7 +303,7 @@ function simAfcsVsCmd() {
   if (tdOn) return _tdVsCmd();
   if ((gaOn || vsModeOn) && !altHoldOn && !crhtOn && !(gsOn && _simGs())) {
     const r = Math.max(GA_VS_MIN, selVS);
-    return gaOn ? r * Math.min(1, _gaT / GA_VS_RAMP) : r;
+    return gaOn ? r * Math.min(1, _gaT / GA_VS_RAMP) * gaSpdShare() : r;
   }
   // CRHT 는 전파고도(AGL)를 지킨다 — 기압고도로 바꾸면 '발밑 땅 + 선택 높이'
   const g = _simGs();

@@ -26,7 +26,7 @@ const JOY_ACTIONS = [
   { id: 'ftr',    grp: '운항',   label: 'FORCE TRIM',    kind: 'hold',
     // 누르고 있는 동안 조종간으로 자세를 옮기고, 놓으면 그 자세가 새 트림이다(SIM)
     on: () => forceTrim(), off: () => forceTrimRelease() },
-  { id: 'gspd',   grp: '운항',   label: 'GSPD (호버)',    kind: 'press',
+  { id: 'gspd',   grp: '운항',   label: 'G/S · GSPD (지상속도 · 호버)',    kind: 'press',
     run: () => toggleGspd() },
   { id: 'hovpos', grp: '운항',   label: 'HOVER POSITION', kind: 'press',
     run: () => toggleHoverPosition() },
@@ -65,12 +65,11 @@ const JOY_ACTIONS = [
   { id: 'crsDn',  grp: 'FCP',    label: 'CRS −',  kind: 'repeat', run: () => applyDelta('crs', -1) },
   { id: 'crsUp',  grp: 'FCP',    label: 'CRS +',  kind: 'repeat', run: () => applyDelta('crs', 1) },
 
-  // 상위모드(NAV·HDG·ALT·CRHT·G/S·IAS·GSPD)를 한꺼번에 푼다 — B1 이 기본이다
+  // 상위모드(NAV·HDG·ALT·CRHT·G/S 강하선·IAS·GSPD)를 한꺼번에 푼다 — B1 이 기본이다
   { id: 'apOff',   grp: 'AFCS',  label: '상위모드 모두 해제', kind: 'press', run: () => afcsReleaseAll() },
   { id: 'altHold', grp: 'AFCS',  label: 'ALT 유지',  kind: 'press', run: () => toggleAltHold() },
   { id: 'crht',    grp: 'AFCS',  label: 'CRHT 유지', kind: 'press', run: () => toggleCrht() },
   { id: 'navap',   grp: 'AFCS',  label: 'NAV (AP)',  kind: 'press', run: () => toggleNavAp() },
-  { id: 'gs',      grp: 'AFCS',  label: 'G/S',       kind: 'press', run: () => toggleGs() },
   { id: 'susp',    grp: 'AFCS',  label: 'SUSP',      kind: 'press', run: () => toggleSusp() },
   { id: 'obs',     grp: 'AFCS',  label: 'OBS',       kind: 'press', run: () => toggleObs() },
 
@@ -140,6 +139,13 @@ let joyOn = true;
 try { joyOn = localStorage.getItem('joyOn') !== '0'; } catch (e) { _swallow(e); }
 let joyBinds = {};
 try { joyBinds = JSON.parse(localStorage.getItem('joyBinds') || 'null') || {}; } catch (e) { joyBinds = {}; }
+// 예전 'G/S'(ILS 강하선) 동작은 없앴다 — 강하선은 이제 스스로 잡는다.
+// 조종사가 그 칸에 기대한 것은 지상속도(G/S = GSPD)이므로 그 배정을 GSPD 로 옮긴다.
+try {
+  let moved = false;
+  for (const c in joyBinds) if (joyBinds[c] === 'gs') { joyBinds[c] = 'gspd'; moved = true; }
+  if (moved) localStorage.setItem('joyBinds', JSON.stringify(joyBinds));
+} catch (e) { _swallow(e); }
 let joyBindsSaved = false;
 try { joyBindsSaved = localStorage.getItem('joyBinds') !== null; } catch (e) { _swallow(e); }
 // '시야 둘러보기' 는 B0 이 기본이다. 한 번만 잡아 두고(그 뒤로 사용자가 바꾸면
