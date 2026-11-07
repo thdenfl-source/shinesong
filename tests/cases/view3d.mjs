@@ -252,4 +252,46 @@ export async function run(page, t) {
   t.ok(!mapov.off.show && mapov.off.home, 'MAP OFF 면 감추고 지도를 제자리로 돌려놓는다');
   t.ok(mapov.mapSolo === 'map' && mapov.back3d === 'm3d', 'MAP 단독 화면에서 지도 아래 3D 버튼을 누르면 3D 단독으로 돌아간다');
   t.ok(mapov.exit, '3D 단독을 나오면 지도가 제자리로 돌아간다');
+
+  // ── 화면 조종간(3D 단독 · SIM) — 컬렉티브 · 페달 · 16방향 사이클릭 ──
+  const vs0 = await page.evaluate(async () => {
+    const o = { split: vStickAvail() };
+    toggleSimMode(true); fcpL = false; chinL = chinR = true; chinViewOn = true; vStickOn = false;
+    panelSolo('m3d'); await new Promise(r => setTimeout(r, 600));
+    document.getElementById('vstick-btn').click(); await new Promise(r => setTimeout(r, 100));
+    const R = q => { const r = document.querySelector(q).getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height, r: r.right, b: r.bottom }; };
+    const d3 = R('#map3d');
+    o.box = R('#vstick'); o.d3 = d3; o.cyc = R('#vstick .vs-cyc'); o.ped = R('#vstick .vs-ped'); o.coll = R('#vstick .vs-coll');
+    o.chinR = chinR; o.chinL = chinL; o.btn = document.getElementById('vstick-btn').textContent;
+    const ctl = R('#ctl3d'); o.ctlClear = ctl.b <= o.box.y + 1;
+    return o;
+  });
+  const vsm = async (x0, y0, x1, y1, probe) => {
+    await page.mouse.move(x0, y0); await page.mouse.down(); await page.mouse.move(x1, y1, { steps: 5 });
+    const held = await page.evaluate(probe); await page.mouse.up();
+    return { held, rel: await page.evaluate(() => ({ ...vStick })) };
+  };
+  const cx = vs0.cyc.x + vs0.cyc.w / 2, cy = vs0.cyc.y + vs0.cyc.h / 2, rr = vs0.cyc.w * 0.4, a40 = 40 * Math.PI / 180;
+  const cyc = await vsm(cx, cy, cx + Math.cos(a40) * rr, cy - Math.sin(a40) * rr, () => ({ ...vStick, ax: simModeAxes() }));
+  const ped = await vsm(vs0.ped.x + vs0.ped.w / 2, vs0.ped.y + vs0.ped.h / 2, vs0.ped.x + 2, vs0.ped.y + vs0.ped.h / 2, () => simModeAxes().yaw);
+  await vsm(vs0.coll.x + vs0.coll.w / 2, vs0.coll.b - 2, vs0.coll.x + vs0.coll.w / 2, vs0.coll.y + 2, () => 0);
+  const coll = await page.evaluate(() => {
+    S.running = true; let ts = 1000; S.lastT = ts; for (let i = 0; i < 40; i++) { ts += 50; simStep(ts); } S.running = false;
+    const o = { coll: vStick.coll, cmd: simTqCmd };
+    toggleChinView('R'); o.chinRefused = !chinR;
+    document.getElementById('vstick-btn').click(); toggleChinView('R'); o.chinBack = chinR;
+    exitSolo(); toggleSimMode(false);
+    return o;
+  });
+  t.ok(!vs0.split, 'SIM 3D 단독이 아니면 화면 조종간을 쓰지 않는다');
+  t.ok(vs0.btn === 'STICK ON' && Math.abs(vs0.box.r - (vs0.d3.x + vs0.d3.w)) < 3 && Math.abs(vs0.box.b - (vs0.d3.y + vs0.d3.h)) < 3 &&
+       Math.abs(vs0.box.w / vs0.d3.w - 1 / 3) < 0.03 && !vs0.chinR && vs0.chinL && vs0.ctlClear,
+    'STICK ON — R CHIN 자리(오른쪽 아래 · 너비 1/3)에 조종간 셋이 뜨고 R CHIN 이 닫힌다(3D 버튼 줄은 그 위에서 끝난다)');
+  t.ok(vs0.coll.x < vs0.ped.x && vs0.ped.x < vs0.cyc.x && vs0.coll.h > vs0.coll.w && vs0.ped.w > vs0.ped.h && Math.abs(vs0.cyc.w - vs0.cyc.h) < 1,
+    '왼쪽은 위아래(컬렉티브), 가운데는 좌우(페달), 오른쪽은 원형(사이클릭)이다');
+  t.ok(Math.abs(cyc.held.roll - cyc.held.pitch) < 1e-3 && cyc.held.roll > 0.5 && cyc.held.ax.roll === cyc.held.roll && cyc.rel.roll === 0 && cyc.rel.pitch === 0,
+    `사이클릭 — 40° 쪽으로 밀면 16방향(45°)으로 맞춰 들어가고(롤 ${cyc.held.roll} · 피치 ${cyc.held.pitch}), 놓으면 가운데로`);
+  t.ok(ped.held < -0.9 && ped.rel.yaw === 0, `페달 — 왼쪽 끝은 −1 언저리(${ped.held.toFixed(2)}), 놓으면 가운데로`);
+  t.ok(coll.coll > 0.97 && coll.cmd > 135, `컬렉티브 — 위 끝으로 올리면 레버 ${coll.cmd.toFixed(0)}%(놓아도 그 자리)`);
+  t.ok(coll.chinRefused && coll.chinBack, '조종간이 켜져 있으면 R CHIN 을 열 수 없고, 끄면 다시 열 수 있다');
 }

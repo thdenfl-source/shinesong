@@ -1329,6 +1329,7 @@ function updateSoloBtn() {
   try { if (typeof syncFcp3d === 'function') syncFcp3d(); } catch (e) { _swallow(e); }   // 3D 단독에서만 FCP L·R
   try { syncCduOverlay(); } catch (e) { _swallow(e); }   // 3D 단독에서만 CDU 겹치기
   try { syncMapOverlay(); } catch (e) { _swallow(e); }   // 3D 단독에서만 MAP 겹치기
+  try { if (typeof syncVStick === 'function') syncVStick(); } catch (e) { _swallow(e); }   // 3D 단독 · SIM 에서만 화면 조종간
 }
 
 // MAP 상단 툴바의 FULL/HALF 토글 — 상황에 맞게 전체화면 진입/분할 복귀
