@@ -194,6 +194,11 @@ function toggle3dMap() {
   // 3D 가 이미 제 창(탭의 '3D')을 쓰고 있으면 2D 위에 또 겹칠 일이 아니다.
   // 그 상태에서 켜면 2D 창이 빈 화면이 되므로 눌러도 바뀌지 않게 한다.
   if (typeof map3dPanelOn === 'function' && map3dPanelOn()) {
+    // MAP 단독 화면이면 3D 단독으로 바꾼다(3D 단독 → CDU 의 MAP 등으로 넘어왔을 때 되돌아가는 길)
+    if (typeof _soloActive !== 'undefined' && _soloActive && _soloCurrent === 'map') {
+      try { setSolo('m3d'); updateSoloBtn(); } catch (e) { _swallow(e); }
+      return;
+    }
     btn.textContent = '3D 창';
     setTimeout(() => { btn.textContent = '3D'; }, 1200);
     return;

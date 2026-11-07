@@ -2216,6 +2216,7 @@ appRegister({
   toggleHdgRef,
   togglePfdOverlay,
   toggleCduOverlay,
+  toggleMapOverlay,
   toggleFpv,
   dgAdjust,
   setSimSpeed,

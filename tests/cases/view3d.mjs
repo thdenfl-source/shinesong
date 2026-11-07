@@ -213,4 +213,39 @@ export async function run(page, t) {
   t.ok(cduov.full === 'm3d' && cduov.noHalf, 'FULL/HALF 처럼 단독 화면을 바꾸는 버튼은 3D 단독을 깨지 않는다(겹친 CDU 에는 HALF 를 두지 않는다)');
   t.ok(!cduov.off.show && cduov.off.home === cduov.home0, 'CDU OFF 면 감추고 CDU 창을 제자리로 돌려놓는다');
   t.ok(!cduov.back.show && cduov.back.home === cduov.home0, '3D 단독을 나오면 CDU 가 제자리로 돌아간다');
+
+  // ── 3D 단독 화면의 MAP 겹치기 · MAP 단독에서 3D 버튼으로 3D 단독 복귀 ──
+  const mapov = await page.evaluate(async () => {
+    const wait = ms => new Promise(r => setTimeout(r, ms));
+    const home0 = document.getElementById('map-wrap').parentElement.id;
+    const o = { split: mapOvActive() };
+    cduOvOn = false; mapOvOn = false;
+    panelSolo('m3d'); await wait(600);
+    document.getElementById('cduov-btn').click(); await wait(200);
+    document.querySelector('#cdu-ov [data-act="cduOpenMap"]').click(); await wait(300);   // 겹친 CDU 의 MAP
+    const box = document.getElementById('map-ov'), rc = box.getBoundingClientRect();
+    const cdu = document.getElementById('cdu-ov').getBoundingClientRect(), pfd = document.getElementById('pfd-ov').getBoundingClientRect();
+    o.on = { solo: _soloCurrent, show: box.classList.contains('show'), inBox: document.getElementById('map-wrap').parentElement === box,
+             gap: cdu.left - rc.right, dw: Math.abs(rc.width - pfd.width), dh: Math.abs(rc.height - pfd.height),
+             btn: document.getElementById('mapov-btn').textContent };
+    document.getElementById('mapov-btn').click(); await wait(100);
+    o.off = { show: box.classList.contains('show'), home: document.getElementById('map-wrap').parentElement.id === home0 };
+    // MAP 단독으로 넘어간 뒤 지도 아래 3D 버튼 → 3D 단독
+    setSolo('map'); await wait(300);
+    o.mapSolo = _soloCurrent;
+    document.getElementById('layer-btn-3d').click(); await wait(400);
+    o.back3d = _soloCurrent;
+    document.getElementById('cduov-btn').click();
+    exitSolo(); await wait(300);
+    o.exit = document.getElementById('map-wrap').parentElement.id === home0;
+    cduOvOn = mapOvOn = false; try { localStorage.removeItem('cduOverlay'); localStorage.removeItem('mapOverlay'); } catch (e) {}
+    return o;
+  });
+  t.ok(!mapov.split, '분할 화면에서는 MAP 겹치기를 쓰지 않는다');
+  t.ok(mapov.on.solo === 'm3d' && mapov.on.show && mapov.on.inBox && mapov.on.btn === 'MAP ON' &&
+       Math.abs(mapov.on.gap - 8) < 2 && mapov.on.dw < 2 && mapov.on.dh < 2,
+    `겹친 CDU 의 MAP — 3D 단독 그대로, 계기 칸과 같은 크기의 지도가 CDU 칸 왼쪽에 뜬다 (간격 ${mapov.on.gap.toFixed(0)}px)`);
+  t.ok(!mapov.off.show && mapov.off.home, 'MAP OFF 면 감추고 지도를 제자리로 돌려놓는다');
+  t.ok(mapov.mapSolo === 'map' && mapov.back3d === 'm3d', 'MAP 단독 화면에서 지도 아래 3D 버튼을 누르면 3D 단독으로 돌아간다');
+  t.ok(mapov.exit, '3D 단독을 나오면 지도가 제자리로 돌아간다');
 }
