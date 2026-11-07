@@ -332,6 +332,18 @@ export async function run(page, t) {
     ori(40, 5); o.back = deg();
     // 화면을 가로로 돌리면 다시 ALIGN 해야 한다
     const angOrig = _gyroAngle; _gyroAngle = () => 90; ori(40, 5); o.rotated = gyroAligned; _gyroAngle = angOrig;
+    // 가로(아이패드 · window.orientation 90) — 앞으로 숙이면 피치, 오른쪽으로 내리면 롤(엇갈리지 않는다)
+    Object.defineProperty(window, 'orientation', { value: 90, configurable: true });
+    o.ang90 = _gyroAngle();
+    ori(20, 10); document.getElementById('gyro-align-btn').click();
+    ori(20, 10 + 25); o.l90fwd = deg();                  // 가로 90 에서 앞으로 숙임 = gamma 증가
+    ori(20 + 25, 10); o.l90right = deg();                // 오른쪽 내림 = beta 증가
+    Object.defineProperty(window, 'orientation', { value: -90, configurable: true });
+    o.ang270 = _gyroAngle();
+    ori(20, 10); document.getElementById('gyro-align-btn').click();
+    ori(20, 10 - 25); o.l270fwd = deg();
+    delete window.orientation;
+    o.noWo = _gyroAngle();                               // window.orientation 이 없으면 screen.orientation.angle
     document.getElementById('gyro-btn').click(); await wait(50);
     o.off = { btn: document.getElementById('gyro-btn').textContent, act: gyroActive() };
     exitSolo(); toggleSimMode(false);
@@ -346,5 +358,9 @@ export async function run(page, t) {
   t.ok(Math.abs(gy.diag.roll - gy.diag.pitch) < 1e-3 && gy.diag.roll > 0, `비스듬히 기울이면 16방향(45°)으로 맞춘다 (${gy.diag.roll} · ${gy.diag.pitch})`);
   t.ok(gy.back.roll === 0 && gy.back.pitch === 0, '가운데 자세로 돌아오면 가운데');
   t.ok(gy.rotated === false, '화면 방향이 바뀌면 다시 ALIGN 해야 한다');
+  t.ok(gy.ang90 === 90 && gy.ang270 === 270 && gy.noWo === 0, `가로 화면 각을 읽는다 — iOS window.orientation 우선(${gy.ang90} · ${gy.ang270}), 없으면 screen.orientation(${gy.noWo})`);
+  t.ok(Math.abs(gy.l90fwd.pitch - 10) < 1e-6 && gy.l90fwd.roll === 0 && Math.abs(gy.l90right.roll - 20) < 1e-6 && gy.l90right.pitch === 0,
+    `가로로 쥐어도 숙이면 피치 · 오른쪽으로 내리면 롤이다 (숙임 피치 ${gy.l90fwd.pitch}° · 롤 ${gy.l90right.roll}°)`);
+  t.ok(Math.abs(gy.l270fwd.pitch - 10) < 1e-6 && gy.l270fwd.roll === 0, '반대쪽 가로(−90)에서도 숙이면 피치다');
   t.ok(gy.off.btn === 'GYRO OFF' && !gy.off.act, 'GYRO OFF 면 기울기로 조종하지 않는다');
 }
