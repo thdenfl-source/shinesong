@@ -831,9 +831,10 @@ function _chinDestroy() {
 }
 function toggleChinView(side) {
   // FCP 가 그 자리(같은 쪽 아래 모서리)를 쓰고 있으면 CHIN 창을 켤 수 없다
-  const busy = k => (k === 'L' ? fcpL : fcpR) && fcp3dAvail();
+  // (R 자리는 화면 조종간 — 14-simmode.js vStickActive)
+  const busy = k => k === 'L' ? (fcpL && fcp3dAvail()) : ((fcpR && fcp3dAvail()) || (typeof vStickActive === 'function' && vStickActive()));
   if ((side === 'L' || side === 'R') && busy(side) && !(side === 'L' ? chinL : chinR)) {
-    try { uiToast(`FCP ${side} 가 켜져 있어 ${side} CHIN 을 열 수 없습니다`, '', 2000); } catch (e) { _swallow(e); }
+    try { uiToast(side === 'L' ? 'FCP 가 켜져 있어 L CHIN 을 열 수 없습니다' : '화면 조종간이 켜져 있어 R CHIN 을 열 수 없습니다', '', 2000); } catch (e) { _swallow(e); }
     return;
   }
   if (side === 'L') chinL = !chinL;

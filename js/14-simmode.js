@@ -687,7 +687,95 @@ function simLookStep(dtGiven) {
 
 function simModeAxes() {
   const ax = r => { try { return joyAxVal(r); } catch (e) { return 0; } };
-  return { roll: ax('roll'), pitch: ax('pitch'), yaw: ax('yaw'), coll: ax('coll') };
+  const o = { roll: ax('roll'), pitch: ax('pitch'), yaw: ax('yaw'), coll: ax('coll') };
+  // 화면 조종간(3D 단독) — 쥐고 있는 동안은 그 값을 쓴다(실물 조종간과 함께 쓸 수 있다)
+  if (vStickActive()) {
+    if (vStick.yaw) o.yaw = vStick.yaw;
+    if (vStick.roll || vStick.pitch) { o.roll = vStick.roll; o.pitch = vStick.pitch; }
+  }
+  return o;
+}
+
+// ── 화면 조종간(3D 단독 · SIM) ──
+// 조이스틱이 없어도 3D 단독 화면 오른쪽 아래(R CHIN 창 자리)에서 손으로 몬다.
+//   왼쪽  : 위아래 — 컬렉티브(놓아도 그 자리 · 아래 0% … 위 140%)
+//   가운데: 좌우 — 페달(놓으면 가운데로)
+//   오른쪽: 원형 — 사이클릭, 16방향(22.5° 칸)으로 맞춰 민 거리만큼(놓으면 가운데로 — 트림이 자세를 지킨다)
+// 'STICK' 버튼으로 켜고 끈다. 켜면 R CHIN 창은 닫힌다.
+let vStickOn = false;
+const vStick = { coll: 0, yaw: 0, roll: 0, pitch: 0 };
+function vStickAvail() { return simModeOn && typeof fcp3dAvail === 'function' && fcp3dAvail(); }
+function vStickActive() { return vStickOn && vStickAvail(); }
+function _vStickBox() {
+  const d3 = document.getElementById('map3d');
+  if (!d3) return null;
+  let box = document.getElementById('vstick');
+  if (box) return box;
+  box = document.createElement('div'); box.id = 'vstick';
+  box.innerHTML =
+    '<div class="vs-track vs-coll" data-k="coll"><div class="vs-knob"></div><span class="vs-lbl">COLL</span></div>' +
+    '<div class="vs-track vs-ped" data-k="yaw"><div class="vs-knob"></div><span class="vs-lbl">PEDAL</span></div>' +
+    '<div class="vs-cyc" data-k="cyc"><div class="vs-ring"></div><div class="vs-knob"></div><span class="vs-lbl">CYCLIC</span></div>';
+  d3.appendChild(box);
+  box.querySelectorAll('[data-k]').forEach(el => {
+    const k = el.dataset.k;
+    const set = ev => {
+      const r = el.getBoundingClientRect();
+      if (k === 'coll') vStick.coll = Math.max(0, Math.min(1, (r.bottom - ev.clientY) / r.height));
+      else if (k === 'yaw') vStick.yaw = Math.max(-1, Math.min(1, ((ev.clientX - r.left) / r.width) * 2 - 1));
+      else {
+        const cx = r.left + r.width / 2, cy = r.top + r.height / 2, R = Math.min(r.width, r.height) / 2;
+        const dx = ev.clientX - cx, dy = ev.clientY - cy;
+        const m = Math.min(1, Math.hypot(dx, dy) / R);
+        const step = Math.PI / 8;                                       // 16방향
+        const ang = Math.round(Math.atan2(-dy, dx) / step) * step;      // 위 = 앞으로 밀기
+        vStick.roll = m < 0.05 ? 0 : +(m * Math.cos(ang)).toFixed(4);
+        vStick.pitch = m < 0.05 ? 0 : +(m * Math.sin(ang)).toFixed(4);
+      }
+      vStickRender();
+    };
+    el.addEventListener('pointerdown', ev => { ev.preventDefault(); ev.stopPropagation(); try { el.setPointerCapture(ev.pointerId); } catch (e) { _swallow(e); } el.classList.add('held'); set(ev); });
+    el.addEventListener('pointermove', ev => { if (el.classList.contains('held')) { ev.preventDefault(); set(ev); } });
+    const end = () => {
+      el.classList.remove('held');
+      if (k === 'yaw') vStick.yaw = 0;                                  // 페달·사이클릭은 놓으면 가운데로
+      if (k === 'cyc') { vStick.roll = 0; vStick.pitch = 0; }
+      vStickRender();
+    };
+    el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end);
+  });
+  return box;
+}
+function vStickRender() {
+  const box = document.getElementById('vstick'); if (!box) return;
+  const q = s => box.querySelector(s);
+  const kc = q('.vs-coll .vs-knob'), kp = q('.vs-ped .vs-knob'), ky = q('.vs-cyc .vs-knob');
+  if (kc) kc.style.bottom = `calc(${(vStick.coll * 100).toFixed(1)}% - 9px)`;
+  if (kp) kp.style.left = `calc(${((vStick.yaw + 1) * 50).toFixed(1)}% - 9px)`;
+  if (ky) { ky.style.left = `calc(${(50 + vStick.roll * 50).toFixed(1)}% - 14px)`; ky.style.top = `calc(${(50 - vStick.pitch * 50).toFixed(1)}% - 14px)`; }
+  const l = q('.vs-coll .vs-lbl'); if (l) l.textContent = `COLL ${Math.round(vStick.coll * SIM_LEVER_TOP)}%`;
+}
+function syncVStick() {
+  const avail = vStickAvail(), want = vStickOn && avail;
+  const b = document.getElementById('vstick-btn');
+  if (b) { b.textContent = vStickOn ? 'STICK ON' : 'STICK OFF'; b.classList.toggle('on', want); b.classList.toggle('dim', !avail); }
+  const box = want ? _vStickBox() : document.getElementById('vstick');
+  if (box) box.classList.toggle('show', want);
+  { const d3 = document.getElementById('map3d'); if (d3) d3.classList.toggle('vstick-on', want); }   // 3D 버튼 줄이 조종간 위에서 끝나게
+  if (want) {
+    vStickRender();
+    if (typeof chinR !== 'undefined' && chinR) { chinR = false; chinViewOn = chinL || chinR; try { syncChinView(); } catch (e) { _swallow(e); } }
+  }
+}
+function toggleVStick() {
+  if (!vStickAvail()) {
+    try { uiToast('화면 조종간은 SIM 모드의 3D 단독(3D Only) 화면에서 씁니다', '', 2500); } catch (e) { _swallow(e); }
+    return;
+  }
+  vStickOn = !vStickOn;
+  // 켤 때 컬렉티브는 지금 토크 자리에서 시작한다(튀지 않게)
+  if (vStickOn) { vStick.coll = Math.max(0, Math.min(1, (S.tq || 0) / SIM_LEVER_TOP)); vStick.yaw = vStick.roll = vStick.pitch = 0; }
+  syncVStick();
 }
 
 function updateSimModeBtn() {
@@ -888,6 +976,7 @@ function toggleSimMode(on, opt) {
   }
   updateSimModeBtn();
   try { updateApInhibit(); } catch (e) { _swallow(e); }
+  try { syncVStick(); } catch (e) { _swallow(e); }      // 화면 조종간은 SIM 에서만
 }
 
 // ── 바깥 그림도 조종석에서 보는 대로 ──
@@ -1175,7 +1264,8 @@ function simFly(dt) {
   // 바뀐 만큼 고도가 빠지려 하고, 뱅크를 주면 필요 토크가 늘어 가라앉으려 한다. 그만큼
   // 토크를 더 써서 고도를 되찾는다 — 출력이 따라붙는 동안 고도가 조금 빠졌다 돌아온다.
   const vert = simAfcsVert();
-  const cfg = (typeof joyAxes === 'object' && joyAxes) ? joyAxes.coll : null;
+  // 화면 조종간을 쓰면 컬렉티브는 그 레버(세워 두는 레버)다
+  const cfg = vStickActive() ? { abs: true, virt: true } : (typeof joyAxes === 'object' && joyAxes) ? joyAxes.coll : null;
   let tTgt;
   if (vert) {
     tTgt = tqRequired() + simTqForVs(simAfcsVsCmd() - simKeVs(onGnd));
@@ -1186,7 +1276,7 @@ function simFly(dt) {
   else if (cfg.abs) {
     // 스로틀·컬렉티브처럼 '세워 두는' 레버는 자리 자체가 출력이다.
     // 맨 아래 0% … 맨 위 140%(그날의 MTA 를 넘겨 당길 수 있게).
-    tTgt = (joyAxRaw('coll') + 1) / 2 * SIM_LEVER_TOP;
+    tTgt = cfg.virt ? vStick.coll * SIM_LEVER_TOP : (joyAxRaw('coll') + 1) / 2 * SIM_LEVER_TOP;
   } else {
     // 가운데로 돌아오는 축은 호버 토크를 기준으로 오르내린다 — 끝까지 올리면 140%,
     // 끝까지 내리면 호버 −45%
@@ -1268,5 +1358,5 @@ function simFly(dt) {
 // 화면 버튼(data-act) 연결 — 이 파일이 11-charts.js 보다 나중에 로드되므로
 // 거기 목록에 넣으면 아직 정의되지 않은 이름이 된다. 여기서 직접 등록한다.
 // toggleFcp3d 는 04-map.js 에 있다(그 파일은 appRegister 보다 먼저 읽혀 여기서 연결한다)
-try { appRegister({ toggleSimMode, simModeBtnPress, toggleRotorChar, setRotorDir, toggleAse, toggleRcOpt, cycleSimEng, toggleFcp3d }); } catch (e) { _swallow(e); }
+try { appRegister({ toggleSimMode, simModeBtnPress, toggleRotorChar, setRotorDir, toggleAse, toggleRcOpt, cycleSimEng, toggleFcp3d, toggleVStick }); } catch (e) { _swallow(e); }
 try { updateSimModeBtn(); } catch (e) { _swallow(e); }
