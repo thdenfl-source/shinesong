@@ -691,7 +691,7 @@ function simModeAxes() {
   // 화면 조종간(3D 단독) — 쥐고 있는 동안은 그 값을 쓴다(실물 조종간과 함께 쓸 수 있다)
   if (vStickActive()) {
     if (vStick.yaw) o.yaw = vStick.yaw;
-    if (vStick.roll || vStick.pitch) { o.roll = vStick.roll; o.pitch = vStick.pitch; }
+    if (vStick.roll || vStick.pitch) { const c = vStickCyclic(); o.roll = c.roll; o.pitch = c.pitch; }
   }
   return o;
 }
@@ -702,6 +702,14 @@ function simModeAxes() {
 //   가운데: 좌우 — 페달(놓으면 가운데로)
 //   오른쪽: 원형 — 사이클릭, 16방향(22.5° 칸)으로 맞춰 민 거리만큼(놓으면 가운데로 — 트림이 자세를 지킨다)
 // 'STICK' 버튼으로 켜고 끈다. 켜면 R CHIN 창은 닫힌다.
+// 화면 사이클릭의 가동범위 — 끝까지 밀면 피치 ±10° · 롤 ±20°(트림 자세 위에 더해진다).
+// 피치는 가운데 감도를 반으로(끝으로 갈수록 붙어 끝에서 10°) — 손가락으로 자세를 잘게 맞추게.
+const VSTICK_PITCH_DEG = 10, VSTICK_ROLL_DEG = 20, VSTICK_PITCH_CENTER = 0.5;
+function vStickCyclic() {
+  const p = vStick.pitch, ap = Math.abs(p);
+  const pc = Math.sign(p) * ap * (VSTICK_PITCH_CENTER + (1 - VSTICK_PITCH_CENTER) * ap);   // 기울기: 가운데 0.5 → 끝 1.5(끝값 1)
+  return { roll: vStick.roll * VSTICK_ROLL_DEG / SIM_BANK_MAX, pitch: pc * VSTICK_PITCH_DEG / SIM_PITCH_MAX };
+}
 let vStickOn = false;
 const vStick = { coll: 0, yaw: 0, roll: 0, pitch: 0 };
 function vStickAvail() { return simModeOn && typeof fcp3dAvail === 'function' && fcp3dAvail(); }

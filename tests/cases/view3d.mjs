@@ -277,6 +277,12 @@ export async function run(page, t) {
   };
   const cx = vs0.cyc.x + vs0.cyc.w / 2, cy = vs0.cyc.y + vs0.cyc.h / 2, rr = vs0.cyc.w * 0.4, a40 = 40 * Math.PI / 180;
   const cyc = await vsm(cx, cy, cx + Math.cos(a40) * rr, cy - Math.sin(a40) * rr, () => ({ ...vStick, ax: simModeAxes() }));
+  // 가동범위 — 끝까지 밀면 피치 10° · 롤 20°, 피치는 가운데 감도가 반
+  const lim = await page.evaluate(() => {
+    const deg = (r, p) => { vStick.roll = r; vStick.pitch = p; const a = simModeAxes(); return { roll: a.roll * SIM_BANK_MAX, pitch: a.pitch * SIM_PITCH_MAX }; };
+    const o = { full: deg(1, 1), right: deg(1, 0), half: deg(0, 0.5), small: deg(0, 0.1) };
+    vStick.roll = vStick.pitch = 0; return o;
+  });
   const ped = await vsm(vs0.ped.x + vs0.ped.w / 2, vs0.ped.y + vs0.ped.h / 2, vs0.ped.x + 2, vs0.ped.y + vs0.ped.h / 2, () => simModeAxes().yaw);
   await vsm(vs0.coll.x + vs0.coll.w / 2, vs0.coll.b - 2, vs0.coll.x + vs0.coll.w / 2, vs0.coll.y + 2, () => 0);
   const coll = await page.evaluate(() => {
@@ -296,8 +302,12 @@ export async function run(page, t) {
   t.ok(vs0.ped.x < vs0.cyc.x && vs0.ped.w > vs0.ped.h && Math.abs(vs0.cyc.w - vs0.cyc.h) < 1,
     '오른쪽 아래에는 좌우(페달)와 원형(사이클릭)이 있다');
   t.ok(vs0.fcpL >= vs0.collR - 1, 'FCP 를 켜면 FCP 창이 컬렉티브 오른쪽으로 비켜 뜬다');
-  t.ok(Math.abs(cyc.held.roll - cyc.held.pitch) < 1e-3 && cyc.held.roll > 0.5 && cyc.held.ax.roll === cyc.held.roll && cyc.rel.roll === 0 && cyc.rel.pitch === 0,
+  t.ok(Math.abs(cyc.held.roll - cyc.held.pitch) < 1e-3 && cyc.held.roll > 0.5 && cyc.rel.roll === 0 && cyc.rel.pitch === 0,
     `사이클릭 — 40° 쪽으로 밀면 16방향(45°)으로 맞춰 들어가고(롤 ${cyc.held.roll} · 피치 ${cyc.held.pitch}), 놓으면 가운데로`);
+  t.ok(Math.abs(lim.right.roll - 20) < 1e-6 && Math.abs(lim.full.pitch - 10) < 1e-6,
+    `사이클릭 가동범위 — 끝까지 밀면 롤 ${lim.right.roll.toFixed(0)}° · 피치 ${lim.full.pitch.toFixed(0)}°`);
+  t.ok(Math.abs(lim.small.pitch - 10 * 0.1 * 0.55) < 1e-6 && lim.half.pitch < 10 * 0.5,
+    `피치 감도는 가운데에서 반 — 10% 밀면 ${lim.small.pitch.toFixed(2)}°(곧게면 1°) · 반 밀면 ${lim.half.pitch.toFixed(2)}°`);
   t.ok(ped.held < -0.9 && ped.rel.yaw === 0, `페달 — 왼쪽 끝은 −1 언저리(${ped.held.toFixed(2)}), 놓으면 가운데로`);
   t.ok(coll.coll > 0.97 && coll.cmd > 135, `컬렉티브 — 위 끝으로 올리면 레버 ${coll.cmd.toFixed(0)}%(놓아도 그 자리)`);
   t.ok(coll.chinRefused && coll.chinBack, '조종간이 켜져 있으면 R CHIN 을 열 수 없고, 끄면 다시 열 수 있다');
