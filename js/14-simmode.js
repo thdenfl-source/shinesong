@@ -71,8 +71,10 @@ const RC_IGE_FT = 40;           // 전이양력 지대 침하는 지면효과(IG
 const RC_BLOWBACK = 2.5;        // 블로우 백 기수 들림(°) — 전진 10~15kt 에서 다, 8·18kt 에서 0(후진에는 없다)
 const RC_BB_KT = [8, 10, 15, 18];
 // 블로우 백 크기(0…1) — 전진 대기속도로만
-function rcBlowbackK(v) {
+// ase: ASE(SAS) 가 켜져 있으면 SAS 가 잡아 줘 18kt 에서 사라지고, 꺼져 있으면 들린 채 남는다(조종사가 한 번 더 밀어 준다)
+function rcBlowbackK(v, ase = true) {
   const [a, b, c, d] = RC_BB_KT;
+  if (!ase) { if (!(v > a)) return 0; const x = Math.min(1, (v - a) / (b - a)); return x * x * (3 - 2 * x); }
   if (!(v > a) || v >= d) return 0;
   const sm = x => x * x * (3 - 2 * x);                 // 부드럽게 들고 놓는다(한 번의 들림)
   return v < b ? sm((v - a) / (b - a)) : v <= c ? 1 : sm((d - v) / (d - c));
@@ -1047,11 +1049,11 @@ function simFly(dt) {
       if (!a.pitch) pRate = SIM_IAS_RATE;
     }
     pTgt += rcPitchOff(a);              // 회전익 특성 — 컬렉티브·페달이 피치로 옮겨 간다
-    // 블로우 백(flapback) — 전진하며 10~15kt 를 지날 때 원판이 뒤로 젖혀져 기수가 한 번 2.5° 들린다(8·18kt 에서 0).
-    // 후진 비행에는 없다. 들림은 자세에만 나타나고 속도 기준(트림·조종간 자세)은 그대로다 — 들림이 감속을 불러
-    // 구간을 오가며 기수가 출렁이지 않고, 구간을 지나면 잡아 둔 자세로 돌아온다.
+    // 블로우 백(flapback) — 전진하며 8~10kt 를 지나면 원판이 뒤로 젖혀져 기수가 2.5° 들린다. 후진 비행에는 없다.
+    //  · ASE 꺼짐: 들린 채 남는다 — 조종사가 조종간(또는 트림)으로 한 번 더 밀어 줘야 한다(들린 만큼 속도도 준다).
+    //  · ASE 켜짐: SAS 가 잡아 준다 — 10~15kt 에서 한 번 들렸다가 18kt 에서 사라지고, 속도 기준은 그대로다.
     const pBase = pTgt;
-    simBb = (rcOn('blowback') && !onGnd && !simAfcsPitch()) ? RC_BLOWBACK * rcBlowbackK(S.spd) : 0;
+    simBb = (rcOn('blowback') && !onGnd && !simAfcsPitch()) ? RC_BLOWBACK * rcBlowbackK(S.spd, aseOn) : 0;
     pTgt += simBb;
     if (gnd3) pTgt = -a.pitch * SIM_PITCH_MAX;
     pTgt += deckAtt.pitch;               // 흔들리는 갑판 위에서는 갑판 자세를 따른다
@@ -1076,7 +1078,7 @@ function simFly(dt) {
     const tqKt = manual ? vsK * Math.max(0, Math.min(TQ_KT_MAX, TQ_KT * (S.tq - tqRequired()))) : 0;
     // 남는 출력이 낸 속도차(자세가 정한 속도보다 빠른 몫)는 엔진이 치른다 — 고도와 맞바꾸지 않는다(simKeVs)
     // 속도 기준 자세 — 트림이 잡고 있으면 블로우 백 들림은 빼고 본다(트림 자세 그대로)
-    const pitRef = (simBb > 0 && S.pit > pBase) ? Math.max(pBase, S.pit - simBb) : S.pit;
+    const pitRef = (aseOn && simBb > 0 && S.pit > pBase) ? Math.max(pBase, S.pit - simBb) : S.pit;   // ASE 일 때만 속도 기준을 지킨다
     _simKePowered = tqKt > 0 && S.spd >= spdFromPitch(pitRef) - 0.5;
     const sTgt = Math.max(SIM_SPD_BACK, Math.min(SIM_SPD_MAX, spdFromPitch(pitRef) + tqKt));
     if (onGnd) {
