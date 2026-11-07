@@ -2434,7 +2434,11 @@ export async function run(page, t) {
     S.alt = 1000; rotorChar = true;
     // (0.3초 — 블로우 백으로 기수가 들리면 감속이 세져(10° 넘으면 ×2) 곧 20kt 언저리를 벗어난다)
     const at = v => { S.spd = v; simTrim.pitch = -pitchFromSpd(v); S.pit = pitchFromSpd(v); fly(0.3); return S.pit - pitchFromSpd(v); };
+    aseOn = true;
     const o = { k12: at(12), k20: at(20), k60: at(60), kBack: at(-12), peak: RC_BLOWBACK };
+    // ASE 꺼짐 — 들린 채 남는다(조종사가 한 번 더 밀어 준다)
+    aseOn = false; o.n12 = at(12); o.n40 = at(40); o.nBack = at(-12);
+    aseOn = true;
     // 4WAY 트림 4°(80kt 자세)로 호버 언저리에서 가속 — 블로우 백을 지나도 속도 기준은 트림 자세다
     joyAxes = { pitch: { i: 1, inv: false } }; _ax(1, 0);
     const accel = (rc) => {
@@ -2452,11 +2456,17 @@ export async function run(page, t) {
       _ax(1, 0); return { ups, spd, pit: S.pit };
     };
     o.held = held();
-    rotorChar = false; simTrimReset();
+    // ASE 꺼짐 — 조종간을 4° 에 쥔 채 가속하면 기수가 들린 채(6.5°) 남아 속도가 덜 붙는다
+    aseOn = false; o.nHeld = held(); aseOn = true;
+    rotorChar = false; aseOn = false; simTrimReset();
     return o;
   })()`);
+  t.ok(bb.n12 > 2.3 && bb.n40 > 2.3 && Math.abs(bb.nBack) < 0.05,
+    `ASE 꺼짐 — 블로우 백으로 들린 기수가 그대로 남는다(조종사가 한 번 더 밀어 준다) (12kt +${bb.n12.toFixed(1)} · 40kt +${bb.n40.toFixed(1)}° · 후진 ${bb.nBack.toFixed(1)}°)`);
+  t.ok(Math.abs(bb.nHeld.pit - 6.5) < 0.2 && bb.nHeld.spd[24] < bb.held.spd[24] - 10,
+    `ASE 꺼짐 — 조종간을 그대로 두면 기수가 ${bb.nHeld.pit.toFixed(1)}° 로 남아 속도가 덜 붙는다 (25초 ${bb.nHeld.spd[24].toFixed(0)} · ASE ${bb.held.spd[24].toFixed(0)}kt)`);
   t.ok(bb.k12 > 1.5 && bb.k12 <= bb.peak + 0.01 && Math.abs(bb.k20) < 0.05 && Math.abs(bb.k60) < 0.05,
-    `블로우 백 — 10~15kt 에서 기수가 2.5° 안쪽으로 한 번 들린다 (12kt +${bb.k12.toFixed(1)}° · 20kt ${bb.k20.toFixed(1)}° · 60kt ${bb.k60.toFixed(1)}°)`);
+    `ASE 켜짐 — 블로우 백은 10~15kt 에서 기수가 2.5° 안쪽으로 한 번 들린다 (12kt +${bb.k12.toFixed(1)}° · 20kt ${bb.k20.toFixed(1)}° · 60kt ${bb.k60.toFixed(1)}°)`);
   t.ok(Math.abs(bb.kBack) < 0.05, `후진 비행(12kt)에서는 블로우 백이 없다 (${bb.kBack.toFixed(2)}°)`);
   t.ok(bb.on.maxPit > 5.5 && bb.on.maxPit < 4 + bb.peak + 0.3 && Math.abs(bb.on.pit - 4) < 0.1,
     `트림 4° 로 가속하면 10~15kt 에서 한 번 들렸다가(최대 ${bb.on.maxPit.toFixed(1)}°) 트림 자세로 돌아온다 (${bb.on.pit.toFixed(1)}°)`);
