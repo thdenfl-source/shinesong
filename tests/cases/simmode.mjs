@@ -905,6 +905,7 @@ export async function run(page, t) {
     const c1 = cam();
     return { bnk: S.bnk, drawn, three: midSel, c1,
              hdg: Math.round(S.hdg) % 360,
+             camYaw: Math.round(normA(_ml3dCamRot(S.hdg, S.pit, S.bnk, 0, -SIM_VIEW_DOWN).yaw)) % 360,
              moved: distance(c0.lat, c0.lon, c1.lat, c1.lon),
              offAc: distance(c1.lat, c1.lon, S.lat, S.lon) * 1852 };
   })()`);
@@ -914,7 +915,8 @@ export async function run(page, t) {
   t.eq(both.three, 'm3d', 'SIM 을 켜면 지도 창이 3D 로 바뀐다');
   t.ok(both.moved > 0.05, `3D 카메라도 함께 날아간다 (${both.moved.toFixed(2)}NM)`);
   t.ok(both.offAc < 2, `카메라는 늘 헬기 자리에 있다 (${both.offAc.toFixed(2)}m)`);
-  t.eq(both.c1.bearing, both.hdg, `방위는 기수를 따른다 (${both.c1.bearing}° · 기수 ${both.hdg}°)`);
+  t.ok(both.c1.bearing === both.camYaw && Math.abs(normAS0(both.c1.bearing - both.hdg)) < 6,
+    `방위는 기수를 따른다 — 5° 숙인 시선이 뱅크만큼 옆으로 조금 돈다 (${both.c1.bearing}° · 기수 ${both.hdg}°)`);
   t.ok(Math.abs(both.c1.roll - both.bnk) < 0.5,
     `카메라가 뱅크만큼, 같은 쪽으로 기운다 (롤 ${both.c1.roll.toFixed(1)}° · 뱅크 ${both.bnk.toFixed(1)}°)`);
   t.eq(both.c1.tf, '', '화면을 돌리는 흉내는 쓰지 않는다(카메라가 직접 기운다)');
@@ -950,11 +952,11 @@ export async function run(page, t) {
   t.ok(Math.abs(view.low.alt - 1000 * 0.3048 - 3) < 1.5 && Math.abs(view.high.alt - 9000 * 0.3048 - 3) < 1.5, // 눈높이 3m
     `카메라 높이가 고도계와 같다 (1,000ft → ${(view.low.alt / 0.3048).toFixed(0)}ft · ` +
     `9,000ft → ${(view.high.alt / 0.3048).toFixed(0)}ft)`);
-  t.ok(Math.abs(view.low.pitch - 90) < 0.5,
-    `수평 자세에서는 지평선을 정면으로 본다 (${view.low.pitch.toFixed(1)}°)`);
-  t.ok(Math.abs(view.down.pitch - 80) < 0.5,
+  t.ok(Math.abs(view.low.pitch - 85) < 0.5,
+    `수평 자세에서는 지평선보다 5° 아래를 본다(기본 시선 — 발밑 갑판이 보이게) (${view.low.pitch.toFixed(1)}°)`);
+  t.ok(Math.abs(view.down.pitch - 75) < 0.5,
     `기수를 10° 숙이면 그만큼 아래를 본다 (${view.down.pitch.toFixed(1)}°)`);
-  t.ok(Math.abs(view.up.pitch - 100) < 0.5,
+  t.ok(Math.abs(view.up.pitch - 95) < 0.5,
     `기수를 10° 들면 지평선 위(하늘)를 본다 (${view.up.pitch.toFixed(1)}° — 종전 엔진은 85° 가 끝이었다)`);
   t.eq(view.turn.bearing, 250, `기수를 돌리면 시야도 돈다 (${view.turn.bearing}°)`);
   t.ok(Math.abs(view.rolled.roll + 30) < 0.5,
@@ -1011,12 +1013,12 @@ export async function run(page, t) {
     return { H, lvl, up10, up20, up40, dn20, bank45, marker, markerAfter, right30, left30, adi };
   })()`);
   const fr = (r) => (r.horizonY / lookUp.H).toFixed(2);
-  t.ok(Math.abs(lookUp.lvl.horizonY - lookUp.H / 2) < lookUp.H * 0.08,
-    `수평 자세에서 지평선은 화면 한가운데다 (높이의 ${fr(lookUp.lvl)})`);
+  t.ok(lookUp.lvl.horizonY < lookUp.H / 2 - lookUp.H * 0.05 && lookUp.lvl.horizonY > lookUp.H * 0.25,
+    `수평 자세에서 지평선은 화면 한가운데보다 조금 위다 — 기본 시선 5° 아래 (높이의 ${fr(lookUp.lvl)})`);
   t.ok(lookUp.up10.horizonY > lookUp.lvl.horizonY + lookUp.H * 0.1
        && lookUp.up20.horizonY > lookUp.up10.horizonY + lookUp.H * 0.1,
     `기수를 들수록 지평선이 내려가 하늘이 넓어진다 (0° ${fr(lookUp.lvl)} → 10° ${fr(lookUp.up10)} → 20° ${fr(lookUp.up20)})`);
-  t.ok(lookUp.up40.c.pitch > 125,
+  t.ok(lookUp.up40.c.pitch > 120,
     `40° 들면 하늘을 올려다본다 (카메라 ${lookUp.up40.c.pitch.toFixed(0)}°)`);
   t.ok(lookUp.dn20.horizonY < lookUp.lvl.horizonY - lookUp.H * 0.1,
     `숙이면 지평선이 올라가 땅이 넓어진다 (${fr(lookUp.dn20)})`);
@@ -1973,7 +1975,7 @@ export async function run(page, t) {
   t.ok(look.upRight.pitch > 110,
     `햇 ▲ 를 누르면 올려다본다 (카메라 ${look.upRight.pitch.toFixed(0)}°)`);
   t.eq(look.trimDuring, look.trimBefore, '둘러보는 동안에는 트림이 바뀌지 않는다');
-  t.ok(Math.abs(normAS0(look.back.bearing - 90)) < 3 && Math.abs(look.back.pitch - 90) < 3,
+  t.ok(Math.abs(normAS0(look.back.bearing - 90)) < 3 && Math.abs(look.back.pitch - 85) < 3,
     `B0 을 놓으면 정면으로 돌아온다 (방위 ${look.back.bearing}° · ${look.back.pitch.toFixed(0)}°)`);
   t.eq(look.trimAfter, look.trimBefore + 0.5, 'B0 없이 누른 햇은 종전대로 트림(0.5°)이다');
   t.ok(Math.abs(look.comp.pitch + 30) < 0.5 && Math.abs(look.comp.yaw - 180) < 0.5,
