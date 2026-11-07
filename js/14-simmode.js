@@ -68,16 +68,16 @@ function rotorSign() { return rotorDir === 'CW' ? 1 : -1; }   // 로터가 도�
 // 컬렉티브 투 피치를 뺀 나머지(컬렉티브→요 · 요→피치 · 전이성향)는 저속 현상이다 —
 // 15kt 부터 줄어 20kt 이상이면 없다
 const RC_IGE_FT = 40;           // 전이양력 지대 침하는 지면효과(IGE) 안(이 높이 이내)에서만
-const RC_BLOWBACK = 2.5;        // 블로우 백 기수 들림(°) — 전진 17~23kt 에서 다, 14·26kt 에서 0(후진에는 없다)
-const RC_BB_KT = [14, 17, 23, 26];
+const RC_BLOWBACK = 2.5;        // 블로우 백 기수 들림(°) — 전진 10~15kt 에서 다, 8·18kt 에서 0(후진에는 없다)
+const RC_BB_KT = [8, 10, 15, 18];
 // 블로우 백 크기(0…1) — 전진 대기속도로만
 function rcBlowbackK(v) {
   const [a, b, c, d] = RC_BB_KT;
   if (!(v > a) || v >= d) return 0;
-  return v < b ? (v - a) / (b - a) : v <= c ? 1 : (d - v) / (d - c);
+  const sm = x => x * x * (3 - 2 * x);                 // 부드럽게 들고 놓는다(한 번의 들림)
+  return v < b ? sm((v - a) / (b - a)) : v <= c ? 1 : sm((d - v) / (d - c));
 }
 let simBb = 0;                  // 지금 걸린 블로우 백(°)
-let simBbTrim = false;          // 조종간을 놓고 트림이 자세를 잡고 있다 — 속도 기준은 트림 자세 그대로
 const RC_LOW_KT0 = 15, RC_LOW_KT1 = 20;
 function rcLowK() { return Math.max(0, Math.min(1, (RC_LOW_KT1 - Math.abs(S.spd)) / (RC_LOW_KT1 - RC_LOW_KT0))); }
 function rcPitchOff(a) {
@@ -1047,12 +1047,11 @@ function simFly(dt) {
       if (!a.pitch) pRate = SIM_IAS_RATE;
     }
     pTgt += rcPitchOff(a);              // 회전익 특성 — 컬렉티브·페달이 피치로 옮겨 간다
-    // 블로우 백(flapback) — 전진 전이 비행(17~23kt 에서 다, 14·26kt 에서 0)에서 원판이 뒤로 젖혀져 기수가 2.5° 들린다.
-    // 후진 비행에는 없다. 4WAY 트림으로 자세를 잡아 두고 조종간을 놓았으면(트림 유지) 속도 기준은 트림 자세 그대로다 —
-    // 기수가 잠깐 들렸다가 그 구간을 지나면 트림 자세로 돌아온다(속도가 그 들림으로 줄지 않는다).
+    // 블로우 백(flapback) — 전진하며 10~15kt 를 지날 때 원판이 뒤로 젖혀져 기수가 한 번 2.5° 들린다(8·18kt 에서 0).
+    // 후진 비행에는 없다. 들림은 자세에만 나타나고 속도 기준(트림·조종간 자세)은 그대로다 — 들림이 감속을 불러
+    // 구간을 오가며 기수가 출렁이지 않고, 구간을 지나면 잡아 둔 자세로 돌아온다.
     const pBase = pTgt;
     simBb = (rcOn('blowback') && !onGnd && !simAfcsPitch()) ? RC_BLOWBACK * rcBlowbackK(S.spd) : 0;
-    simBbTrim = simBb > 0 && Math.abs(a.pitch) <= SIM_TRIM_HOLD_DEAD;
     pTgt += simBb;
     if (gnd3) pTgt = -a.pitch * SIM_PITCH_MAX;
     pTgt += deckAtt.pitch;               // 흔들리는 갑판 위에서는 갑판 자세를 따른다
@@ -1077,7 +1076,7 @@ function simFly(dt) {
     const tqKt = manual ? vsK * Math.max(0, Math.min(TQ_KT_MAX, TQ_KT * (S.tq - tqRequired()))) : 0;
     // 남는 출력이 낸 속도차(자세가 정한 속도보다 빠른 몫)는 엔진이 치른다 — 고도와 맞바꾸지 않는다(simKeVs)
     // 속도 기준 자세 — 트림이 잡고 있으면 블로우 백 들림은 빼고 본다(트림 자세 그대로)
-    const pitRef = (simBbTrim && S.pit > pBase) ? Math.max(pBase, S.pit - simBb) : S.pit;
+    const pitRef = (simBb > 0 && S.pit > pBase) ? Math.max(pBase, S.pit - simBb) : S.pit;
     _simKePowered = tqKt > 0 && S.spd >= spdFromPitch(pitRef) - 0.5;
     const sTgt = Math.max(SIM_SPD_BACK, Math.min(SIM_SPD_MAX, spdFromPitch(pitRef) + tqKt));
     if (onGnd) {
