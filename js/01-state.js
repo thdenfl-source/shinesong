@@ -779,6 +779,7 @@ function toggleObs() {
 
 function toggleNavAp() {
   navApOn = !navApOn;
+  _shipNavPhase = null;              // 함정 접근 차례는 걸 때마다 처음부터 고른다
   document.getElementById('nav-ap-btn').classList.toggle('on', navApOn);
   if (!navApOn) {
     if (holdOn) holdExit();          // NAV 해제 시 홀딩도 해제
@@ -816,9 +817,61 @@ const NAV_INTERCEPT_CHOICES = [30, 45, 60];
 let navInterceptDeg = 45;          // 인터셉트 각도(조종사 선택: 30/45/60)
 let _navDirectTo = false;          // 표적 직행 모드(FMA 표기에 사용)
 const VOR_FSD_DEG = 10;            // VOR CDI 최대편위 = 10°
+// ── 함정 TACAN(I-SHP) 접근 ── 함정은 움직이는 착륙장이다. 지상 VOR 처럼 '국 1.5NM 안은 혼동원추라 기수 유지'
+// 로 두면 마지막 접근에서 손을 놓고, 함정 앞·옆에 있으면 코스선(함정 침로)을 따라 함정에서 멀어진다.
+// 그래서 함정 뒤 코스선(침로의 반대쪽 · 접근로)으로 들어가 함정까지 따라가는 차례를 둔다:
+//   ABEAM — 함정 앞이면 먼저 함정 옆(내 쪽 SHIP_ABEAM_NM)을 지나 함정 위를 넘지 않는다
+//   GATE  — 함정 뒤 SHIP_GATE_NM 관문으로 곧장(닿을 때까지 — 도중에 꺾지 않는다)
+//   TRACK — 코스선 편위를 NM 로 보고(FMS 와 같은 인터셉트 · 롤아웃) 함정까지 따라간다 — 가까워져도 놓지 않는다
+//   OVER  — 함정 위(SHIP_OVER_NM)에 닿으면 함정 침로로 난다(1NM 넘게 벗어나면 다시 처음부터)
+const SHIP_GATE_NM = 2, SHIP_ABEAM_NM = 1.2, SHIP_OVER_NM = 0.15;
+let _shipNavPhase = null, _shipNavT = 0;
+function shipNavPhase() { return _shipNavPhase; }
+function _navShipTacan() {
+  if (navSrc === 'FMS') return false;
+  const r = (typeof navRadios === 'object' && navRadios) ? navRadios[navSrc] : null;
+  return !!(r && r.ship && navLat !== null && navLon !== null);
+}
+function _navShipBank(L) {
+  const crs = L.crs, d = distance(S.lat, S.lon, navLat, navLon);
+  const brgFromShip = bearing(navLat, navLon, S.lat, S.lon);
+  const along = d * Math.cos((brgFromShip - crs) * D2R);           // + = 함정 앞, − = 함정 뒤
+  const xtk = courseXtk(L);                                         // + = 코스 오른쪽
+  const IC = navInterceptDeg;
+  // 오래 쉬었다 다시 걸면(2초 넘게 불리지 않음) 처음부터 고른다
+  const now = (typeof performance !== 'undefined') ? performance.now() : Date.now();
+  if (now - _shipNavT > 2000) _shipNavPhase = null;
+  _shipNavT = now;
+  let ph = _shipNavPhase;
+  const astern = along < -0.5 && Math.abs(xtk) < -along * 0.6;     // 접근로 안쪽(뒤쪽 · 코스선 가까이)
+  if (!ph) ph = d < SHIP_OVER_NM ? 'OVER' : astern ? 'TRACK' : along > 0 ? 'ABEAM' : 'GATE';
+  if (ph === 'OVER' && d > 1) ph = astern ? 'TRACK' : along > 0 ? 'ABEAM' : 'GATE';
+  if (ph === 'TRACK' && d < SHIP_OVER_NM) ph = 'OVER';
+  if (ph === 'TRACK' && along > 0.5) ph = 'ABEAM';                  // 함정을 앞질렀다
+  if (ph === 'ABEAM' && along < 0) ph = 'GATE';                      // 함정 옆을 지났다
+  const side = xtk >= 0 ? 1 : -1;                                   // 내가 있는 쪽(코스 오른쪽 +)
+  const gate = destPoint(navLat, navLon, normA(crs + 180), SHIP_GATE_NM);
+  if (ph === 'GATE' && distance(S.lat, S.lon, gate[0], gate[1]) < 0.3) ph = 'TRACK';
+  _shipNavPhase = ph;
+  let desiredTrk;
+  _navDirectTo = ph === 'ABEAM' || ph === 'GATE';
+  if (ph === 'OVER') desiredTrk = crs;
+  else if (ph === 'ABEAM') {
+    const a = destPoint(navLat, navLon, normA(crs + 90 * side), SHIP_ABEAM_NM);
+    desiredTrk = bearing(S.lat, S.lon, a[0], a[1]);
+  } else if (ph === 'GATE') desiredTrk = bearing(S.lat, S.lon, gate[0], gate[1]);
+  else {
+    const rollOut = Math.max(0.15, navTurnRadiusNM() * (1 - Math.cos(IC * D2R)));
+    const ang = Math.min(IC, Math.abs(xtk) / rollOut * IC);
+    desiredTrk = normA(crs - Math.sign(xtk) * ang);
+  }
+  const hdgErr = normAS(windCorrectedHdg(desiredTrk) - S.hdg);
+  return Math.max(-25, Math.min(25, hdgErr * 2));
+}
 function navApBankTarget() {
   const L = activeCourseLine();
   if (!L) { _navDirectTo = false; return 0; }
+  if (_navShipTacan()) return _navShipBank(L);
   const crs = courseCrsHere(L);    // 현재 위치에서 본 코스 방위(대권 보정)
   const xtk = courseXtk(L);        // + = 코스 오른쪽
   const aXtk = Math.abs(xtk);

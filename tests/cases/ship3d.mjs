@@ -592,6 +592,38 @@ export async function run(page, t) {
   t.ok(tac.follow, '함정이 움직이고 돌면 국 위치와 코스(함정 침로)가 따라간다');
   t.ok(tac.red && tac.noShip, 'HSI 의 따로 그리던 함정 표시는 없고, 붉은 판독이 I-SHP 를 가리킨다');
 
+  // 함정 TACAN 으로 NAV 를 걸면 함정 뒤 접근로로 들어가 함정까지 따라간다(앞·옆에서 시작해도)
+  const tnav = await page.evaluate(() => {
+    const run = (distNM, offNM, spd, sec) => {
+      if (simModeOn) toggleSimMode(false);
+      if (!shipVisible) shipToggleOn();
+      shipLat = 37.0; shipLon = 126.0; shipHdg = 90; shipSpd = spd; updateShipMarker();
+      const p = destPoint(37.0, 126.0, 270, distNM), q = destPoint(p[0], p[1], 0, offNM);
+      S.lat = q[0]; S.lon = q[1]; S.hdg = 90; S.alt = 1500; S.spd = 100; S.bnk = 0; windSpd = 0;
+      setNavRadio('NAV1', '110X', null); setNavSrc('NAV1'); shipTacanSync();
+      if (navApOn) toggleNavAp(); toggleNavAp();
+      let reach = null, minEarly = 99; const phases = new Set();
+      S.running = true; let ts = 1000; S.lastT = ts;
+      for (let i = 0; i < sec * 20 && reach === null; i++) {
+        ts += 50; simStep(ts);
+        const d = distance(S.lat, S.lon, shipLat, shipLon), ph = shipNavPhase(); phases.add(ph);
+        if (ph === 'ABEAM' || ph === 'GATE') minEarly = Math.min(minEarly, d);
+        if (d < 0.2) reach = { t: Math.round(i / 20), xtk: Math.abs(courseXtk(activeCourseLine())), hdg: Math.round(S.hdg) };
+      }
+      S.running = false;
+      if (navApOn) toggleNavAp();
+      return { reach, minEarly, phases: [...phases] };
+    };
+    const o = { astern: run(6, 1, 15, 300), ahead: run(-4, 0.5, 15, 420), abeam: run(0, 3, 10, 420) };
+    setNavSrc('FMS'); setNavRadio('NAV1', '115.50', 'SEL'); shipSpd = 0;
+    return o;
+  });
+  t.ok(tnav.astern.reach && tnav.astern.reach.xtk < 0.05 && Math.abs(tnav.astern.reach.hdg - 90) < 5,
+    `함정 TACAN NAV — 함정 뒤에서 코스선(함정 침로)에 붙어 함정까지 따라간다(1.5NM 안에서도 놓지 않는다) (${tnav.astern.reach && tnav.astern.reach.t}초)`);
+  t.ok(tnav.ahead.reach && tnav.ahead.minEarly > 0.8 && tnav.ahead.phases.includes('ABEAM') && tnav.ahead.phases.includes('GATE'),
+    `함정 앞에서 걸면 함정 위를 넘지 않고 옆(1.2NM)을 지나 뒤 관문(2NM)으로 돌아 들어간다 (가장 가까이 ${tnav.ahead.minEarly.toFixed(2)}NM · ${tnav.ahead.reach && tnav.ahead.reach.t}초)`);
+  t.ok(tnav.abeam.reach, `함정 옆(3NM)에서 걸어도 뒤로 돌아 함정까지 온다 (${tnav.abeam.reach && tnav.abeam.reach.t}초)`);
+
   // 롤·피칭 · 난이도
   const mot = await page.evaluate(() => {
     shipLat = 37.0; shipLon = 126.0; shipHdg = 0; shipSpd = 10; updateShipMarker();
