@@ -991,6 +991,18 @@ function simVisAlt(map) {
 const SIM_VIEW_DOWN = 5;   // 1인칭 기본 시선을 기체 자세보다 숙이는 각(°) — 기수 그림은 화면 같은 자리에 둔다
 function _ml3dSimCamera() {
   if (!_ml3d || typeof _ml3d.calculateCameraOptionsFromCameraLngLatAltRotation !== 'function') return;
+  // 1인칭 ⇄ 외부 시점이 바뀌는 중 — 두 카메라 자리 사이를 옮긴다(15-heli3d.js simCamTx)
+  if (typeof simCamTx !== 'undefined' && simCamTx && typeof heli3dExtPose === 'function') {
+    const cp = _simCockpitPose(), ep = heli3dExtPose();
+    if (cp && ep) {
+      const k = simCamTxK(), w = simCamTx.toExt ? k : 1 - k;      // w: 외부 시점 쪽 몫
+      const L = (a, b) => a + (b - a) * w, A = (a, b) => normA(a + normAS(b - a) * w);
+      try { _ml3d.jumpTo(_ml3dCamOptions(L(cp.lon, ep.lon), L(cp.lat, ep.lat), L(cp.alt, ep.alt), A(cp.bearing, ep.bearing),
+                                         L(cp.pitch, ep.pitch), L(cp.roll, ep.roll), L(cp.dist, ep.dist))); } catch (e) { _swallow(e); }
+      try { if (typeof heli3dNoseSync === 'function') heli3dNoseSync(null); } catch (e) { _swallow(e); }
+      return;
+    }
+  }
   // 외부 시점 — 뒤에서 따라가며 내 헬기(15-heli3d.js 의 모형)를 본다
   if (typeof simExtView !== 'undefined' && simExtView) { heli3dExtCamera(); return; }
   // 카메라가 헬기 자리에 있어야 하므로 화면 중심을 지면에 묶지 않는다
@@ -1101,6 +1113,15 @@ function _ml3dCamRot(hdg, pit, bnk, lookYaw, lookPit) {
            roll: Math.atan2(C[2][1], C[2][2]) / D2R };
 }
 // SIM 모드에서 나올 때 — 지면 묶기와 롤을 되돌린다
+// 1인칭 카메라 자리·방향(시점 전환 효과가 쓴다 — 둘러보기는 가운데로 본다)
+function _simCockpitPose() {
+  const vis = simVisAlt();
+  const camAlt = Math.max(vis.alt, vis.drawn + _simEyeFloorM(vis.phys)) + SIM_EYE_MIN_M;
+  const r = _ml3dCamRot(S.hdg, S.pit, S.bnk, 0, -SIM_VIEW_DOWN);
+  const pitch = Math.max(0, Math.min(180, 90 + r.pitch));
+  const dist = Math.max(200, Math.min(10000, (camAlt - vis.drawn) * 20));
+  return { lon: S.lon, lat: S.lat, alt: camAlt, bearing: r.yaw, pitch, roll: r.roll, dist };
+}
 function _ml3dSimCameraOff() {
   if (!_ml3d) return;
   try { if (_ml3d.setCenterClampedToGround) _ml3d.setCenterClampedToGround(true); } catch (e) { _swallow(e); }

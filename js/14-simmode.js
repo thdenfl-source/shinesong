@@ -1036,6 +1036,7 @@ function acPlaceOnGround() {
 
 function toggleSimMode(on, opt) {
   simModeOn = (on === undefined) ? !simModeOn : !!on;
+  try { if (typeof simCamTx !== 'undefined') simCamTx = null; } catch (e) { _swallow(e); }   // 시점 전환 효과는 SIM 을 켜고 끌 때 거둔다
   if (simModeOn) {
     // 들어올 때는 AFCS 를 놓는다 — 상위모드는 들어온 뒤 조종사가 다시 건다
     // (걸면 그 축은 AFCS 가 몰고 조종간 값은 무시한다 — simAfcsLat·simAfcsVert)
