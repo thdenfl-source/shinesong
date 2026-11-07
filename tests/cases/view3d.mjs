@@ -261,9 +261,13 @@ export async function run(page, t) {
     document.getElementById('vstick-btn').click(); await new Promise(r => setTimeout(r, 100));
     const R = q => { const r = document.querySelector(q).getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height, r: r.right, b: r.bottom }; };
     const d3 = R('#map3d');
-    o.box = R('#vstick'); o.d3 = d3; o.cyc = R('#vstick .vs-cyc'); o.ped = R('#vstick .vs-ped'); o.coll = R('#vstick .vs-coll');
+    o.box = R('#vstick'); o.d3 = d3; o.cyc = R('#vstick .vs-cyc'); o.ped = R('#vstick .vs-ped'); o.coll = R('#vstick-coll .vs-coll');
     o.chinR = chinR; o.chinL = chinL; o.btn = document.getElementById('vstick-btn').textContent;
     const ctl = R('#ctl3d'); o.ctlClear = ctl.b <= o.box.y + 1;
+    { const c = o.coll, top = document.elementFromPoint(c.x + c.w / 2, c.y + c.h / 2); o.collTop = !!(top && top.closest('#vstick-coll')); }
+    // FCP 를 켜면 컬렉티브 오른쪽으로 비킨다
+    toggleFcp3d(); await new Promise(r => setTimeout(r, 150)); o.fcpL = R('#fcp3d-l').x; o.collR = R('#vstick-coll').r; toggleFcp3d();
+    chinL = true; chinViewOn = true;
     return o;
   });
   const vsm = async (x0, y0, x1, y1, probe) => {
@@ -287,8 +291,11 @@ export async function run(page, t) {
   t.ok(vs0.btn === 'STICK ON' && Math.abs(vs0.box.r - (vs0.d3.x + vs0.d3.w)) < 3 && Math.abs(vs0.box.b - (vs0.d3.y + vs0.d3.h)) < 3 &&
        Math.abs(vs0.box.w / vs0.d3.w - 1 / 3) < 0.03 && !vs0.chinR && vs0.chinL && vs0.ctlClear,
     'STICK ON — R CHIN 자리(오른쪽 아래 · 너비 1/3)에 조종간 셋이 뜨고 R CHIN 이 닫힌다(3D 버튼 줄은 그 위에서 끝난다)');
-  t.ok(vs0.coll.x < vs0.ped.x && vs0.ped.x < vs0.cyc.x && vs0.coll.h > vs0.coll.w && vs0.ped.w > vs0.ped.h && Math.abs(vs0.cyc.w - vs0.cyc.h) < 1,
-    '왼쪽은 위아래(컬렉티브), 가운데는 좌우(페달), 오른쪽은 원형(사이클릭)이다');
+  t.ok(vs0.coll.x - vs0.d3.x < 16 && vs0.d3.y + vs0.d3.h - vs0.coll.b < 16 && vs0.coll.h > vs0.coll.w && vs0.collTop,
+    `컬렉티브(위아래)는 화면 왼쪽 아래 끝(왼손)에 있고 L CHIN 창 위에 보인다 (왼쪽 ${Math.round(vs0.coll.x - vs0.d3.x)}px)`);
+  t.ok(vs0.ped.x < vs0.cyc.x && vs0.ped.w > vs0.ped.h && Math.abs(vs0.cyc.w - vs0.cyc.h) < 1,
+    '오른쪽 아래에는 좌우(페달)와 원형(사이클릭)이 있다');
+  t.ok(vs0.fcpL >= vs0.collR - 1, 'FCP 를 켜면 FCP 창이 컬렉티브 오른쪽으로 비켜 뜬다');
   t.ok(Math.abs(cyc.held.roll - cyc.held.pitch) < 1e-3 && cyc.held.roll > 0.5 && cyc.held.ax.roll === cyc.held.roll && cyc.rel.roll === 0 && cyc.rel.pitch === 0,
     `사이클릭 — 40° 쪽으로 밀면 16방향(45°)으로 맞춰 들어가고(롤 ${cyc.held.roll} · 피치 ${cyc.held.pitch}), 놓으면 가운데로`);
   t.ok(ped.held < -0.9 && ped.rel.yaw === 0, `페달 — 왼쪽 끝은 −1 언저리(${ped.held.toFixed(2)}), 놓으면 가운데로`);

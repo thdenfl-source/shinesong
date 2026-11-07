@@ -713,11 +713,15 @@ function _vStickBox() {
   if (box) return box;
   box = document.createElement('div'); box.id = 'vstick';
   box.innerHTML =
-    '<div class="vs-track vs-coll" data-k="coll"><div class="vs-knob"></div><span class="vs-lbl">COLL</span></div>' +
     '<div class="vs-track vs-ped" data-k="yaw"><div class="vs-knob"></div><span class="vs-lbl">PEDAL</span></div>' +
     '<div class="vs-cyc" data-k="cyc"><div class="vs-ring"></div><div class="vs-knob"></div><span class="vs-lbl">CYCLIC</span></div>';
   d3.appendChild(box);
-  box.querySelectorAll('[data-k]').forEach(el => {
+  // 컬렉티브는 왼손 — 화면 왼쪽 아래 끝(L CHIN 창의 왼쪽 가장자리)에 따로 둔다
+  const cb = document.createElement('div'); cb.id = 'vstick-coll'; cb.className = 'vstick-pane';
+  cb.innerHTML = '<div class="vs-track vs-coll" data-k="coll"><div class="vs-knob"></div><span class="vs-lbl">COLL</span></div>';
+  // (CHIN 창 줄은 #map3d 바깥 형제라, 그 위에 보이도록 #map3d 의 부모에 붙인다)
+  (d3.parentElement || d3).appendChild(cb);
+  [...box.querySelectorAll('[data-k]'), ...cb.querySelectorAll('[data-k]')].forEach(el => {
     const k = el.dataset.k;
     const set = ev => {
       const r = el.getBoundingClientRect();
@@ -748,7 +752,7 @@ function _vStickBox() {
 }
 function vStickRender() {
   const box = document.getElementById('vstick'); if (!box) return;
-  const q = s => box.querySelector(s);
+  const q = s => document.querySelector('#vstick ' + s + ', #vstick-coll ' + s);
   const kc = q('.vs-coll .vs-knob'), kp = q('.vs-ped .vs-knob'), ky = q('.vs-cyc .vs-knob');
   if (kc) kc.style.bottom = `calc(${(vStick.coll * 100).toFixed(1)}% - 9px)`;
   if (kp) kp.style.left = `calc(${((vStick.yaw + 1) * 50).toFixed(1)}% - 9px)`;
@@ -761,6 +765,9 @@ function syncVStick() {
   if (b) { b.textContent = vStickOn ? 'STICK ON' : 'STICK OFF'; b.classList.toggle('on', want); b.classList.toggle('dim', !avail); }
   const box = want ? _vStickBox() : document.getElementById('vstick');
   if (box) box.classList.toggle('show', want);
+  { const cb = document.getElementById('vstick-coll'), d3 = document.getElementById('map3d');
+    if (cb && d3 && d3.parentElement && cb.parentElement !== d3.parentElement) d3.parentElement.appendChild(cb);   // 3D 창이 옮겨 가면 따라간다
+    if (cb) cb.classList.toggle('show', want); }
   { const d3 = document.getElementById('map3d'); if (d3) d3.classList.toggle('vstick-on', want); }   // 3D 버튼 줄이 조종간 위에서 끝나게
   if (want) {
     vStickRender();
