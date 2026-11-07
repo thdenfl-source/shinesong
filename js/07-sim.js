@@ -1357,6 +1357,8 @@ function cduFullScreen() { enterSolo('cdu'); }
 // ── CDU 하단 푸터 표준화 ──
 // 전체화면(solo)일 땐 FULL → HALF(우측 상단 ✕와 동일: exitSolo)
 function cduFullNavBtn() {
+  // 3D 단독에 겹친 CDU — 단독 화면을 바꾸는 FULL/HALF 는 두지 않는다(3D 단독을 지킨다)
+  try { if (cduOvActive()) return `<div class="nav-btn" style="opacity:.35;pointer-events:none"><span>✥</span>3D</div>`; } catch (e) { _swallow(e); }
   return _soloActive
     ? `<div class="nav-btn" data-act="exitSolo"><span>✥</span>Half</div>`
     : `<div class="nav-btn" data-act="cduFullScreen"><span>✥</span>Full</div>`;
@@ -1371,6 +1373,7 @@ function openFlightPlan() {
 function planFullScreen() { enterSolo('plan'); }
 // Flight Plan 푸터용 FULL/HALF 버튼(solo 상태 반영)
 function fpFullBtn() {
+  try { if (cduOvActive()) return `<div class="fp-nav-btn" style="opacity:.35;pointer-events:none"><span>✥</span>3D</div>`; } catch (e) { _swallow(e); }
   return _soloActive
     ? `<div class="fp-nav-btn" data-act="exitSolo"><span>✥</span>Half</div>`
     : `<div class="fp-nav-btn" data-act="planFullScreen"><span>✥</span>Full</div>`;
@@ -1409,6 +1412,8 @@ let _soloSaved = null;          // 단독 진입 전 창 배치
 let _soloCurrent = null;
 
 function setSolo(screen) {
+  // 3D 단독에 CDU 를 겹쳐 쓰는 중이면 CDU·Flight Plan 화면 바꾸기는 그 칸 안에서 — 3D 단독은 그대로
+  try { if (_soloActive && _soloCurrent === 'm3d' && cduOvRoute(screen)) return; } catch (e) { _swallow(e); }
   _soloCurrent = screen;
   const leftPanel  = document.getElementById('left-panel');
   const rightPanel = document.getElementById('right-panel');
@@ -1547,33 +1552,50 @@ function togglePfdOverlay() {
 const CDU_OV_PREF = 'cduOverlay';
 let cduOvOn = false;
 try { cduOvOn = localStorage.getItem(CDU_OV_PREF) === '1'; } catch (e) { cduOvOn = false; }
-let _cduOvHome = null;          // 제자리 표시
+const _cduOvHome = { cdu: null, plan: null };   // 제자리 표시
+const CDU_OV_WRAP = { cdu: 'cdu-wrap', plan: 'fp-wrap' };
+// 겹친 CDU 가 보여 줄 화면 — CDU 또는 그 안에서 연 Flight Plan(PROC 포함). CDU 의 버튼이 단독 화면을 바꾸려 하면
+// (Flight Plan · Home · BACK 등 setSolo) 3D 단독은 그대로 두고 이 칸 안에서 바꾼다.
+let cduOvPage = 'cdu';
 function cduOvAvail() { return _soloActive && _soloCurrent === 'm3d' && !!pfdOvHost(); }
+function cduOvActive() { return cduOvOn && cduOvAvail(); }
 function syncCduOverlay() {
-  const want = cduOvOn && cduOvAvail();
+  const want = cduOvActive();
+  if (!want) cduOvPage = 'cdu';
   const b = document.getElementById('cduov-btn');
   if (b) {
     b.textContent = cduOvOn ? 'CDU ON' : 'CDU OFF';
     b.classList.toggle('on', want);
     b.classList.toggle('dim', !cduOvAvail());
   }
-  const wrap = document.getElementById('cdu-wrap');
-  if (!wrap) return;
   let box = document.getElementById('cdu-ov');
   if (want) {
     const host = pfdOvHost();
     if (!box) { box = document.createElement('div'); box.id = 'cdu-ov'; }
     if (box.parentElement !== host) host.appendChild(box);
-    if (wrap.parentElement !== box) {
-      _cduOvHome = document.createComment('cdu-ov'); wrap.before(_cduOvHome);
-      box.appendChild(wrap);
-    }
     box.classList.add('show');
-  } else {
-    if (_cduOvHome) { _cduOvHome.replaceWith(wrap); _cduOvHome = null; }
-    if (box) box.classList.remove('show');
-  }
+  } else if (box) box.classList.remove('show');
+  // 보여 줄 화면만 칸 안에, 나머지는 제자리로
+  Object.keys(CDU_OV_WRAP).forEach(k => {
+    const wrap = document.getElementById(CDU_OV_WRAP[k]);
+    if (!wrap) return;
+    const inBox = want && cduOvPage === k;
+    if (inBox && wrap.parentElement !== box) {
+      _cduOvHome[k] = document.createComment('cdu-ov'); wrap.before(_cduOvHome[k]);
+      box.appendChild(wrap);
+    } else if (!inBox && _cduOvHome[k]) { _cduOvHome[k].replaceWith(wrap); _cduOvHome[k] = null; }
+  });
   requestAnimationFrame(() => { try { scaleCdu(); } catch (e) { _swallow(e); } });
+  if (want !== _cduOvWas) { _cduOvWas = want; _refreshCduFooters(); }   // FULL/HALF 자리
+}
+let _cduOvWas = false;
+// 겹친 CDU 안에서 화면 바꾸기(setSolo 가 부른다) — 바꿨으면 true
+function cduOvRoute(screen) {
+  if (!cduOvActive() || (screen !== 'cdu' && screen !== 'plan')) return false;
+  cduOvPage = screen;
+  syncCduOverlay();
+  _refreshCduFooters();
+  return true;
 }
 function toggleCduOverlay() {
   if (!cduOvAvail()) {

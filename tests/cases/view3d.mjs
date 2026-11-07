@@ -185,6 +185,15 @@ export async function run(page, t) {
     switchMode('HOME');
     box.querySelector('[data-act="switchMode"][data-arg*="INTERCOM"]').click(); await wait(100);
     o.key = currentMode; switchMode('HOME');
+    // 단독 화면을 바꾸던 버튼들 — Flight Plan(PLAN) · 그 안의 Home · FULL — 3D 단독은 그대로, 칸 안에서 바뀐다
+    openFlightPlan(); await wait(150);
+    o.plan = { solo: _soloCurrent, inBox: document.getElementById('fp-wrap').parentElement === box,
+               cduHome: document.getElementById('cdu-wrap').parentElement !== box };
+    fpGoCduHome(); await wait(150);
+    o.home = { solo: _soloCurrent, inBox: document.getElementById('cdu-wrap').parentElement === box,
+               fpHome: document.getElementById('fp-wrap').parentElement !== box };
+    cduFullScreen(); await wait(150); o.full = _soloCurrent;
+    o.noHalf = !box.querySelector('[data-act="exitSolo"]');
     document.getElementById('cduov-btn').click(); await wait(100);
     o.off = { show: box.classList.contains('show'), home: document.getElementById('cdu-wrap').parentElement.id };
     document.getElementById('cduov-btn').click(); await wait(100);
@@ -198,6 +207,10 @@ export async function run(page, t) {
        Math.abs(cduov.on.h - 0.6) < 0.06 && cduov.on.fit && cduov.on.side < 4,
     `3D 단독에서 CDU ON — 3D 버튼 줄 바로 왼쪽에 계기 칸 높이(${(cduov.on.h * 100).toFixed(0)}%)로, 좌우 빈 여백 없이(${cduov.on.side.toFixed(1)}px) CDU 가 뜬다`);
   t.eq(cduov.key, 'INTERCOM', '겹친 CDU 의 키가 그대로 듣는다');
+  t.ok(cduov.plan.solo === 'm3d' && cduov.plan.inBox && cduov.plan.cduHome,
+    '겹친 CDU 에서 Flight Plan 을 열어도 3D 단독 그대로 — 칸 안에서 Flight Plan 이 뜬다');
+  t.ok(cduov.home.solo === 'm3d' && cduov.home.inBox && cduov.home.fpHome, 'Flight Plan 의 Home 도 칸 안에서 CDU 로 돌아온다');
+  t.ok(cduov.full === 'm3d' && cduov.noHalf, 'FULL/HALF 처럼 단독 화면을 바꾸는 버튼은 3D 단독을 깨지 않는다(겹친 CDU 에는 HALF 를 두지 않는다)');
   t.ok(!cduov.off.show && cduov.off.home === cduov.home0, 'CDU OFF 면 감추고 CDU 창을 제자리로 돌려놓는다');
   t.ok(!cduov.back.show && cduov.back.home === cduov.home0, '3D 단독을 나오면 CDU 가 제자리로 돌아간다');
 }
