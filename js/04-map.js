@@ -844,11 +844,11 @@ function toggleChinView(side) {
   requestAnimationFrame(() => { try { if (_ml3d) _applyFollow(); } catch (e) { _swallow(e); } });
 }
 
-// ── 3D 화면의 FCP(L · R) ──
-// PFD 아래 FCP(.ctrl-bar 의 세 줄)를 줄마다 반으로 갈라, 왼쪽 반은 FCP L, 오른쪽 반은 FCP R 로
-// 3D 화면 아래 왼쪽·오른쪽 모서리(CHIN 창 자리)에 띄운다. 버튼 그 자체를 옮겨 오므로 기능·상태가
-// 그대로다(닫으면 제자리로 돌려놓는다). PFD 가 화면에 없는 3D 단독(3D Only) 화면에서만 연다 —
-// 분할 화면은 PFD 아래에 FCP 가 이미 있다. FCP 를 연 쪽의 CHIN 창은 닫힌다.
+// ── 3D 화면의 FCP ──
+// PFD 아래 FCP(.ctrl-bar 의 세 줄)를 통째로 3D 화면 왼쪽 아래에 한 창으로 띄운다(FCP ON/OFF 버튼 하나).
+// 버튼 그 자체를 옮겨 오므로 기능·상태가 그대로다(닫으면 제자리로 돌려놓는다). PFD 가 화면에 없는
+// 3D 단독(3D Only) 화면에서만 연다 — 분할 화면은 PFD 아래에 FCP 가 이미 있다. 켜면 L CHIN 창은 닫힌다.
+// (안쪽 이름은 L·R 두 칸이던 때를 따른다 — 지금은 L 칸 하나만 쓴다)
 let fcpL = false, fcpR = false;
 let _fcpParts = null;            // [{ el, side, row, ph(제자리 표시) }]
 let _fcpKey = '';
@@ -864,7 +864,7 @@ function _fcpSplit() {
     // 칸(무리)만 세어 반으로 가르고, 칸 사이 구분선(.ctrl-div)은 뒤 칸을 따라간다(반의 맨 앞 구분선은 두고 간다)
     const kids = [...row.children];
     const items = kids.filter(e => !e.classList.contains('ctrl-div'));
-    const half = Math.ceil(items.length / 2);
+    const half = items.length;          // 한 창 — 모두 왼쪽(L) 칸으로
     let seen = 0, last = { L: false, R: false };
     kids.forEach((el, i) => {
       if (el.classList.contains('ctrl-div')) {
@@ -895,16 +895,18 @@ function _fcpBox(side) {
   }
   return box;
 }
-// 상자 너비(CHIN 창 너비)에 맞춰 줄여 그린다 — 높이는 그 비율대로
+// 3D 화면 너비의 반 · 높이의 45% 안에 들도록 줄여 그리고(키우지는 않는다) 상자를 그 크기로
 function _fcpFit(box) {
   const inner = box && box.firstElementChild;
-  if (!inner) return;
+  const host = box && box.parentElement;
+  if (!inner || !host) return;
   inner.style.transform = 'none';
-  const nw = inner.scrollWidth, nh = inner.scrollHeight, bw = box.clientWidth;
-  if (!nw || !bw) return;
-  const k = Math.min(1.2, bw / nw);
+  const nw = inner.scrollWidth, nh = inner.scrollHeight;
+  if (!nw || !nh) return;
+  const k = Math.min(1, host.clientWidth * 0.5 / nw, host.clientHeight * 0.45 / nh);
   inner.style.transform = `scale(${k.toFixed(4)})`;
-  box.style.height = Math.ceil(nh * k) + 'px';
+  box.style.width = Math.ceil(nw * k) + 4 + 'px';
+  box.style.height = Math.ceil(nh * k) + 4 + 'px';
 }
 function syncFcp3d() {
   const avail = fcp3dAvail();
@@ -914,6 +916,7 @@ function syncFcp3d() {
     if (!b) return;
     const on = sd === 'L' ? wantL : wantR;
     if (b.classList.contains('on') !== on) b.classList.toggle('on', on);
+    if (sd === 'L') { const t = fcpL ? 'FCP ON' : 'FCP OFF'; if (b.textContent !== t) b.textContent = t; }
     if (b.classList.contains('dim') === avail) b.classList.toggle('dim', !avail);
   });
   const key = `${wantL}|${wantR}`;
@@ -946,7 +949,7 @@ function toggleFcp3d(side) {
     try { uiToast('FCP 는 3D 단독(3D Only) 화면에서 엽니다 — 분할 화면은 PFD 아래에 FCP 가 있습니다', '', 2500); } catch (e) { _swallow(e); }
     return;
   }
-  if (side === 'L') fcpL = !fcpL; else fcpR = !fcpR;
+  fcpL = !fcpL; fcpR = false;          // 한 창(왼쪽 아래)
   syncFcp3d();
 }
 window.addEventListener('resize', () => {

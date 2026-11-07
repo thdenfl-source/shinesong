@@ -674,11 +674,11 @@ html, body {
 #ctl3d > #ctl3d-body > .sim-btn, #ctl3d-tog { padding: 5px 4px; text-align: center; }
 #ctl3d #chin-btn { display: none; gap: 3px; }
 #ctl3d .fcp-btn-row { display: flex; gap: 3px; }
-#ctl3d .fcp-btn-row .sim-btn { flex: 1; width: auto; padding: 5px 0; font-size: 10px; }
+#ctl3d .fcp-btn-row .sim-btn { flex: 1; width: auto; padding: 5px 0; }
 #ctl3d .fcp-btn-row .sim-btn.on { color: #ffb000; border-color: #ffb000; }
 #ctl3d .fcp-btn-row .sim-btn.dim { opacity: 0.45; }
-/* 3D 화면의 FCP(L·R) — CHIN 창과 같은 아래 좌·우 모서리, 같은 너비(높이는 줄인 비율대로) */
-.fcp3d { display: none; position: absolute; bottom: 0; width: calc((100% - 18px) / 3); z-index: 802;
+/* 3D 화면의 FCP — 왼쪽 아래 한 창 */
+.fcp3d { display: none; position: absolute; bottom: 0; z-index: 802;   /* 크기는 04-map.js _fcpFit(너비 ≤ 1/2 · 높이 ≤ 45%) */
          background: rgba(10,12,15,0.92); border: 2px solid #1d232b; border-radius: 10px 10px 0 0;
          box-shadow: 0 0 10px rgba(0,0,0,0.6); overflow: hidden; box-sizing: border-box; }
 .fcp3d.show { display: block; }
@@ -2126,10 +2126,8 @@ body.gate-open #gate-overlay { display: none; }
             겹친 CDU 의 <b>MAP</b> 버튼도 이 지도를 켭니다(3D 단독은 그대로). MAP 단독 화면에서는 지도 아래 <b>3D</b> 버튼으로 3D 단독에 돌아갑니다.<br>
             <b>CDU ON/OFF</b>(3D 오른쪽 버튼 묶음, 계기 버튼 아래) — <b>3D 단독(3D Only) 화면</b>에서 CDU 를 <b>3D 버튼 줄 바로 왼쪽</b>에
             계기 칸과 같은 높이(3/5)로 겹쳐 띄웁니다(너비는 CDU 비율대로 — 좌우 빈 여백 없이). CDU 창 그대로라 키·화면이 같고, 끄거나 단독을 나오면 제자리로 돌아갑니다(이 기기에 기억).<br>
-            <b>FCP L · FCP R</b>(3D 오른쪽 버튼 묶음, 계기 버튼 아래) — <b>3D 단독(3D Only) 화면</b>에서 PFD 아래 FCP 를 3D 화면에 띄웁니다.
-            FCP 의 줄마다 <b>왼쪽 반은 FCP L</b>(IAS·HDG·CRS·VS · 바람·AP · NAV SRC…), <b>오른쪽 반은 FCP R</b>(ALT·CRHT·ALT 유지·SIM · BRG·스톱워치·HOVER · 트림…)이며,
-            <b>CHIN 창 자리(아래 왼쪽·오른쪽 모서리)</b>에 뜹니다. FCP 를 켠 쪽 CHIN 창은 닫히고, 둘 다 켜면 CHIN 창이 모두 닫힙니다.
-            분할 화면에서는 PFD 아래에 FCP 가 있으므로 열지 않습니다.<br>
+            <b>FCP ON/OFF</b>(3D 오른쪽 버튼 묶음) — <b>3D 단독(3D Only) 화면</b>에서 PFD 아래 FCP 전체(세 줄)를 <b>3D 화면 왼쪽 아래에 한 창</b>으로 띄웁니다
+            (화면 너비의 반 · 높이의 45% 안으로 줄여 그림). 버튼 그대로라 기능이 같고, 켜면 L CHIN 창은 닫힙니다. 분할 화면에서는 PFD 아래에 FCP 가 있으므로 열지 않습니다.<br>
             <b>CHIN BUBBLE</b> — 1인칭에서는 <b>정면 시야가 3D 창 가득</b> 차고, 좌·우 발밑 창은 그 위
             <b>아래 왼쪽·오른쪽 모서리에 붙어 겹쳐</b> 뜹니다(창 하나가 너비 약 1/3 · 높이 2/9).
             가운데 앞쪽 아래는 가리지 않아 전방을 넓게 봅니다. 발밑 창은 헬기의 CHIN BUBBLE 처럼 <b>정면보다 50° 아래</b>를 좌·우로 15° 벌려 보며,
@@ -2882,8 +2880,8 @@ body.gate-open #gate-overlay { display: none; }
           <button class="sim-btn" id="cduov-btn" data-act="toggleCduOverlay" title="CDU — 3D 단독(3D Only) 화면에서 3D 버튼 줄 바로 왼쪽에 CDU 를 계기 칸 높이(3/5)로 보이기/감추기">CDU OFF</button>
           <!-- MAP ON/OFF — 3D 단독 화면에서 2D 지도를 계기 칸 크기로 겹쳐 띄운다(CDU 칸 왼쪽 · 07-sim.js) -->
           <button class="sim-btn" id="mapov-btn" data-act="toggleMapOverlay" title="MAP — 3D 단독(3D Only) 화면에서 2D 지도를 계기 칸 크기(가로 1/4 · 높이 3/5)로 CDU 칸 왼쪽에 보이기/감추기(CDU 의 MAP 버튼과 같다)">MAP OFF</button>
-          <!-- FCP L · FCP R — PFD 아래 FCP 의 왼쪽·오른쪽 반을 3D 화면 아래 같은 쪽 모서리(CHIN 창 자리)에(3D 단독에서만 · 04-map.js) -->
-          <div id="fcp-btn" class="fcp-btn-row"><button class="sim-btn" id="fcp-l-btn" data-act="toggleFcp3d" data-arg='["L"]' title="FCP L — FCP 왼쪽 반(IAS·HDG·CRS·VS…)을 3D 화면 왼쪽 아래에(그쪽 CHIN 창은 닫힘 · 3D 단독 화면에서만)">FCP L</button><button class="sim-btn" id="fcp-r-btn" data-act="toggleFcp3d" data-arg='["R"]' title="FCP R — FCP 오른쪽 반(ALT·CRHT·SIM·AP·BRG·HOVER…)을 3D 화면 오른쪽 아래에(그쪽 CHIN 창은 닫힘 · 3D 단독 화면에서만)">FCP R</button></div>
+          <!-- FCP ON/OFF — PFD 아래 FCP 전체를 3D 화면 왼쪽 아래에 한 창으로(3D 단독에서만 · 04-map.js) -->
+          <div id="fcp-btn" class="fcp-btn-row"><button class="sim-btn" id="fcp-l-btn" data-act="toggleFcp3d" title="FCP — PFD 아래 FCP 전체를 3D 화면 왼쪽 아래에 한 창으로 보이기/감추기(L CHIN 창은 닫힘 · 3D 단독 화면에서만)">FCP OFF</button></div>
           <!-- MG(Slaved)/DG — 방향 기준. 지도 창의 같은 버튼과 같다(07-sim.js) -->
           <div class="hdgref" id="hdgref-3d">
             <button class="sim-btn hdgref-btn" data-act="toggleHdgRef" title="방향 기준 — MG(Slaved): 자이로를 지구 자기장에 맞춘다 · DG: 방향 자이로만(1시간에 약 6° 어긋난다 → −/+ 로 맞춘다)">MG (Slaved)</button>
