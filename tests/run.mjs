@@ -35,6 +35,7 @@ import * as gslope from './cases/gslope.mjs';
 import * as joystick from './cases/joystick.mjs';
 import * as geosearch from './cases/geosearch.mjs';
 import * as simmode from './cases/simmode.mjs';
+import * as ga from './cases/ga.mjs';
 import * as ship3d from './cases/ship3d.mjs';
 import * as heli3d from './cases/heli3d.mjs';
 import * as ralt from './cases/ralt.mjs';
@@ -47,7 +48,7 @@ import * as apptune from './cases/apptune.mjs';
 import * as lock from './cases/lock.mjs';
 import * as popout from './cases/popout.mjs';
 
-const SUITES = [smoke, actions, coords, chartcal, hold, nav, gspd, dialog, chartview, procdata, simspd, tascalc, brg, fpwpt, maprot, map3d, dmearc, dme, fporder, wptcrs, brglbl, directto, crssync, locsta, susp, layout, gslope, joystick, geosearch, simmode, ship3d, heli3d, ralt, startapt, hdgref, sound, view3d, runway, apptune, lock, popout];
+const SUITES = [smoke, actions, coords, chartcal, hold, nav, gspd, dialog, chartview, procdata, simspd, tascalc, brg, fpwpt, maprot, map3d, dmearc, dme, fporder, wptcrs, brglbl, directto, crssync, locsta, susp, layout, gslope, joystick, geosearch, simmode, ga, ship3d, heli3d, ralt, startapt, hdgref, sound, view3d, runway, apptune, lock, popout];
 const filter = process.argv.slice(2);
 
 function makeT() {

@@ -179,7 +179,43 @@ function simAfcsAny() {
   return simModeOn && !!(hdgSelOn || navApOn || altHoldOn || crhtOn || simIasOn || gspdOn || gsOn ||
     (typeof holdOn !== 'undefined' && holdOn));
 }
-function simAfcsVert() { return simModeOn && (altHoldOn || crhtOn || (gsOn && !!_simGs())); }
+function simAfcsVert() { return simModeOn && (altHoldOn || crhtOn || (gsOn && !!_simGs()) || gaOn || vsModeOn); }
+// ── G/A(복행) ── FCP 의 G/A 버튼. 누르면 컬렉티브·피치 축이 GA 가 되어
+//   · 피치: 지금 속도에서 목표 속도까지 GA_DUR(25초 · 전진 20kt 넘으면 17초)에 걸쳐 점점 가속
+//           목표 = Vy(지금이 Vy 보다 느리면) · 지금 속도(Vy~VNE) · VNE(VNE 를 넘으면) — IAS 기준
+//   · 컬렉티브: 선택 상승률(selVS, 기본 1,000fpm · VS ▲▼ 로 300fpm 까지)로 오른다 — 지금 고도 아래로는 가지 않는다
+// 시간이 다 되면 컬렉티브는 VS(그 상승률로 계속 상승), 피치는 IAS(목표 속도)로 넘어간다.
+// 롤 축은 붙이지 않는다 — 뱅크가 있었으면 그대로 간다(HDG 는 조종사가 건다).
+const GA_DUR = 25, GA_DUR_FWD = 17, GA_FWD_KT = 20, GA_VS_DEF = 1000, GA_VS_MIN = 300, GA_VS_RAMP = 4;
+let gaOn = false, vsModeOn = false, _gaT = 0, _gaDur = GA_DUR, _gaSpd0 = 0, _gaSpdTgt = 0;
+function gaTarget(spd = S.spd) {
+  const vy = simVyKt(), vne = simVne();
+  return spd < vy ? vy : spd <= vne ? spd : vne;
+}
+function gaEngage() {
+  if (!simModeOn) { try { uiToast('G/A 는 SIM 모드에서 씁니다', '', 2000); } catch (e) { _swallow(e); } return; }
+  try { if (gspdOn) toggleGspd(); } catch (e) { _swallow(e); }
+  try { if (gsOn || gsArmed) toggleGs(); } catch (e) { _swallow(e); }
+  altHoldOn = false; crhtOn = false;
+  selVS = GA_VS_DEF;
+  _gaSpd0 = Math.max(0, S.spd); _gaSpdTgt = gaTarget(_gaSpd0);
+  _gaDur = _gaSpd0 >= GA_FWD_KT ? GA_DUR_FWD : GA_DUR; _gaT = 0;
+  simIasOn = true; selSpd = _gaSpd0;
+  gaOn = true; vsModeOn = false;
+  updateGaBtn();
+  try { updateHoverBtns(); updateApInhibit(); } catch (e) { _swallow(e); }
+}
+function gaRelease() { gaOn = false; vsModeOn = false; updateGaBtn(); }
+function updateGaBtn() { const b = document.getElementById('ga-btn'); if (b) b.classList.toggle('on', gaOn); }
+// simFly 가 구간마다 부른다 — 속도 기준을 목표 쪽으로 옮기고, 다 되면 VS · IAS 로 넘긴다
+function gaStep(dt) {
+  if (!gaOn) return;
+  if (!simIasOn || altHoldOn || crhtOn) { gaOn = false; if (!altHoldOn && !crhtOn) vsModeOn = true; updateGaBtn(); return; }  // 조종사가 축을 가져갔다
+  _gaT += dt;
+  const x = Math.min(1, _gaT / _gaDur), k = x * x * (3 - 2 * x);   // 점점 붙고 점점 풀린다
+  selSpd = _gaSpd0 + (_gaSpdTgt - _gaSpd0) * k;
+  if (x >= 1) { gaOn = false; vsModeOn = true; selSpd = _gaSpdTgt; updateGaBtn(); }
+}
 // G/S 를 잡고 있으면 강하선(gsDeviation)이 고도를 정한다 — ALT·CRHT 보다 앞선다
 function _simGs() { try { return gsOn ? gsDeviation() : null; } catch (e) { return null; } }
 // ALT·CRHT 가 원하는 상승률(fpm) — 목표 고도까지 남은 높이에 비례하고, ALT 는 선택
@@ -189,6 +225,11 @@ function _simGs() { try { return gsOn ? gsDeviation() : null; } catch (e) { retu
 const SIM_AFCS_ALT_K = 10;     // 1ft 어긋날 때마다 원하는 상승률(fpm)
 const SIM_AFCS_LEAD  = 2;      // 앞을 내다보는 시간(s)
 function simAfcsVsCmd() {
+  // G/A · VS — 선택 상승률로 오른다(G/A 처음 몇 초는 점점 붙인다 · 내려가지는 않는다)
+  if ((gaOn || vsModeOn) && !altHoldOn && !crhtOn && !(gsOn && _simGs())) {
+    const r = Math.max(GA_VS_MIN, selVS);
+    return gaOn ? r * Math.min(1, _gaT / GA_VS_RAMP) : r;
+  }
   // CRHT 는 전파고도(AGL)를 지킨다 — 기압고도로 바꾸면 '발밑 땅 + 선택 높이'
   const g = _simGs();
   if (g) {
@@ -1037,6 +1078,7 @@ function acPlaceOnGround() {
 function toggleSimMode(on, opt) {
   simModeOn = (on === undefined) ? !simModeOn : !!on;
   try { if (typeof simCamTx !== 'undefined') simCamTx = null; } catch (e) { _swallow(e); }   // 시점 전환 효과는 SIM 을 켜고 끌 때 거둔다
+  gaOn = false; vsModeOn = false; try { updateGaBtn(); } catch (e) { _swallow(e); }
   if (simModeOn) {
     // 들어올 때는 AFCS 를 놓는다 — 상위모드는 들어온 뒤 조종사가 다시 건다
     // (걸면 그 축은 AFCS 가 몰고 조종간 값은 무시한다 — simAfcsLat·simAfcsVert)
@@ -1156,6 +1198,7 @@ function simAirspeed() {
 
 // 한 적분 구간(dt초)의 조종 입력 적용. simStep 안에서 불린다.
 function simFly(dt) {
+  try { gaStep(dt); } catch (e) { _swallow(e); }
   if (!simModeOn || !(dt > 0)) return;
   const a = simModeAxes();
 
@@ -1470,5 +1513,5 @@ function simFly(dt) {
   }, 200);
 })();
 // toggleFcp3d 는 04-map.js 에 있다(그 파일은 appRegister 보다 먼저 읽혀 여기서 연결한다)
-try { appRegister({ toggleSimMode, simModeBtnPress, toggleRotorChar, setRotorDir, toggleAse, toggleRcOpt, cycleSimEng, toggleFcp3d, toggleVStick, toggleGyro, gyroAlign }); } catch (e) { _swallow(e); }
+try { appRegister({ toggleSimMode, simModeBtnPress, toggleRotorChar, setRotorDir, toggleAse, toggleRcOpt, cycleSimEng, toggleFcp3d, toggleVStick, toggleGyro, gyroAlign, gaEngage }); } catch (e) { _swallow(e); }
 try { updateSimModeBtn(); } catch (e) { _swallow(e); }

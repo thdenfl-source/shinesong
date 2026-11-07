@@ -36,7 +36,9 @@ function applyDelta(field, d){
       }
       break;
     case 'vs':
-      if (altHoldOn || crhtOn) {
+      if ((typeof gaOn !== 'undefined') && (gaOn || vsModeOn) && !altHoldOn && !crhtOn) {
+        selVS = Math.max(GA_VS_MIN, Math.min(3000, selVS + d));   // G/A · VS — 상승률(최저 300fpm)
+      } else if (altHoldOn || crhtOn) {
         // Hold mode active: VS ▲/▼ adjusts the convergence rate preselect.
         // altHoldOn uses selVS directly; crhtOn uses fixed 500 fpm but
         // pre-setting selVS here means it takes effect if ALT hold is engaged next.
@@ -91,6 +93,7 @@ function afcsReleaseAll() {
   try { if (gsOn || gsArmed) toggleGs(); } catch (e) { _swallow(e); }
   try { if (simIasOn && typeof simIasRelease === 'function') simIasRelease(); } catch (e) { _swallow(e); }
   try { if (gspdOn) toggleGspd(); } catch (e) { _swallow(e); }
+  try { if (typeof gaRelease === 'function') gaRelease(); } catch (e) { _swallow(e); }
   try { updateHoverBtns(); updateApInhibit(); } catch (e) { _swallow(e); }
 }
 

@@ -514,6 +514,7 @@ function toggleAltHold() {
     // 다른 고도로 가려면(ALT.A) ALT ▲▼ 로 기준을 옮긴다(07-sim.js applyDelta 'alt').
     selAlt = Math.round(S.alt);
     crhtOn = false;  // mutually exclusive
+    try { gaOn = false; vsModeOn = false; updateGaBtn(); } catch (e) { /* 14-simmode 앞 */ }   // ALT 가 컬렉티브를 가져간다
   } else if (!simModeOn) {
     S.vs = 0;  // prevent unintended climb/descent after disengagement
     // (SIM 모드에서는 그 상승률에서 컬렉티브가 이어 받는다 — 계기가 튀지 않게)
@@ -530,6 +531,7 @@ function toggleCrht() {
     // CRHT 는 전파고도(지면 위 높이 — 05-gps.js radarAltFt)를 지킨다.
     selCrht   = Math.round(radarAltFt());
     altHoldOn = false;
+    try { gaOn = false; vsModeOn = false; updateGaBtn(); } catch (e) { /* 14-simmode 앞 */ }
   } else if (!simModeOn) {
     S.vs = 0;  // prevent unintended climb/descent after disengagement
   }

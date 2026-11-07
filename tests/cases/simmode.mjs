@@ -48,6 +48,10 @@ const FLY = `(sec) => {
   S.running = false;
 }`;
 
+// 다른 검사(G/A)도 같은 준비·비행 도우미를 쓴다
+export const SIM_SETUP_SRC = SETUP.toString();
+export const SIM_FLY_SRC = FLY;
+
 // 자세 값을 그대로 쓰기 위한 작은 도우미(읽기 쉬우라고 둔다)
 const trimSpdPit = (p) => p;
 const hoverSide = (v) => Math.abs(v);
