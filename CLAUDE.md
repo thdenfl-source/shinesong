@@ -46,3 +46,10 @@
 - 버튼·화면(index.html · data-act)을 건드렸으면 **'스모크' '액션 위임'** 도 함께 돌린다(1분 안팎) —
   버튼 연결이 빠진 것을 잡는다(파일 읽는 순서 때문에 appRegister 가 조용히 실패한 일이 있었다).
 - 전체 실행은 비행 물리처럼 여러 기능에 두루 걸치는 큰 변경이거나 사용자가 요청할 때만 한다.
+
+### 캐시 버전 올리기
+- 앱 파일을 고치면 `sw.js` 의 `CACHE`(vfr-flight-vNNN)와 `index.html` 스크립트 꼬리표(`js/…js?v=NNN`)를
+  **같은 번호로 함께** 올린다 — `tests/check-swver.mjs` 가 둘이 다르면 실패시킨다.
+  (배포 직후 새 index.html 이 브라우저 캐시의 옛 JS 와 섞여 버튼이 듣지 않는 일을 막는다)
+  예: `sed -i "s/vfr-flight-v500/vfr-flight-v501/" sw.js && sed -i 's/\.js?v=500"/.js?v=501"/g' index.html`
+
