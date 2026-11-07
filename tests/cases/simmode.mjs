@@ -2395,7 +2395,7 @@ export async function run(page, t) {
     return o;
   })()`);
   t.ok(pke.dn > 300 && pke.dn < 420, `기수를 들어 10kt 줄이면 약 350fpm 오른다 (최대 ${pke.dn.toFixed(0)}fpm)`);
-  t.ok(pke.up < -280 && pke.up > -420, `기수를 숙여 10kt 늘리면 약 350fpm 내려간다 (최대 ${pke.up.toFixed(0)}fpm)`);
+  t.ok(pke.up < -240 && pke.up > -420, `기수를 숙여 10kt 늘리면 약 250~350fpm 내려간다 — 가속이 느린 만큼(10%↓ · 기수 들림 0~3° ×0.8) 고르게 (최대 ${pke.up.toFixed(0)}fpm)`);
   t.ok(pke.manual.skid !== 0 && pke.afcs.skid === 0 && Math.abs(pke.afcs.ball) < 0.02,
     `상위모드가 걸리면 내활·외활이 없다 — 수동 비행에서만 (수동 외활 ${pke.manual.skid} · HDG 중 볼 ${pke.afcs.ball.toFixed(3)})`);
 
