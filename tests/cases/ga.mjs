@@ -24,7 +24,12 @@ export async function run(page, t) {
     o.dur = _gaDur; o.tgt = _gaSpdTgt; o.vy = simVyKt();
     o.fma0 = fma();
     let minAlt = S.alt, maxVs = 0;
-    for (let i = 0; i < 24; i++) { fly(1); minAlt = Math.min(minAlt, S.alt); maxVs = Math.max(maxVs, S.vs); }
+    for (let i = 0; i < 24; i++) {
+      fly(1); minAlt = Math.min(minAlt, S.alt); maxVs = Math.max(maxVs, S.vs);
+      if (i === 3) o.at4 = { vs: S.vs, cmd: simAfcsVsCmd(), spd: S.spd };
+      if (i === 7) o.at8 = { vs: S.vs, cmd: simAfcsVsCmd(), spd: S.spd };
+      if (i === 19) o.at20 = { vs: S.vs, cmd: simAfcsVsCmd(), spd: S.spd };
+    }
     o.mid = { ga: gaOn, spd: S.spd };
     fly(2);
     o.end = { ga: gaOn, vsm: vsModeOn, sel: selSpd, iasOn: simIasOn, hdg: hdgSelOn, bnk: S.bnk };
@@ -46,6 +51,7 @@ export async function run(page, t) {
     gaRelease();
     // SIM 모드가 아니면 걸리지 않는다
     toggleSimMode(false); gaEngage(); o.offSim = gaOn;
+    o.joy = { gs: !!JOY_ACT_BY_ID.gs, gspdLbl: JOY_ACT_BY_ID.gspd.label };
     return o;
   })()`);
   t.eq(r.on, true, 'G/A 버튼을 누르면 GA 가 걸린다');
@@ -54,6 +60,11 @@ export async function run(page, t) {
   t.eq(r.tgt, r.vy, `제자리에서는 목표 속도가 Vy 다 (${r.tgt} / Vy ${r.vy})`);
   const n0 = r.fma0.filter(s => s === 'GA').length;
   t.ok(n0 >= 2, `FMA 컬렉티브·피치 축이 GA 로 보인다 (GA ${n0}개)`);
+  t.ok(r.at4.cmd < 100, `상승률은 천천히 붙는다(8초 램프) — 4초 째 명령 ${r.at4.cmd.toFixed(0)}fpm`);
+  t.ok(r.at8.cmd < 400 && r.at8.spd > 5, `속도 우선 — 8초 째 속도 ${r.at8.spd.toFixed(0)}kt 가 붙는 동안 상승은 ${r.at8.cmd.toFixed(0)}fpm 에 머문다`);
+  t.ok(r.at20.cmd > r.at8.cmd + 300, `속도가 붙을수록 상승을 늘린다 (8초 ${r.at8.cmd.toFixed(0)} → 20초 ${r.at20.cmd.toFixed(0)}fpm · ${r.at20.spd.toFixed(0)}kt)`);
+  t.eq(r.joy.gs, false, '조이스틱 배정 목록에 ILS 강하선 G/S 는 없다(자동)');
+  t.ok(/G\/S/.test(r.joy.gspdLbl) && /GSPD/.test(r.joy.gspdLbl), `조이스틱 G/S 는 지상속도(GSPD) 동작이다 (${r.joy.gspdLbl})`);
   t.eq(r.mid.ga, true, `24초 째에는 아직 GA 다 (${r.mid.spd.toFixed(0)}kt)`);
   t.eq(r.end.ga, false, '25초가 지나면 GA 가 끝난다');
   t.eq(r.end.vsm, true, '컬렉티브는 VS 모드로 넘어간다');
