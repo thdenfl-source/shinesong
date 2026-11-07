@@ -454,7 +454,7 @@ function heli3dPose(map) {
 // 지금 이 모형을 그리는가 — SIM 1인칭에서는 눈이 기체 안에 있으므로 그리지 않는다
 function heli3dShown() {
   if (typeof _ml3d === 'undefined' || !_ml3d || !_ml3dReady) return false;
-  if (typeof simModeOn !== 'undefined' && simModeOn) return !!simExtView;
+  if (typeof simModeOn !== 'undefined' && simModeOn) return !!simExtView || !!simCamTx;   // 시점이 바뀌는 동안에도 보인다
   return true;
 }
 
@@ -586,8 +586,36 @@ function updateExtCamInfo() {
 }
 document.addEventListener('pointerup', extCamStop);
 document.addEventListener('pointercancel', extCamStop);   // 외부 시점 카메라의 바닥(그려진 땅 + 3m, 걸러서)
+// ── 1인칭 ⇄ 외부 시점 전환 효과 ── 같은 시선에서 뒤로 쑥 물러나며 헬기가 앞으로 나오고(→ EXT),
+// 거꾸로 헬기 조종석으로 쑥 빨려 들어간다(→ 1인칭). 시점(simExtView)은 곧바로 바뀌고, 카메라만
+// SIM_CAM_TX_MS 동안 두 자리 사이를 부드럽게 옮긴다(05-gps.js _ml3dSimCamera).
+const SIM_CAM_TX_MS = 900;
+let simCamTx = null;            // { toExt, t0 }
+function simCamTxK() {
+  if (!simCamTx) return 1;
+  const x = Math.min(1, (performance.now() - simCamTx.t0) / SIM_CAM_TX_MS);
+  return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;   // 천천히 시작해 천천히 멎는다
+}
+function _simCamTxStart(toExt) {
+  if (!(typeof simModeOn !== 'undefined' && simModeOn && _ml3d && (typeof _map3dShown !== 'function' || _map3dShown()))) { simCamTx = null; return; }
+  simCamTx = { toExt, t0: performance.now() };
+  const tick = () => {
+    if (!simCamTx) return;
+    try { _applyFollow(); } catch (e) { _swallow(e); }
+    if (performance.now() - simCamTx.t0 >= SIM_CAM_TX_MS) {
+      simCamTx = null;
+      try { syncChinView(); } catch (e) { _swallow(e); }          // 조종석에 들어선 뒤에 CHIN 창·기수
+      try { _applyFollow(); } catch (e) { _swallow(e); }
+      return;
+    }
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+}
 function toggleExtView(on) {
+  const was = simExtView;
   simExtView = (typeof on === 'boolean') ? on : !simExtView;
+  if (simExtView !== was) _simCamTxStart(simExtView);
   try { if (typeof simLookReset === 'function') simLookReset(); } catch (e) { _swallow(e); }
   try { syncChinView(); } catch (e) { _swallow(e); }
   try { if (typeof pfdOverlaySync === 'function') pfdOverlaySync(); } catch (e) { _swallow(e); }
@@ -598,6 +626,14 @@ function heli3dExtCamera() {
   if (!_ml3d) return;
   try { if (_ml3d.getCenterClampedToGround && _ml3d.getCenterClampedToGround()) _ml3d.setCenterClampedToGround(false); }
   catch (e) { _swallow(e); }
+  const p = heli3dExtPose();
+  if (!p) return;
+  try { _ml3d.jumpTo(_ml3dCamOptions(p.lon, p.lat, p.alt, p.bearing, p.pitch, p.roll, p.dist)); }
+  catch (e) { _swallow(e); }
+}
+// 외부 시점 카메라 자리·방향(헬기 뒤 조금 위에서 헬기를 겨눈다) — 시점 전환 효과도 쓴다
+function heli3dExtPose() {
+  if (!_ml3d) return null;
   const pose = heli3dPose();
   _h3PoseNow = { t: performance.now(), pose };
   let look = { yaw: 0, pitch: 0 };
@@ -633,8 +669,7 @@ function heli3dExtCamera() {
   }
   const dist = Math.hypot(horiz, camAlt - tgtAlt);
   const pitch = Math.max(0, Math.min(180, 90 - el));
-  try { _ml3d.jumpTo(_ml3dCamOptions(camLon, camLat, camAlt, az, pitch, 0, dist)); }
-  catch (e) { _swallow(e); }
+  return { lon: camLon, lat: camLat, alt: camAlt, bearing: az, pitch, roll: 0, dist };
 }
 
 // ── 1인칭의 기수(nose) ──
@@ -645,7 +680,7 @@ function heli3dExtCamera() {
 function heli3dNoseSync(look) {
   const el = document.getElementById('sim-nose');
   if (!el) return;
-  const want = (typeof simModeOn !== 'undefined') && simModeOn && !simExtView &&
+  const want = (typeof simModeOn !== 'undefined') && simModeOn && !simExtView && !simCamTx &&
                !!_ml3d && (typeof _map3dShown !== 'function' || _map3dShown());
   if (el.classList.contains('show') !== want) el.classList.toggle('show', want);
   if (!want) return;

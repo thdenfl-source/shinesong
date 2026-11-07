@@ -754,7 +754,8 @@ let _chinMaps = [];               // [{ map, side: -1 왼쪽 · +1 오른쪽, sh
 function _chinWanted() {
   // 외부 시점(15-heli3d.js)에서는 조종석 창이 뜻이 없다 — 닫는다
   const ext = (typeof simExtView !== 'undefined') && simExtView;
-  return chinViewOn && !ext && (typeof simModeOn !== 'undefined') && simModeOn && !!_ml3d && _map3dShown();
+  const tx = (typeof simCamTx !== 'undefined') && simCamTx;   // 시점이 바뀌는 동안은 닫아 둔다(조종석에 들어선 뒤 연다)
+  return chinViewOn && !ext && !tx && (typeof simModeOn !== 'undefined') && simModeOn && !!_ml3d && _map3dShown();
 }
 // 지금 상태에 맞춰 CHIN 창을 열고 닫는다 — SIM 진입·해제, 3D 창 옮기기, 버튼에서 부른다
 // (1인칭 카메라가 매 프레임 부르지만 바뀐 것이 없으면 아무것도 하지 않는다)

@@ -17,7 +17,7 @@
      CDN 을 쓰면 한 번이라도 못 받는 순간 앱이 통째로 죽는다 — 비행 중에는
      그럴 여지를 두지 않는다. -->
 <!-- 패널 새 창(다중 모니터) — 라이브러리가 거는 이벤트까지 받아 적어야 하므로 맨 먼저 -->
-<script src="js/00-popout.js?v=507"></script>
+<script src="js/00-popout.js?v=508"></script>
 <link rel="stylesheet" href="vendor/leaflet.css"/>
 <script src="vendor/leaflet.js"></script>
 <link rel="stylesheet" href="vendor/leaflet-velocity.min.css"/>
@@ -1974,7 +1974,7 @@ body.gate-open #gate-overlay { display: none; }
     </div>
   </form>
 </div>
-<script src="js/00-gate.js?v=507"></script>
+<script src="js/00-gate.js?v=508"></script>
 <!-- ── 단일화면 선택 바 (기본 숨김) ── -->
 <!-- ── 시작 안내(사용법/키보드) 오버레이 ── -->
 <div id="help-overlay" style="display:none;">
@@ -2191,7 +2191,9 @@ body.gate-open #gate-overlay { display: none; }
             (한 번 더 누르면 1인칭 · 조이스틱 버튼에 「외부 시점」을 배정할 수도 있습니다). 헬기 뒤 조금 위(12°)에서
             기수 방향으로 내려다보고, <b>시야 둘러보기(B0 + 햇)</b>로 ◀▶ 는 헬기 둘레를 돌고 ▲▼ 는 위아래로
             오르내립니다(놓으면 다시 뒤로). 창이 좁으면 헬기 전체가 들어오게 그만큼 물러섭니다.
-            외부 시점에서는 CHIN 창을 닫고, SIM 을 나갔다 들어오면 1인칭부터 시작합니다.<br>
+            외부 시점에서는 CHIN 창을 닫고, SIM 을 나갔다 들어오면 1인칭부터 시작합니다.
+            바꿀 때는 <b>0.9초 동안 카메라가 옮겨 갑니다</b> — EXT 로는 조종석 시선 그대로 <b>뒤로 쑥 물러나며 헬기가 앞으로 나오고</b>,
+            1인칭으로는 헬기 뒤에서 <b>조종석으로 쑥 빨려 들어간 뒤</b> 기수·CHIN 창이 나타납니다.<br>
             <b>흰수리 3D 모형</b> — 입면도·평면도·측면도를 바탕으로 <b>실제 크기(전장 20m — 주로터 앞 끝에서
             꼬리로터 뒤 끝까지)</b>로 그립니다: 주로터 지름 14.1m · 꼬리로터 3m · 동체 약 18.8m, 흰 동체에 붉은 엔진 덮개,
             뒤로 노랑 → 파랑 띠, 붉은 수평 꼬리날개(왼쪽에만), 꼬리로터는 오른쪽. 자세(기수·피치·뱅크)를 그대로 따르고 로터가 돕니다
@@ -3279,33 +3281,33 @@ body.gate-open #gate-overlay { display: none; }
 <!-- 앱 코드 — 클래식 스크립트(모듈 아님)라 전역 스코프를 공유한다.
      순서가 곧 실행 순서이므로 임의로 바꾸지 말 것. -->
   <!-- AIP 데이터 — 코드보다 먼저 로드한다 -->
-  <script src="js/data/terminal-fixes.js?v=507"></script>
-  <script src="js/data/ifr-fixes.js?v=507"></script>
-  <script src="js/data/ifr-procedures.js?v=507"></script>
-  <script src="js/data/airfield-info.js?v=507"></script>
-  <script src="js/data/enr-vors.js?v=507"></script>
-  <script src="js/data/loc-stations.js?v=507"></script>
-  <script src="js/data/enr-routes.js?v=507"></script>
-  <script src="js/data/airspace.js?v=507"></script>
-  <script src="js/data/runways.js?v=507"></script>
+  <script src="js/data/terminal-fixes.js?v=508"></script>
+  <script src="js/data/ifr-fixes.js?v=508"></script>
+  <script src="js/data/ifr-procedures.js?v=508"></script>
+  <script src="js/data/airfield-info.js?v=508"></script>
+  <script src="js/data/enr-vors.js?v=508"></script>
+  <script src="js/data/loc-stations.js?v=508"></script>
+  <script src="js/data/enr-routes.js?v=508"></script>
+  <script src="js/data/airspace.js?v=508"></script>
+  <script src="js/data/runways.js?v=508"></script>
   <!-- 앱 코드 -->
-  <script src="js/00-ui.js?v=507"></script>
-  <script src="js/01-state.js?v=507"></script>
-  <script src="js/02-math.js?v=507"></script>
-  <script src="js/03-pfd.js?v=507"></script>
-  <script src="js/04-map.js?v=507"></script>
-  <script src="js/05-gps.js?v=507"></script>
-  <script src="js/06-nav.js?v=507"></script>
-  <script src="js/07-sim.js?v=507"></script>
-  <script src="js/08-ifrdb.js?v=507"></script>
-  <script src="js/09-cdu.js?v=507"></script>
-  <script src="js/10-tools.js?v=507"></script>
-  <script src="js/11-charts.js?v=507"></script>
-  <script src="js/12-joystick.js?v=507"></script>
-  <script src="js/13-joyhid.js?v=507"></script>
-  <script src="js/14-simmode.js?v=507"></script>
-  <script src="js/15-heli3d.js?v=507"></script>
-  <script src="js/16-sound.js?v=507"></script>
+  <script src="js/00-ui.js?v=508"></script>
+  <script src="js/01-state.js?v=508"></script>
+  <script src="js/02-math.js?v=508"></script>
+  <script src="js/03-pfd.js?v=508"></script>
+  <script src="js/04-map.js?v=508"></script>
+  <script src="js/05-gps.js?v=508"></script>
+  <script src="js/06-nav.js?v=508"></script>
+  <script src="js/07-sim.js?v=508"></script>
+  <script src="js/08-ifrdb.js?v=508"></script>
+  <script src="js/09-cdu.js?v=508"></script>
+  <script src="js/10-tools.js?v=508"></script>
+  <script src="js/11-charts.js?v=508"></script>
+  <script src="js/12-joystick.js?v=508"></script>
+  <script src="js/13-joyhid.js?v=508"></script>
+  <script src="js/14-simmode.js?v=508"></script>
+  <script src="js/15-heli3d.js?v=508"></script>
+  <script src="js/16-sound.js?v=508"></script>
 
 <input type="file" id="zipFileInput" accept=".zip,application/zip,application/x-zip-compressed,application/octet-stream" style="display:none" onchange="handleZipFile(this.files[0]); this.value='';"></body>
 </html>

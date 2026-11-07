@@ -234,7 +234,7 @@ export async function run(page, t) {
     simLookHold(false); simLookReset();
     // 한 번 더 누르면 1인칭으로 — CHIN 창이 돌아온다
     btn.click();
-    await w(300);
+    await w(300 + SIM_CAM_TX_MS);                       // 조종석으로 들어가는 전환이 끝난 뒤
     out.back = { ext: simExtView, model: heli3dShown(), chin: _chinMaps.length };
     // 외부 시점에서 SIM 을 나가면 다음에는 1인칭부터
     toggleExtView(true);
@@ -262,4 +262,32 @@ export async function run(page, t) {
   t.ok(!ext.exit.ext && ext.exit.model && ext.exit.btn === 'none', 'SIM 을 나가면 외부 시점도 풀리고 3D 지도에 모형이 보인다');
   t.ok(ext.joy, '조이스틱 버튼에 「외부 시점」을 배정할 수 있다');
   await page.evaluate(() => { pfdOvOn = window.__pfdOvWas !== false; pfdOverlaySync(); });
+
+  // ── 1인칭 ⇄ 외부 시점 전환 효과 — 뒤로 물러나며 헬기가 나오고, 조종석으로 빨려 들어간다 ──
+  const tx = await page.evaluate(async () => {
+    const wait = ms => new Promise(r => setTimeout(r, ms));
+    if (!simModeOn) toggleSimMode(true);
+    if (simExtView) { toggleExtView(false); await wait(1300); }
+    const camD = () => { const ll = _ml3d.transform.getCameraLngLat(); return distance(ll.lat, ll.lng, S.lat, S.lon) * 1852; };
+    const run = async (to) => {
+      _applyFollow(); await new Promise(r => requestAnimationFrame(r)); _applyFollow();
+      const d0 = camD(); toggleExtView(to);
+      const rec = [], t0 = performance.now();
+      let state = { ext: simExtView, tx: !!simCamTx, model: heli3dShown(), nose: document.getElementById('sim-nose').classList.contains('show'), chin: _chinMaps.length };
+      while (simCamTx && performance.now() - t0 < 3000) { await new Promise(r => requestAnimationFrame(r)); if (simCamTx) rec.push(camD()); }
+      await wait(100);
+      return { d0, rec, d1: camD(), state, end: { model: heli3dShown(), nose: document.getElementById('sim-nose').classList.contains('show'), chin: _chinMaps.length } };
+    };
+    const out = await run(true), back = await run(false);
+    toggleSimMode(false);
+    return { out, back, ms: SIM_CAM_TX_MS };
+  });
+  const mid = a => a.rec.filter(d => d > Math.min(a.d0, a.d1) + 1 && d < Math.max(a.d0, a.d1) - 1).length;
+  t.ok(tx.out.state.ext && tx.out.state.tx && tx.out.state.model && !tx.out.state.nose && tx.out.d0 < 2 && tx.out.d1 > 20,
+    `→ EXT: 시점은 곧바로 바뀌고 카메라가 조종석(${tx.out.d0.toFixed(0)}m)에서 헬기 뒤(${tx.out.d1.toFixed(0)}m)로 물러난다`);
+  t.ok(mid(tx.out) >= 1 || tx.out.rec.length === 0, `그 사이를 부드럽게 지난다(중간 자리 ${mid(tx.out)}번)`);
+  t.ok(!tx.back.state.ext && tx.back.state.tx && tx.back.state.model && !tx.back.state.nose && tx.back.state.chin === 0,
+    '→ 1인칭: 조종석으로 들어가는 동안은 헬기 모형이 보이고, 기수·CHIN 창은 아직 없다');
+  t.ok(tx.back.d0 > 20 && tx.back.d1 < 2 && !tx.back.end.model && tx.back.end.nose && tx.back.end.chin > 0,
+    `조종석에 들어서면(${tx.back.d1.toFixed(0)}m) 모형이 사라지고 기수·CHIN 창이 열린다 (전환 ${tx.ms}ms)`);
 }
