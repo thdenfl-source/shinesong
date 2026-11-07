@@ -2441,13 +2441,14 @@ export async function run(page, t) {
     aseOn = true;
     // 4WAY 트림 4°(80kt 자세)로 호버 언저리에서 가속 — 블로우 백을 지나도 속도 기준은 트림 자세다
     joyAxes = { pitch: { i: 1, inv: false } }; _ax(1, 0);
-    const accel = (rc) => {
-      rotorChar = rc; S.spd = 5; S.pit = pitchFromSpd(5); simTrimReset(); simTrim.pitch = -4; simTrimAct.pitch = -4;
+    // 블로우 백만 켜고 끈다(회전익 특성은 켠 채 — 다른 특성(속도·TQ 효율 등)이 가속을 바꾸지 않게)
+    const accel = (bb) => {
+      rotorChar = true; rcOpt.blowback = bb; S.spd = 5; simAcc = 0; S.vs = 0; simVsAcc = 0; simLat = 0; S.pit = pitchFromSpd(5); simTrimReset(); simTrim.pitch = -4; simTrimAct.pitch = -4;
       let maxPit = -99; const spd = [];
       for (let i = 0; i < 25; i++) { fly(1); maxPit = Math.max(maxPit, S.pit); spd.push(S.spd); }
       return { maxPit, spd, pit: S.pit };
     };
-    o.on = accel(true); o.off = accel(false);
+    o.on = accel(true); o.off = accel(false); rcOpt.blowback = true;
     // 조종간을 쥔 채(4° 자세) 가속해도 기수가 출렁이지 않고 한 번만 들린다
     const held = () => {
       rotorChar = true; S.spd = 5; S.pit = 4; simTrimReset(); _ax(1, (-4 / SIM_PITCH_MAX) * (1 - 0.08) - 0.08);
