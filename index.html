@@ -2867,14 +2867,14 @@ body.gate-open #gate-overlay { display: none; }
           </div>
           <!-- 회전익 특성 — COLLECTIVE TO YAW · COLLECTIVE TO PITCH · YAW TO PITCH (14-simmode.js) -->
           <div id="rotor-3d">
-            <button class="sim-btn rotor-main" data-act="toggleRotorChar" title="회전익 특성 — 컬렉티브→요 · 컬렉티브→피치(±5°) · 페달→피치(±2°) · 전이성향 편류 · 선회 1/2 볼 외활 · 블로우 백(전진 17~23kt 기수 2.5° 들림) · 전이양력 지대 침하">회전익 특성</button>
+            <button class="sim-btn rotor-main" data-act="toggleRotorChar" title="회전익 특성 — 컬렉티브→요 · 컬렉티브→피치(±5°) · 페달→피치(±2°) · 전이성향 편류 · 선회 1/2 볼 외활 · 블로우 백(전진 10~15kt 기수 2.5° 들림) · 전이양력 지대 침하">회전익 특성</button>
             <div class="rotor-dir">
               <button class="sim-btn on" data-rdir="CW" data-act="setRotorDir" data-arg='["CW"]' title="시계방향 로터(위에서 볼 때)" disabled>CW ↻</button>
               <button class="sim-btn" data-rdir="CCW" data-act="setRotorDir" data-arg='["CCW"]' title="반시계방향 로터(위에서 볼 때)" disabled>CCW ↺</button>
             </div>
             <div class="rc-opts">
               <button class="sim-btn on rc-opt" data-rc="etl" data-act="toggleRcOpt" data-arg='["etl"]' title="유효전이양력 — 20kt 언저리를 지나며 가속할 때 침하(지면효과 40ft 이내)" disabled>유효전이양력</button>
-              <button class="sim-btn on rc-opt" data-rc="blowback" data-act="toggleRcOpt" data-arg='["blowback"]' title="블로우백 — 전진 17~23kt 에서 기수 2.5° 들림(14·26kt 에서 0 · 후진에는 없음). 4WAY 트림으로 잡아 둔 자세는 속도 기준이 그대로이고, 구간을 지나면 트림 자세로 돌아온다" disabled>블로우백</button>
+              <button class="sim-btn on rc-opt" data-rc="blowback" data-act="toggleRcOpt" data-arg='["blowback"]' title="블로우백 — 전진 10~15kt 에서 기수 2.5° 한 번 들림(8·18kt 에서 0 · 후진에는 없음). 들림은 자세에만 나타나고 속도 기준(트림·조종간 자세)은 그대로라, 구간을 지나면 잡아 둔 자세로 돌아온다" disabled>블로우백</button>
               <button class="sim-btn on rc-opt" data-rc="collPitch" data-act="toggleRcOpt" data-arg='["collPitch"]' title="컬렉티브 → 피치(±5°, 20kt 이하)" disabled>Coll to Pitch</button>
               <button class="sim-btn on rc-opt" data-rc="collYaw" data-act="toggleRcOpt" data-arg='["collYaw"]' title="컬렉티브 → 요(움직이는 동안, 0.5초 지연, 20kt 이하)" disabled>Coll to YAW</button>
               <button class="sim-btn on rc-opt" data-rc="yawPitch" data-act="toggleRcOpt" data-arg='["yawPitch"]' title="페달 → 피치(±2°, 20kt 이하)" disabled>YAW to Pitch</button>
