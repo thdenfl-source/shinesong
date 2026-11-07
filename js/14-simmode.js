@@ -789,9 +789,13 @@ function syncVStick() {
 const GYRO_FULL_DEG = 25, GYRO_DEAD_DEG = 1.5;
 let gyroOn = false, gyroAligned = false, _gyroZero = null, _gyroLast = null, _gyroBound = false;
 function gyroActive() { return gyroOn && gyroAligned && vStickAvail(); }
+// 화면이 기기 본래 방향에서 돌아간 각(0 · 90 · 180 · 270). 아이패드·아이폰은 screen.orientation.angle 이 가로에서도
+// 0 으로 나올 때가 있어(가로로 쥐고 숙이면 롤로, 기울이면 피치로 엇갈렸다) iOS 의 window.orientation 을 먼저 본다.
+// (가로가 본래 방향인 안드로이드 태블릿·PC 는 가로에서 0 이 맞다 — 센서 축도 그 방향을 따른다)
 function _gyroAngle() {
+  try { if (typeof window.orientation === 'number' && Number.isFinite(window.orientation)) return (window.orientation + 360) % 360; } catch (e) { _swallow(e); }
   try { if (screen.orientation && Number.isFinite(screen.orientation.angle)) return screen.orientation.angle; } catch (e) { _swallow(e); }
-  return Number.isFinite(window.orientation) ? (window.orientation + 360) % 360 : 0;
+  return 0;
 }
 // 기기 기울기 → 화면 기준(앞으로 숙임 + · 오른쪽 내림 +)
 function _gyroTilt(ev, ang) {
