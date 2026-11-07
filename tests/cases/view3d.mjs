@@ -141,12 +141,12 @@ export async function run(page, t) {
     fcpL = false;
     panelSolo('m3d'); await wait(600);
     o.avail = fcp3dAvail();
-    toggleFcp3d('L'); await wait(100);
+    document.getElementById('fcp-l-btn').click(); await wait(100);   // 화면 버튼 그대로 눌러 본다
     const boxL = document.getElementById('fcp3d-l'), rcL = boxL.getBoundingClientRect(), r3 = document.getElementById('map3d').getBoundingClientRect();
     o.L = { show: boxL.classList.contains('show'), chinL, chinR, ias: !!boxL.querySelector('#ias-lbl-btn'),
             left: Math.round(rcL.left - r3.left), bottom: Math.round(r3.bottom - rcL.bottom), w: rcL.width / r3.width };
     toggleChinView('L'); o.chinRefused = !chinL;
-    toggleFcp3d('R'); await wait(100);
+    document.getElementById('fcp-r-btn').click(); await wait(100);
     const boxR = document.getElementById('fcp3d-r');
     o.both = { chinL, chinR, sim: !!boxR.querySelector('.sim-mode-group'), home: document.querySelectorAll('#pfd-wrap .ctrl-bar > .ctrl-sub-row > :not(.ctrl-div)').length };
     // FCP 를 닫으면 그쪽 CHIN 을 다시 켤 수 있다

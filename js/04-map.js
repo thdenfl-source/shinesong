@@ -947,7 +947,7 @@ function toggleFcp3d(side) {
 window.addEventListener('resize', () => {
   ['fcp3d-l', 'fcp3d-r'].forEach(id => { const b = document.getElementById(id); if (b && b.classList.contains('show')) _fcpFit(b); });
 });
-try { appRegister({ toggleFcp3d }); } catch (e) { _swallow(e); }
+// (버튼 연결은 14-simmode.js 에서 — 이 파일은 appRegister(09-cdu.js)보다 먼저 읽힌다)
 
 // 3D 조작 버튼 묶음 접기/펴기(index.html #ctl3d)
 function toggleCtl3d() {
