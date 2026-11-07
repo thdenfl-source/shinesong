@@ -17,7 +17,7 @@
      CDN 을 쓰면 한 번이라도 못 받는 순간 앱이 통째로 죽는다 — 비행 중에는
      그럴 여지를 두지 않는다. -->
 <!-- 패널 새 창(다중 모니터) — 라이브러리가 거는 이벤트까지 받아 적어야 하므로 맨 먼저 -->
-<script src="js/00-popout.js?v=508"></script>
+<script src="js/00-popout.js?v=509"></script>
 <link rel="stylesheet" href="vendor/leaflet.css"/>
 <script src="vendor/leaflet.js"></script>
 <link rel="stylesheet" href="vendor/leaflet-velocity.min.css"/>
@@ -468,6 +468,11 @@ html, body {
   transition: background 0.1s, border-color 0.1s, color 0.1s;
 }
 .force-trim-btn:active { background: #2a2a4a; }
+.ftr-col { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.ga-btn { width: 40px; height: 22px; border-radius: 11px; background: #1a1a1a; border: 2px solid #555; color: #9aa4ae;
+          font: bold 10px 'Helvetica Neue', Arial, sans-serif; cursor: pointer; touch-action: manipulation; padding: 0; }
+.ga-btn:active { background: #1a2a1a; }
+.ga-btn.on { border-color: #00ff88; color: #00ff88; box-shadow: 0 0 6px rgba(0,255,136,0.4); }
 .force-trim-btn.active { border-color: #cc66ff; color: #cc66ff; }
 .force-trim-btn.disabled { opacity: 0.3; cursor: not-allowed; pointer-events: none; }
 .gspd-btn:active { background: #2a1a1e; }
@@ -1974,7 +1979,7 @@ body.gate-open #gate-overlay { display: none; }
     </div>
   </form>
 </div>
-<script src="js/00-gate.js?v=508"></script>
+<script src="js/00-gate.js?v=509"></script>
 <!-- ── 단일화면 선택 바 (기본 숨김) ── -->
 <!-- ── 시작 안내(사용법/키보드) 오버레이 ── -->
 <div id="help-overlay" style="display:none;">
@@ -2467,6 +2472,10 @@ body.gate-open #gate-overlay { display: none; }
             SIM 에서 GSPD 가 걸려 있을 때 <b>트림을 거슬러 조종간을 밀면(against trim)</b> 그쪽으로
             지상속도가 붙습니다 — 끝까지 밀면 <b>초당 10.5kt</b>(종전의 세 배). 놓으면 기준속도로 돌아가고,
             FORCE TRIM 을 누르면 그 순간의 속도가 새 기준이 됩니다.</li>
+        <li><b>G/A</b>(FORCE TRIM 아래, SIM 모드): 누르면 FMA 컬렉티브·피치 축이 <b>GA</b> — 지금 고도 아래로 내려가지 않고
+            <b>선택 상승률(기본 1000fpm, VS ▲▼ 로 최저 300fpm)</b>로 오르며, 속도 기준을 <b>25초</b>(전진 20kt 이상이면 <b>17초</b>)에 걸쳐
+            Vy 까지 옮깁니다(Vy~VNE 면 지금 속도 유지, VNE 초과면 VNE). 시간이 다 되면 컬렉티브 <b>VS</b> · 피치 <b>IAS</b> 로 넘어갑니다.
+            롤 축은 커플되지 않으므로 뱅크는 그대로 — 기수 유지가 필요하면 조종사가 HDG 를 겁니다.</li>
         <li>HOVER PAGE에는 <b>SHIP</b>(청록)과 <b>비행계획 활성 웨이포인트</b>(빨강 삼각형)가 함께 표시됩니다.
             반경 50 ft 이내면 실제 축척 위치에, 밖이면 방향 니들과 점선으로 나타납니다.</li>
         <li><b>ANTI-TORQUE PEDAL ◀▶</b>(GSPD 우측): 뱅크 없이 기수만 즉시 회전(홀드 시 약 12°/s).
@@ -2829,7 +2838,11 @@ body.gate-open #gate-overlay { display: none; }
               <button class="trim-cell tc-r"   id="trim-r"   data-trim-dir="R">►</button>
             </div>
           </div>
+          <div class="ftr-col">
           <button class="force-trim-btn" id="force-trim-btn" data-act="forceTrimBtn" title="Force Trim">FORCE<br>TRIM</button>
+          <!-- G/A — 복행: 컬렉티브·피치 GA → 25초(전진 20kt 넘으면 17초) 뒤 VS · IAS (14-simmode.js gaEngage) -->
+          <button class="ga-btn" id="ga-btn" data-act="gaEngage" title="G/A(복행) — 지금 고도 아래로 가지 않고 25초(전진 20kt 넘으면 17초)에 걸쳐 Vy 까지 점점 가속하며 1,000fpm(VS ▲▼ 로 300fpm 까지)으로 상승. 끝나면 VS · IAS. 롤 축은 그대로(HDG 는 조종사가 건다)">G/A</button>
+          </div>
           <button class="gspd-btn" id="gspd-btn" data-act="toggleGspd" title="Ground Speed Hold">GSPD</button>
           <div class="pedal-group">
             <div class="pedal-lbl">ANTI-TORQUE<br>PEDAL</div>
@@ -3281,33 +3294,33 @@ body.gate-open #gate-overlay { display: none; }
 <!-- 앱 코드 — 클래식 스크립트(모듈 아님)라 전역 스코프를 공유한다.
      순서가 곧 실행 순서이므로 임의로 바꾸지 말 것. -->
   <!-- AIP 데이터 — 코드보다 먼저 로드한다 -->
-  <script src="js/data/terminal-fixes.js?v=508"></script>
-  <script src="js/data/ifr-fixes.js?v=508"></script>
-  <script src="js/data/ifr-procedures.js?v=508"></script>
-  <script src="js/data/airfield-info.js?v=508"></script>
-  <script src="js/data/enr-vors.js?v=508"></script>
-  <script src="js/data/loc-stations.js?v=508"></script>
-  <script src="js/data/enr-routes.js?v=508"></script>
-  <script src="js/data/airspace.js?v=508"></script>
-  <script src="js/data/runways.js?v=508"></script>
+  <script src="js/data/terminal-fixes.js?v=509"></script>
+  <script src="js/data/ifr-fixes.js?v=509"></script>
+  <script src="js/data/ifr-procedures.js?v=509"></script>
+  <script src="js/data/airfield-info.js?v=509"></script>
+  <script src="js/data/enr-vors.js?v=509"></script>
+  <script src="js/data/loc-stations.js?v=509"></script>
+  <script src="js/data/enr-routes.js?v=509"></script>
+  <script src="js/data/airspace.js?v=509"></script>
+  <script src="js/data/runways.js?v=509"></script>
   <!-- 앱 코드 -->
-  <script src="js/00-ui.js?v=508"></script>
-  <script src="js/01-state.js?v=508"></script>
-  <script src="js/02-math.js?v=508"></script>
-  <script src="js/03-pfd.js?v=508"></script>
-  <script src="js/04-map.js?v=508"></script>
-  <script src="js/05-gps.js?v=508"></script>
-  <script src="js/06-nav.js?v=508"></script>
-  <script src="js/07-sim.js?v=508"></script>
-  <script src="js/08-ifrdb.js?v=508"></script>
-  <script src="js/09-cdu.js?v=508"></script>
-  <script src="js/10-tools.js?v=508"></script>
-  <script src="js/11-charts.js?v=508"></script>
-  <script src="js/12-joystick.js?v=508"></script>
-  <script src="js/13-joyhid.js?v=508"></script>
-  <script src="js/14-simmode.js?v=508"></script>
-  <script src="js/15-heli3d.js?v=508"></script>
-  <script src="js/16-sound.js?v=508"></script>
+  <script src="js/00-ui.js?v=509"></script>
+  <script src="js/01-state.js?v=509"></script>
+  <script src="js/02-math.js?v=509"></script>
+  <script src="js/03-pfd.js?v=509"></script>
+  <script src="js/04-map.js?v=509"></script>
+  <script src="js/05-gps.js?v=509"></script>
+  <script src="js/06-nav.js?v=509"></script>
+  <script src="js/07-sim.js?v=509"></script>
+  <script src="js/08-ifrdb.js?v=509"></script>
+  <script src="js/09-cdu.js?v=509"></script>
+  <script src="js/10-tools.js?v=509"></script>
+  <script src="js/11-charts.js?v=509"></script>
+  <script src="js/12-joystick.js?v=509"></script>
+  <script src="js/13-joyhid.js?v=509"></script>
+  <script src="js/14-simmode.js?v=509"></script>
+  <script src="js/15-heli3d.js?v=509"></script>
+  <script src="js/16-sound.js?v=509"></script>
 
 <input type="file" id="zipFileInput" accept=".zip,application/zip,application/x-zip-compressed,application/octet-stream" style="display:none" onchange="handleZipFile(this.files[0]); this.value='';"></body>
 </html>

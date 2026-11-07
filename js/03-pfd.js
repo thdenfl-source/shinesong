@@ -137,6 +137,10 @@ function drawFMA(x, y, w) {
     right  = 'IAS';
     // SIM 모드에서는 IAS 를 건 동안만 켜진다(풀려 있으면 기수 자세는 조종간 몫)
     rightOn = !simModeOn || simIasOn;
+    // G/A — 컬렉티브·피치 축이 GA, 끝나면 컬렉티브 VS(선택 상승률) · 피치 IAS
+    const ga = (typeof gaOn !== 'undefined') && simModeOn && gaOn, vsm = (typeof vsModeOn !== 'undefined') && simModeOn && vsModeOn;
+    if (ga) { left = 'GA'; leftOn = true; right = 'GA'; rightOn = true; }
+    else if (vsm && !altHoldOn && !crhtOn) { left = 'VS ' + Math.round(selVS); leftOn = true; }
   }
 
   // ── G/S (ILS 강하선) ──
