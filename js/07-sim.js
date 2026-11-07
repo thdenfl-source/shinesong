@@ -71,7 +71,7 @@ function applyDelta(field, d){
       break;
     }
     case 'hht':
-      // HHT — T/DOWN 이 내려가 멈출 호버 높이(전파고도). 10ft 단위 · 20~1,000ft. 모드는 걸지 않는다.
+      // HHT — T/D to H 가 내려가 멈출 호버 높이(전파고도). 10ft 단위 · 20~1,000ft. 모드는 걸지 않는다.
       selHht = Math.max(20, Math.min(1000, Math.round(selHht / 10) * 10 + d));
       break;
     case 'wdir': windDir = normA(windDir + d); break;

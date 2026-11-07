@@ -140,7 +140,7 @@ function drawFMA(x, y, w) {
     // G/A — 컬렉티브·피치 축이 GA, 끝나면 컬렉티브 VS(선택 상승률) · 피치 IAS
     const ga = (typeof gaOn !== 'undefined') && simModeOn && gaOn, vsm = (typeof vsModeOn !== 'undefined') && simModeOn && vsModeOn;
     const td = (typeof tdOn !== 'undefined') && simModeOn && tdOn;
-    if (td) { left = 'TDOWN'; leftOn = true; right = 'TDOWN'; rightOn = true; }
+    if (td) { left = 'TDH'; leftOn = true; right = 'TDH'; rightOn = true; }   // T/D to H
     else if (ga) { left = 'GA'; leftOn = true; right = 'GA'; rightOn = true; }
     else if (vsm && !altHoldOn && !crhtOn) { left = 'VS ' + Math.round(selVS); leftOn = true; }
   }
@@ -157,7 +157,7 @@ function drawFMA(x, y, w) {
   const active = [leftOn, midOn,  rightOn];
   const armed  = [leftArm, '',    ''      ];
 
-  // T/DOWN 중 45kt 밑 — 롤 축(HDG·NAV)이 성능이 줄었다는 주의(황색)
+  // T/D to H 중 45kt 밑 — 롤 축(HDG·NAV)이 성능이 줄었다는 주의(황색)
   const midAmber = (typeof tdRollAmber === 'function') && tdRollAmber();
   const modeColor = (lbl, on, i) => {
     if (!on) return '#3a3a3a';
@@ -223,7 +223,7 @@ function drawCrhtDisplay(x, y, w, h) {
   const HEAD_H = 26;
   const tapeY  = y + HEAD_H;
   const tapeH  = h - HEAD_H;
-  // T/DOWN 중에는 같은 창이 HHT(내려가 멈출 호버 높이)를 보여 준다
+  // T/D to H 중에는 같은 창이 HHT(내려가 멈출 호버 높이)를 보여 준다
   const tdv    = (typeof tdOn !== 'undefined') && tdOn;
   const target = tdv ? selHht : selCrht;
   const cy     = tapeY + tapeH / 2;
