@@ -22,7 +22,8 @@ export async function run(page, t) {
       return { pitch: _ml3d.getPitch(), n: ids.length, z17: ids.filter(i => i.overscaledZ >= 17).length,
                top: Math.max(...ids.map(i => i.overscaledZ)) };
     };
-    const o = { level: tiles(0), up: tiles(1), down: tiles(-1), guard: !!_ml3d.style.tileManagers['satellite'].getSource().calculateTileZoom._lodGuard };
+    // 기본 시선이 자세보다 5° 아래(SIM_VIEW_DOWN)라, 카메라가 꼭 수평(90°)인 것은 기수 5° 들었을 때다
+    const o = { level: tiles(SIM_VIEW_DOWN), up: tiles(SIM_VIEW_DOWN + 1), down: tiles(SIM_VIEW_DOWN - 1), guard: !!_ml3d.style.tileManagers['satellite'].getSource().calculateTileZoom._lodGuard };
     toggleSimMode(false);
     return o;
   });

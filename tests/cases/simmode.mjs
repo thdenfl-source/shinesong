@@ -950,11 +950,11 @@ export async function run(page, t) {
   t.ok(Math.abs(view.low.alt - 1000 * 0.3048 - 3) < 1.5 && Math.abs(view.high.alt - 9000 * 0.3048 - 3) < 1.5, // 눈높이 3m
     `카메라 높이가 고도계와 같다 (1,000ft → ${(view.low.alt / 0.3048).toFixed(0)}ft · ` +
     `9,000ft → ${(view.high.alt / 0.3048).toFixed(0)}ft)`);
-  t.ok(Math.abs(view.low.pitch - 90) < 0.5,
-    `수평 자세에서는 지평선을 정면으로 본다 (${view.low.pitch.toFixed(1)}°)`);
-  t.ok(Math.abs(view.down.pitch - 80) < 0.5,
+  t.ok(Math.abs(view.low.pitch - 85) < 0.5,
+    `수평 자세에서는 지평선보다 5° 아래를 본다(기본 시선 — 발밑 갑판이 보이게) (${view.low.pitch.toFixed(1)}°)`);
+  t.ok(Math.abs(view.down.pitch - 75) < 0.5,
     `기수를 10° 숙이면 그만큼 아래를 본다 (${view.down.pitch.toFixed(1)}°)`);
-  t.ok(Math.abs(view.up.pitch - 100) < 0.5,
+  t.ok(Math.abs(view.up.pitch - 95) < 0.5,
     `기수를 10° 들면 지평선 위(하늘)를 본다 (${view.up.pitch.toFixed(1)}° — 종전 엔진은 85° 가 끝이었다)`);
   t.eq(view.turn.bearing, 250, `기수를 돌리면 시야도 돈다 (${view.turn.bearing}°)`);
   t.ok(Math.abs(view.rolled.roll + 30) < 0.5,
@@ -1973,7 +1973,7 @@ export async function run(page, t) {
   t.ok(look.upRight.pitch > 110,
     `햇 ▲ 를 누르면 올려다본다 (카메라 ${look.upRight.pitch.toFixed(0)}°)`);
   t.eq(look.trimDuring, look.trimBefore, '둘러보는 동안에는 트림이 바뀌지 않는다');
-  t.ok(Math.abs(normAS0(look.back.bearing - 90)) < 3 && Math.abs(look.back.pitch - 90) < 3,
+  t.ok(Math.abs(normAS0(look.back.bearing - 90)) < 3 && Math.abs(look.back.pitch - 85) < 3,
     `B0 을 놓으면 정면으로 돌아온다 (방위 ${look.back.bearing}° · ${look.back.pitch.toFixed(0)}°)`);
   t.eq(look.trimAfter, look.trimBefore + 0.5, 'B0 없이 누른 햇은 종전대로 트림(0.5°)이다');
   t.ok(Math.abs(look.comp.pitch + 30) < 0.5 && Math.abs(look.comp.yaw - 180) < 0.5,

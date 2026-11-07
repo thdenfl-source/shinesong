@@ -988,6 +988,7 @@ function simVisAlt(map) {
 //              기수를 들면 90° 를 넘어 하늘을, 숙이면 땅을 본다
 //   · 롤     = 뱅크(자세계) — 오른쪽으로 기울이면 지평선의 오른쪽이 올라간다
 //              (PFD 의 ADI 와 같은 쪽). maplibre 의 롤 + 가 바로 그 방향이다.
+const SIM_VIEW_DOWN = 5;   // 1인칭 기본 시선을 기체 자세보다 숙이는 각(°) — 기수 그림은 화면 같은 자리에 둔다
 function _ml3dSimCamera() {
   if (!_ml3d || typeof _ml3d.calculateCameraOptionsFromCameraLngLatAltRotation !== 'function') return;
   // 외부 시점 — 뒤에서 따라가며 내 헬기(15-heli3d.js 의 모형)를 본다
@@ -1012,7 +1013,8 @@ function _ml3dSimCamera() {
   // 시선(둘러보기)을 기체 자세 위에 얹는다
   let look = { yaw: 0, pitch: 0 };
   try { if (typeof simLookStep === 'function') look = simLookStep(); } catch (e) { _swallow(e); }
-  const r = _ml3dCamRot(S.hdg, S.pit, S.bnk, look.yaw, look.pitch);
+  // 기본 시선은 기체 자세보다 SIM_VIEW_DOWN(5°) 아래 — 함정 이착함 때 발밑 갑판이 잘 보이게
+  const r = _ml3dCamRot(S.hdg, S.pit, S.bnk, look.yaw, look.pitch - SIM_VIEW_DOWN);
   const pitch = Math.max(0, Math.min(180, 90 + r.pitch));
   // 화면 아래 가운데의 내 헬기 기수(15-heli3d.js) — 고개를 돌리면 비켜 간다
   try { if (typeof heli3dNoseSync === 'function') heli3dNoseSync(look); } catch (e) { _swallow(e); }
