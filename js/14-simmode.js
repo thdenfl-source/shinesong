@@ -68,7 +68,16 @@ function rotorSign() { return rotorDir === 'CW' ? 1 : -1; }   // 로터가 도�
 // 컬렉티브 투 피치를 뺀 나머지(컬렉티브→요 · 요→피치 · 전이성향)는 저속 현상이다 —
 // 15kt 부터 줄어 20kt 이상이면 없다
 const RC_IGE_FT = 40;           // 전이양력 지대 침하는 지면효과(IGE) 안(이 높이 이내)에서만
-const RC_BLOWBACK = 3;          // 블로우 백 기수 들림(°) — 20kt 에서 최대
+const RC_BLOWBACK = 2.5;        // 블로우 백 기수 들림(°) — 전진 17~23kt 에서 다, 14·26kt 에서 0(후진에는 없다)
+const RC_BB_KT = [14, 17, 23, 26];
+// 블로우 백 크기(0…1) — 전진 대기속도로만
+function rcBlowbackK(v) {
+  const [a, b, c, d] = RC_BB_KT;
+  if (!(v > a) || v >= d) return 0;
+  return v < b ? (v - a) / (b - a) : v <= c ? 1 : (d - v) / (d - c);
+}
+let simBb = 0;                  // 지금 걸린 블로우 백(°)
+let simBbTrim = false;          // 조종간을 놓고 트림이 자세를 잡고 있다 — 속도 기준은 트림 자세 그대로
 const RC_LOW_KT0 = 15, RC_LOW_KT1 = 20;
 function rcLowK() { return Math.max(0, Math.min(1, (RC_LOW_KT1 - Math.abs(S.spd)) / (RC_LOW_KT1 - RC_LOW_KT0))); }
 function rcPitchOff(a) {
@@ -348,13 +357,13 @@ function simAccPitchK(decel, pit = S.pit) {
   if (pit <= 5) return 0.6;
   return 0.5;
 }
-function simAccLimit(ds) {
+function simAccLimit(ds, pit = S.pit) {
   const v = S.spd;
   if (v && Math.sign(ds) !== Math.sign(v)) {
-    const k = simAccPitchK(true);
+    const k = simAccPitchK(true, pit);
     return { max: SPD_DEC_MAX * k * SIM_RATE_K, jerk: SPD_DEC_JERK * k * SIM_RATE_K };
   }
-  const k = simAccPitchK(false);
+  const k = simAccPitchK(false, pit);
   return { max: (SPD_ACC_UP0 + (SPD_ACC_UP - SPD_ACC_UP0) * Math.min(1, Math.abs(v) / SPD_ETL_KT)) * k * SIM_RATE_K,
            jerk: SPD_JERK * k * SIM_RATE_K };
 }
@@ -1038,8 +1047,13 @@ function simFly(dt) {
       if (!a.pitch) pRate = SIM_IAS_RATE;
     }
     pTgt += rcPitchOff(a);              // 회전익 특성 — 컬렉티브·페달이 피치로 옮겨 간다
-    // 블로우 백(flapback) — 전이 비행(10~30kt, 20kt 에서 가장 셈) 에서 원판이 뒤로 젖혀져 기수가 들린다
-    if (rcOn('blowback') && !onGnd && !simAfcsPitch()) pTgt += RC_BLOWBACK * Math.max(0, 1 - Math.abs(Math.abs(S.spd) - 20) / 10);
+    // 블로우 백(flapback) — 전진 전이 비행(17~23kt 에서 다, 14·26kt 에서 0)에서 원판이 뒤로 젖혀져 기수가 2.5° 들린다.
+    // 후진 비행에는 없다. 4WAY 트림으로 자세를 잡아 두고 조종간을 놓았으면(트림 유지) 속도 기준은 트림 자세 그대로다 —
+    // 기수가 잠깐 들렸다가 그 구간을 지나면 트림 자세로 돌아온다(속도가 그 들림으로 줄지 않는다).
+    const pBase = pTgt;
+    simBb = (rcOn('blowback') && !onGnd && !simAfcsPitch()) ? RC_BLOWBACK * rcBlowbackK(S.spd) : 0;
+    simBbTrim = simBb > 0 && Math.abs(a.pitch) <= SIM_TRIM_HOLD_DEAD;
+    pTgt += simBb;
     if (gnd3) pTgt = -a.pitch * SIM_PITCH_MAX;
     pTgt += deckAtt.pitch;               // 흔들리는 갑판 위에서는 갑판 자세를 따른다
     pTgt += simRbs.p;                    // 후퇴익 실속 — 기수가 든다
@@ -1062,8 +1076,10 @@ function simFly(dt) {
     const vsK = Math.max(0, Math.min(1, (Math.abs(S.vs) - TQ_KT_VS0) / (TQ_KT_VS1 - TQ_KT_VS0)));
     const tqKt = manual ? vsK * Math.max(0, Math.min(TQ_KT_MAX, TQ_KT * (S.tq - tqRequired()))) : 0;
     // 남는 출력이 낸 속도차(자세가 정한 속도보다 빠른 몫)는 엔진이 치른다 — 고도와 맞바꾸지 않는다(simKeVs)
-    _simKePowered = tqKt > 0 && S.spd >= spdFromPitch(S.pit) - 0.5;
-    const sTgt = Math.max(SIM_SPD_BACK, Math.min(SIM_SPD_MAX, spdFromPitch(S.pit) + tqKt));
+    // 속도 기준 자세 — 트림이 잡고 있으면 블로우 백 들림은 빼고 본다(트림 자세 그대로)
+    const pitRef = (simBbTrim && S.pit > pBase) ? Math.max(pBase, S.pit - simBb) : S.pit;
+    _simKePowered = tqKt > 0 && S.spd >= spdFromPitch(pitRef) - 0.5;
+    const sTgt = Math.max(SIM_SPD_BACK, Math.min(SIM_SPD_MAX, spdFromPitch(pitRef) + tqKt));
     if (onGnd) {
       // 바퀴로 구른다 — 토크 20% 를 넘기면 천천히 앞으로, 사이클릭을 민 만큼 더 빨리
       let acc;
@@ -1082,7 +1098,7 @@ function simFly(dt) {
     } else {
       // 가감속은 점점 커진다 — 기수를 들면 감속이, 숙이면 가속이 갈수록 세진다
       const ds = sTgt - S.spd;
-      const lim = simAccLimit(ds);
+      const lim = simAccLimit(ds, pitRef);
       if (manual && S.tq < tqRequired() - DESC_TQ && ds < 0) {
         // 강하 파워에서 기수를 들면 — 감속이 점점 세지지 않고 남은 속도에 정비례해 곧바로 준다
         simAcc = Math.max(-lim.max, ds * DESC_DEC_K * SIM_RATE_K);
@@ -1097,7 +1113,7 @@ function simFly(dt) {
       const dev = Math.max(-KE_DEV_MAX, Math.min(KE_DEV_MAX, S.spd - sTgt));
       let ke = (dev > 0 ? KE_FPM_PER_KT : KE_FPM_PER_KT_ACC) * dev * Math.min(1, Math.abs(S.spd) / KE_FULL_KT);
       // 자세 배율로 가감속이 빨라진 만큼 같은 시간에 더 주고받는다 — 주고받는 고도 총량은 그대로(에너지)
-      ke *= simAccPitchK(dev > 0 && S.spd > 0) * SIM_RATE_K;
+      ke *= simAccPitchK(dev > 0 && S.spd > 0, pitRef) * SIM_RATE_K;
       if (_simKePowered && dev < 0) ke = 0;                        // 남는 출력이 낸 속도차(그 속도까지 붙는 가속)는 엔진 몫 — 감속은 그대로 고도로 돌아온다
       // 남는 출력(수평 비행 토크보다 많이)을 걸고 가속할 때는 엔진이 속도를 낸다 — 고도로 치르지 않는다
       // (남는 토크 0 → 5% 사이에서 서서히). 수평 비행 출력에서 기수를 숙여 가속하면 종전대로 고도로 치른다.

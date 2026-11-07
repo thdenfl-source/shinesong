@@ -129,4 +129,40 @@ export async function run(page, t) {
   t.ok(!back.solo && back.l === before.l && back.m === before.m && back.r === before.r && back.tri === before.tri &&
        !bov.show && back.host === 'map-wrap' && bov.main === 'pfd-wrap',
     `HALF 를 누르면 들어가기 전 배치(${before.l} · ${before.tri ? before.m + ' · ' : ''}${before.r})로 돌아온다`);
+
+  // ── 3D 화면의 FCP L · R — 3D 단독에서만, 연 쪽 CHIN 창은 닫힌다 ──
+  const fcp = await page.evaluate(async () => {
+    const wait = ms => new Promise(r => setTimeout(r, ms));
+    const total = document.querySelectorAll('#pfd-wrap .ctrl-bar > .ctrl-sub-row > :not(.ctrl-div)').length;
+    if (!simModeOn) toggleSimMode(true);
+    chinL = chinR = true; chinViewOn = true;
+    const o = { split: fcp3dAvail() };
+    toggleFcp3d('L'); o.splitRefused = !document.getElementById('fcp3d-l') || !document.getElementById('fcp3d-l').classList.contains('show');
+    fcpL = false;
+    panelSolo('m3d'); await wait(600);
+    o.avail = fcp3dAvail();
+    toggleFcp3d('L'); await wait(100);
+    const boxL = document.getElementById('fcp3d-l'), rcL = boxL.getBoundingClientRect(), r3 = document.getElementById('map3d').getBoundingClientRect();
+    o.L = { show: boxL.classList.contains('show'), chinL, chinR, ias: !!boxL.querySelector('#ias-lbl-btn'),
+            left: Math.round(rcL.left - r3.left), bottom: Math.round(r3.bottom - rcL.bottom), w: rcL.width / r3.width };
+    toggleChinView('L'); o.chinRefused = !chinL;
+    toggleFcp3d('R'); await wait(100);
+    const boxR = document.getElementById('fcp3d-r');
+    o.both = { chinL, chinR, sim: !!boxR.querySelector('.sim-mode-group'), home: document.querySelectorAll('#pfd-wrap .ctrl-bar > .ctrl-sub-row > :not(.ctrl-div)').length };
+    // FCP 를 닫으면 그쪽 CHIN 을 다시 켤 수 있다
+    toggleFcp3d('L'); toggleChinView('L'); o.chinBack = chinL;
+    toggleFcp3d('R');
+    exitSolo(); await wait(400);
+    o.back = { home: document.querySelectorAll('#pfd-wrap .ctrl-bar > .ctrl-sub-row > :not(.ctrl-div)').length, total, showL: boxL.classList.contains('show') };
+    toggleSimMode(false);
+    return o;
+  });
+  t.ok(!fcp.split && fcp.splitRefused, '분할 화면에서는 FCP L·R 을 열지 않는다(PFD 아래에 FCP 가 있다)');
+  t.ok(fcp.avail && fcp.L.show && fcp.L.ias && !fcp.L.chinL && fcp.L.chinR && fcp.L.left <= 2 && fcp.L.bottom <= 2 && Math.abs(fcp.L.w - 1 / 3) < 0.03,
+    `3D 단독에서 FCP L 을 켜면 FCP 왼쪽 반이 CHIN 창 자리(왼쪽 아래 · 너비 1/3)에 뜨고 L CHIN 이 닫힌다`);
+  t.ok(fcp.chinRefused, 'FCP L 이 켜져 있으면 L CHIN 을 열 수 없다');
+  t.ok(!fcp.both.chinL && !fcp.both.chinR && fcp.both.sim && fcp.both.home === 0,
+    'FCP 둘 다 켜면 CHIN 창이 다 닫히고 FCP 전체가 좌·우로 나뉘어 뜬다');
+  t.ok(fcp.chinBack, 'FCP 를 닫으면 그쪽 CHIN 을 다시 켤 수 있다');
+  t.ok(fcp.back.home === fcp.back.total && !fcp.back.showL, `3D 단독을 빠져나가면 FCP 가 PFD 아래 제자리로 돌아간다 (${fcp.back.home}/${fcp.back.total})`);
 }
