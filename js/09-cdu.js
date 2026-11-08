@@ -1578,7 +1578,7 @@ function act(name, ...args) {
     // (perfData·perfResults는 화면 렌더에서 읽고 쓰므로 바깥에 남긴다)
     let calculatePerformance;
     // SIM 모드(14-simmode.js)가 쓰는 성능 접근자 — 아래 IIFE 안에서 채운다
-    let perfTqForVs, perfVsForTq, perfHoverTq, perfVy, perfMta;
+    let perfTqForVs, perfVsForTq, perfHoverTq, perfVy, perfMta, perfWeightLb;
     (function () {
     // Vy Tables
     const vyTemps = [-32, -20, -10, 0, 10, 20, 30, 40];
@@ -1827,6 +1827,8 @@ function act(name, ...args) {
         _mtaVal = mta30At(alt, tRef - MTA_LAPSE * (alt - a0) / 1000, false);
         return _mtaVal;
     };
+    // PERF 의 총중량(lb) — SIM 의 상승·강하율이 무게에 반비례한다(남는 동력 ÷ 무게)
+    perfWeightLb = function () { return parseFloat(perfData.weight) || 16000; };
     // 제자리 호버에 필요한 토크(%) — 지면효과 안(IGE)·밖(OGE)
     // 매 프레임 불리므로(계기·비행 모델) 입력이 그대로면 셈을 다시 하지 않는다.
     let _hovCache = null, _hovKey = '';
@@ -4821,6 +4823,7 @@ switchMode('HOME');
     window.perfVsForTq       = (...a) => perfVsForTq(...a);
     window.perfVy            = (...a) => perfVy(...a);
     window.perfMta           = (...a) => perfMta(...a);
+    window.perfWeightLb      = (...a) => perfWeightLb(...a);
     // 상태 변수: 밖에서 '현재 값'을 읽으므로 접근자로 공개(스냅샷이면 갱신이 안 됨)
     Object.defineProperties(window, {
       currentMode:    { get: () => currentMode,    configurable: true },

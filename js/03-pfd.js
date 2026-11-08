@@ -1068,7 +1068,7 @@ function drawHSI(x, y, w, h) {
   // ── 좌하단 2줄 정보: ①TAS·OAT ②GS·ISA ──
   {
     // TAS: altitude-corrected from displayed speed (~+2% per 1000 ft)
-    const tas = S.spd * (1 + 0.02 * S.alt / 1000);
+    const tas = simModeOn ? tasKt(S.spd) : S.spd * (1 + 0.02 * S.alt / 1000);   // SIM 은 실제로 움직이는 TAS 그대로
     // GS: TAS vector + (effective) wind vector. Wind is gated by the
     // speed-dependent effect factor — 0 in hover/low-speed, full at cruise.
     const wto = normA(windDir + 180) * D2R;

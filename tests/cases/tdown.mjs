@@ -44,6 +44,9 @@ export async function run(page, t) {
     S.alt = 1000; S.spd = 100; S.hdg = 90; S.vs = 0; S.tq = tqRequired(); S.bnk = 0;
     selHdg = 90; hdgSelOn = true; rollApOn = true;
     const lat0 = S.lat, lon0 = S.lon;
+    document.getElementById('tdh-btn').click(); document.getElementById('tdh-btn').click();
+    o.off = tdOn;                                  // 한 번 더 누르면 풀린다
+    S.spd = 100; S.alt = 1000; S.vs = 0;
     document.getElementById('tdh-btn').click();
     o.on = tdOn; o.btnOn = document.getElementById('tdh-btn').classList.contains('on');
     o.fma0 = fma().map(x => x[0]);
@@ -56,14 +59,27 @@ export async function run(page, t) {
       if (decpl === null && S.spd < 28) decpl = { hdg: hdgSelOn, roll: rollApOn, spd: S.spd };
       if (i === 60) path.push({ h: radarAltFt(), d: distance(lat0, lon0, S.lat, S.lon) });
       if (i === 120) path.push({ h: radarAltFt(), d: distance(lat0, lon0, S.lat, S.lon) });
-      if (S.spd < 1 && Math.abs(radarAltFt() - selHht) < 5 && i > 60) { o.doneAt = i; break; }
+      if (!tdOn) { o.doneAt = i; break; }
     }
-    fly(20);
-    o.end = { ra: radarAltFt(), spd: S.spd, td: tdOn, sel: selSpd };
+    fly(30);
+    o.end = { ra: radarAltFt(), gs: Math.hypot(gspdActFwd, gspdActLat), td: tdOn, gspd: gspdOn, crht: crhtOn, selCrht };
     o.fma1 = fma().map(x => x[0]);
     o.amber = amber; o.decpl = decpl; o.hdgAt50 = hdgAt50; o.maxVs = maxVs; o.path = path;
-    // 한 번 더 누르면 풀린다
-    tdhEngage(); o.off = tdOn;
+    // 맞바람 20kt — 땅 위 3° 로 내려가 그 자리에 멈춘다(바람에 흘러가지 않는다)
+    if (gspdOn) toggleGspd(); if (crhtOn) toggleCrht();
+    S.alt = 1000; S.spd = 100; S.hdg = 90; S.vs = 0; S.tq = tqRequired(); S.bnk = 0; simLat = 0;
+    windDir = 90; windSpd = 20; hdgSelOn = true; rollApOn = true; selHdg = 90;
+    const la = S.lat, lo = S.lon; let wp = [];
+    tdhEngage(); o.wOn = tdOn;
+    for (let i = 0; i < 500; i++) {
+      fly(1);
+      if (i === 40 || i === 90) wp.push({ h: radarAltFt(), d: distance(la, lo, S.lat, S.lon) });
+      if (!tdOn) { o.wDone = i; break; }
+    }
+    fly(30);
+    const l1 = S.lat, n1 = S.lon; fly(30);
+    o.wind = { ra: radarAltFt(), drift: distance(l1, n1, S.lat, S.lon) * 6076.1, gspd: gspdOn, crht: crhtOn, wp };
+    windSpd = 0; if (gspdOn) toggleGspd(); if (crhtOn) toggleCrht();
     toggleSimMode(false);
     return o;
   })()`);
@@ -94,8 +110,14 @@ export async function run(page, t) {
     `45kt 밑이면 HDG 가 황색(성능 감소) (${r.amber && r.amber.spd.toFixed(0)}kt ${r.amber && r.amber.f && r.amber.f[1]})`);
   t.ok(r.decpl && !r.decpl.hdg && !r.decpl.roll, `30kt 밑이면 롤 축이 풀린다 (${r.decpl && r.decpl.spd.toFixed(0)}kt)`);
   t.ok(Math.abs(r.end.ra - 50) < 8, `HHT(50ft)에서 멈춘다 (RA ${r.end.ra.toFixed(0)}ft)`);
-  t.ok(Math.abs(r.end.spd) < 3, `속도가 0 에 모인다 (${r.end.spd.toFixed(1)}kt · ${r.doneAt}s)`);
-  t.ok(r.end.td && r.fma1.includes('TDH'), '멈춘 뒤에도 TDH 로 제자리 비행');
+  t.ok(r.end.gs < 1.5, `지상속도가 0 에 모인다 (${r.end.gs.toFixed(1)}kt · ${r.doneAt}s)`);
+  t.ok(!r.end.td && r.end.gspd && r.end.crht && r.end.selCrht === 50 && r.fma1.includes('CRHT') && r.fma1.includes('GS'),
+    `다 내려오면 GSPD 0 + CRHT(HHT) 호버로 넘긴다 (${r.fma1.filter(x => /^(CRHT|GS|TDH)/.test(x)).join(' ')})`);
+  t.ok(r.wOn && r.wind.gspd && r.wind.crht && Math.abs(r.wind.ra - 50) < 8,
+    `맞바람 20kt 에서도 HHT 호버로 끝난다 (RA ${r.wind.ra.toFixed(0)}ft · ${r.wDone}s)`);
+  t.ok(r.wind.drift < 15, `바람에 흘러가지 않는다 — 30초 동안 ${r.wind.drift.toFixed(1)}ft`);
+  { const q = r.wind.wp; const a2 = Math.atan2(q[0].h - q[1].h, (q[1].d - q[0].d) * 6076.1) * 180 / Math.PI;
+    t.ok(a2 > 2 && a2 < 4.5, `맞바람에서도 땅 기준 약 3° (${a2.toFixed(2)}°)`); }
   t.eq(r.off, false, '한 번 더 누르면 풀린다');
 
   await page.evaluate(() => {

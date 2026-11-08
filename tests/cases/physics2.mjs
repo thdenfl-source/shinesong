@@ -1,0 +1,75 @@
+// 비행 물리 보정 — TAS 로 움직이고 돌기 · 토크 지연과 NR 처짐 · 운동에너지 ↔ 고도(같은 η) ·
+// 무게에 따른 상승률 · 횡류 효과. 기준값은 물리식으로 이 파일에서 따로 낸다.
+import { SIM_SETUP_SRC, SIM_FLY_SRC } from './simmode.mjs';
+export const name = '비행 물리 보정';
+
+// ISA 밀도비(지면 15°C · 2°C/1000ft) — 앱 코드를 베끼지 않은 독립 구현
+const tasR = (ft) => { const p = Math.pow(1 - 6.87535e-6 * ft, 5.2558797); const T = 288.15 - 2 * ft / 1000; return Math.sqrt(T / (p * 288.15)); };
+
+export async function run(page, t) {
+  const r = await page.evaluate(`(() => {
+    (${SIM_SETUP_SRC})();
+    const fly = ${SIM_FLY_SRC};
+    const o = {};
+    _oatSurfaceC = 15;
+    // ── TAS: 10,000ft · IAS 100kt 로 수평 30초 — 실제 간 거리 ──
+    const leg = (alt) => {
+      S.alt = alt; S.spd = 100; S.hdg = 90; S.bnk = 0; S.vs = 0; S.pit = pitchFromSpd(100);
+      simTrimReset(); simTrim.pitch = -pitchFromSpd(100); simTrimAct.pitch = simTrim.pitch; simAcc = 0;
+      if (!simIasOn) simIasEngage(); selSpd = 100; if (!altHoldOn) toggleAltHold();
+      const la = S.lat, lo = S.lon; fly(30);
+      const nm = distance(la, lo, S.lat, S.lon);
+      if (altHoldOn) toggleAltHold(); if (simIasOn) simIasRelease();
+      return { gs: nm / 30 * 3600, spd: S.spd };
+    };
+    o.sl = leg(1000); o.hi = leg(11000);
+    o.ratio = tasRatio(10000); o.rLo = tasRatio(1000); o.rHi = tasRatio(11000);
+    // 선회율 — 같은 뱅크 20° 면 높은 곳(TAS 큼)이 덜 돈다
+    const turn = (alt) => { S.alt = alt; S.spd = 100; S.bnk = 20; const h0 = S.hdg; S.running = true; let ts = 1000; S.lastT = ts;
+      for (let i = 0; i < 20; i++) { ts += 50; simStep(ts); } S.running = false; return normAS(S.hdg - h0); };
+    // ── 토크 지연 · NR 처짐 ── 레버를 60 → 100% 로 한 번에
+    joyAxes = { coll: { i: 3, inv: false, abs: true } };
+    S.alt = 2000; S.spd = 80; S.bnk = 0; S.vs = 0;
+    const lev = (tq) => _ax(3, tq / SIM_LEVER_TOP * 2 - 1);
+    lev(60); fly(3); simNr = 100;
+    const tq0 = S.tq; lev(100); fly(0.25);
+    o.tq = { t0: tq0, t025: S.tq }; let nrMin = simNr;
+    for (let i = 0; i < 20; i++) { fly(0.05); nrMin = Math.min(nrMin, simNr); }
+    fly(3); o.tq.t3 = S.tq; o.nr = { min: nrMin, after: simNr };
+    joyAxes = { roll: { i: 0, inv: false }, pitch: { i: 1, inv: false }, yaw: { i: 2, inv: false }, coll: { i: 3, inv: false } };
+    _ax(3, 0);
+    // ── 운동에너지 ↔ 고도: 감속·가속에 같은 η ──
+    o.eta = [SIM_KE_EFF, SIM_KE_EFF_ACC];
+    // ── 무게 ── 남는 토크 10% 의 상승률: 16,000lb 대 20,000lb
+    const keepW = window.perfWeightLb;
+    o.vs16 = simVsForTq(10);
+    window.perfWeightLb = () => 20000; o.vs20 = simVsForTq(10); o.dn20 = simVsForTq(-30);
+    window.perfWeightLb = keepW; o.dn16 = simVsForTq(-30);
+    // ── 횡류 효과 ──
+    rotorChar = true; rcOpt.transverse = true; rotorDir = 'CW';
+    rcOpt.blowback = false;
+    const tf = (spd, ase) => { aseOn = ase; S.alt = 500; S.spd = spd; S.bnk = 0; simLat = 0; simAcc = 0; simTrimReset();
+      simTrim.pitch = -pitchFromSpd(spd); simTrimAct.pitch = simTrim.pitch; S.pit = pitchFromSpd(spd); fly(3); return { tf: simTf, spd: S.spd }; };
+    o.tf15 = tf(15, false); o.tf15ase = tf(15, true); o.tf40 = tf(40, false); o.tf5 = tf(5, false);
+    rotorDir = 'CCW'; o.tfCcw = tf(15, false); rotorDir = 'CW';
+    rcOpt.blowback = true; rotorChar = false; aseOn = false;
+    o.turnSl = turn(0); o.turnHi = turn(10000);
+    toggleSimMode(false);
+    return o;
+  })()`);
+  const want = tasR(10000);
+  t.ok(Math.abs(r.ratio - want) < 0.01, `10,000ft TAS/IAS 비 ${r.ratio.toFixed(3)} (ISA ${want.toFixed(3)})`);
+  t.ok(Math.abs(r.sl.gs - 100 * tasR(1000)) < 3, `1,000ft 에서는 IAS 100kt 로 TAS ${(100 * tasR(1000)).toFixed(0)}kt 만큼 간다 (${r.sl.gs.toFixed(1)}kt)`);
+  t.ok(Math.abs(r.hi.gs - 100 * tasR(11000)) < 4, `11,000ft 에서는 TAS(${(100 * tasR(11000)).toFixed(0)}kt)만큼 간다 (${r.hi.gs.toFixed(1)}kt)`);
+  t.ok(r.turnHi < r.turnSl * 0.92, `같은 뱅크면 높은 곳에서 덜 돈다(선회율 = g·tanφ/TAS) (1초 ${r.turnSl.toFixed(2)}° → ${r.turnHi.toFixed(2)}°)`);
+  t.ok(r.tq.t025 > r.tq.t0 + 15 && r.tq.t025 < 95, `토크는 레버를 약 0.25초 늦게 따라간다 (${r.tq.t0.toFixed(0)} → 0.25초 ${r.tq.t025.toFixed(0)}%)`);
+  t.ok(r.tq.t3 > 97, `곧 다 따라온다 (3초 ${r.tq.t3.toFixed(0)}%)`);
+  t.ok(r.nr.min < 99.5 && r.nr.min > 93 && r.nr.after > 99.5, `레버를 급히 올리면 NR 이 잠깐 처졌다 돌아온다 (최저 ${r.nr.min.toFixed(1)}% → ${r.nr.after.toFixed(1)}%)`);
+  t.ok(r.eta[0] === r.eta[1], `감속·가속이 같은 η 로 고도와 주고받는다 (${r.eta.join(' · ')})`);
+  t.ok(Math.abs(r.vs20 / r.vs16 - 0.8) < 0.01, `무게 20,000lb 면 같은 남는 토크로 16,000lb 의 80% 만 오른다 (${r.vs16.toFixed(0)} → ${r.vs20.toFixed(0)}fpm)`);
+  t.ok(Math.abs(r.dn20 / r.dn16 - 0.8) < 0.01, '같은 모자란 토크면 강하율도 무게에 반비례(필요 토크가 무게만큼 커져 결과는 √무게 꼴)');
+  t.ok(r.tf15.tf < -1.8 && r.tf15.tf > -2.1, `횡류 효과 — CW 로터 15kt 에서 왼쪽으로 약 2° (${r.tf15.tf.toFixed(2)}° · ${r.tf15.spd.toFixed(0)}kt)`);
+  t.ok(r.tfCcw.tf > 1.8, `CCW 로터는 오른쪽 (${r.tfCcw.tf.toFixed(2)}°)`);
+  t.ok(Math.abs(r.tf15ase.tf) < 0.7 && Math.abs(r.tf15ase.tf) > 0.4, `ASE 면 SAS 가 대부분 잡는다 (${r.tf15ase.tf.toFixed(2)}°)`);
+  t.ok(r.tf40.tf === 0 && r.tf5.tf === 0, `전이양력 지대 밖(5kt · 40kt)에서는 없다 (${r.tf5.tf.toFixed(2)}@${r.tf5.spd.toFixed(0)}kt · ${r.tf40.tf.toFixed(2)}@${r.tf40.spd.toFixed(0)}kt)`);
+}

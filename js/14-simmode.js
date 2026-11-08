@@ -61,7 +61,7 @@ const RC_DRIFT_BANK = 3;        // 전이성향 — 호버 편류를 막는 데 
 const RC_YAW_FRAC = 0.15, RC_COLL_PIT = 5, RC_YAW_PIT = 2;
 let rotorChar = false, rotorDir = 'CW';
 // 회전익 특성의 항목별 켜기/끄기(3D 창 회전익 특성 아래 버튼) — 회전익 특성이 켜져 있을 때만 뜻이 있다
-const rcOpt = { etl: true, blowback: true, collPitch: true, collYaw: true, yawPitch: true, spdTq: true };
+const rcOpt = { etl: true, blowback: true, collPitch: true, collYaw: true, yawPitch: true, spdTq: true, transverse: true };
 function rcOn(k) { return rotorChar && !!rcOpt[k]; }
 function toggleRcOpt(k) { if (k in rcOpt) { rcOpt[k] = !rcOpt[k]; updateRotorBtns(); } }
 function rotorSign() { return rotorDir === 'CW' ? 1 : -1; }   // 로터가 도는 쪽(요 + = 오른쪽)
@@ -80,6 +80,18 @@ function rcBlowbackK(v, ase = true) {
   return v < b ? sm((v - a) / (b - a)) : v <= c ? 1 : sm((d - v) / (d - c));
 }
 let simBb = 0;                  // 지금 걸린 블로우 백(°)
+// 횡류 효과(transverse flow) — 전진 10~20kt 에서 원판 앞쪽은 유도류를 많이, 뒤쪽은 적게 받아
+// 앞쪽 양력이 준다. 자이로 세차(90° 늦음)로 옆으로 나타나 한쪽으로 구른다(CCW 로터 → 오른쪽,
+// CW 로터 → 왼쪽 · 전이성향 편류와 같은 쪽). 전이양력 지대를 지나면 사라진다.
+// ASE(SAS)가 켜져 있으면 대부분 잡아 준다(30% 만 남는다).
+const RC_TF_BANK = 2, RC_TF_KT = [8, 12, 18, 24], RC_TF_ASE = 0.3;
+function rcTransverseK(v) {
+  const [a, b, c, d] = RC_TF_KT;
+  if (!(v > a) || v >= d) return 0;
+  const sm = x => x * x * (3 - 2 * x);
+  return v < b ? sm((v - a) / (b - a)) : v <= c ? 1 : sm((d - v) / (d - c));
+}
+let simTf = 0;                  // 지금 걸린 횡류 효과 뱅크(°, 오른쪽 +)
 const RC_LOW_KT0 = 15, RC_LOW_KT1 = 20;
 function rcLowK() { return Math.max(0, Math.min(1, (RC_LOW_KT1 - Math.abs(S.spd)) / (RC_LOW_KT1 - RC_LOW_KT0))); }
 function rcPitchOff(a) {
@@ -139,8 +151,9 @@ function aseHoverFollow(a, onGnd, rollRate, pitRate) {
   aseFollowing = false;
   if (aseOn && simModeOn && !onGnd && Math.abs(S.spd) < ASE_HF_KT) {
     const axes = [
-      ['roll', a.roll, rollRate, !simAfcsLat(), S.bnk, SIM_TRIM_MAX_ROLL],
-      ['pitch', a.pitch, pitRate, !simAfcsPitch(), -(S.pit - rcPitchOff(a)), SIM_TRIM_MAX_PITCH],
+      // 블로우 백·횡류 효과 몫은 트림에 넣지 않는다(넣으면 그 위에 또 얹힌다 — FORCE TRIM 과 같다)
+      ['roll', a.roll, rollRate, !simAfcsLat(), S.bnk - (simTf || 0), SIM_TRIM_MAX_ROLL],
+      ['pitch', a.pitch, pitRate, !simAfcsPitch(), -(S.pit - rcPitchOff(a) - (simBb || 0)), SIM_TRIM_MAX_PITCH],
     ];
     for (const [k, stick, rate, free, att, max] of axes) {
       if (!free || Math.abs(stick) <= SIM_TRIM_HOLD_DEAD || simTrimHeld[k] === null) continue;
@@ -248,7 +261,8 @@ function tdownSet() {
 //   · 지금 자리에서 3° 강하각으로 내려가 HHT(전파고도 기준 호버 높이)에 닿는다.
 //   · 속도는 0 으로 모은다 — 남은 높이에 맞춰 v = v0·√(h/h0)(일정 감속)로 기준을 줄이고,
 //     강하율은 지상속도 × tan3° 로 낸다. 그래서 속도와 높이가 같은 3° 선 위에서 함께 0·HHT 로 간다.
-//   · 다 내려오면 HHT 높이 · 0kt 로 제자리 비행을 이어 간다(FMA 는 계속 TDH).
+//   · 속도·3° 강하 모두 지상속도 기준(바람이 있어도 땅 위의 한 점으로 내려간다).
+//   · 다 내려오면 GSPD 0kt + CRHT(HHT) 로 넘긴다 — 바람이 불어도 그 자리에서 호버한다(FMA CRHT · GS · GS).
 //   · 롤 축은 HDG·NAV 그대로 몬다. 45kt 밑으로 줄면 FMA 가 황색(성능 감소 주의),
 //     30kt 밑이면 롤 축을 놓는다(decouple) — 그 뒤 HDG·NAV 를 다시 거는 것은 조종사 몫.
 const TD_MIN_KT = 50, TD_MIN_AGL = 200, TD_ANG = 3, TD_AMBER_KT = 45, TD_DECPL_KT = 30;
@@ -266,24 +280,37 @@ function tdhEngage() {
   try { if (gspdOn) toggleGspd(); } catch (e) { _swallow(e); }
   gsOn = false; gsArmed = false; try { gsAutoLatch(); updateGsBtn(); } catch (e) { _swallow(e); }
   altHoldOn = false; crhtOn = false; gaOn = false; vsModeOn = false;
-  _tdV0 = S.spd; _tdH0 = Math.max(1, ra - selHht); _tdDecpl = false; _tdDone = false;
+  _tdV0 = Math.max(0, tdGsFwd()); _tdH0 = Math.max(1, ra - selHht); _tdDecpl = false; _tdDone = false;
   simIasOn = true; selSpd = S.spd;
   tdOn = true;
   updateGaBtn();
   try { updateHoverBtns(); updateApInhibit(); } catch (e) { _swallow(e); }
 }
 function tdownRelease() { tdOn = false; _tdDone = false; updateGaBtn(); }
+// 기수 방향 지상속도(kt) — 진대기속도(TAS)에서 맞바람 몫을 뺀다. T/D to H 는 땅 위에 멈춰야 하므로
+// 속도 프로파일과 3° 강하를 모두 이 지상속도로 잡는다(대기속도로 잡으면 맞바람에서는 땅 위로 0 이 되어도
+// 대기속도가 남아 강하가 멎고, 끝나면 바람에 실려 흘러간다).
+function tdGsFwd() { const w = simWindRel(); return tasKt(S.spd) - w.fwd; }
+// 그 지상속도를 내는 계기속도(IAS) — 맞바람 몫을 더하고 TAS → IAS 로 되돌린다
+function tdIasForGs(vg) { const w = simWindRel(); return (vg + w.fwd) / tasRatio(); }
 // 지금 남은 높이(HHT 위 · ft)
 function _tdH() { return radarAltFt() - selHht; }
 function tdStep(dt) {
   if (!tdOn) return;
   if (!simModeOn || !simIasOn || altHoldOn || crhtOn || gspdOn || gaOn) { tdOn = false; updateGaBtn(); return; }   // 조종사가 축을 가져갔다
   const h = _tdH();
-  if (!_tdDone) {
-    selSpd = _tdV0 * Math.sqrt(Math.max(0, Math.min(1, h / _tdH0)));
-    if (h < 3 || selSpd < 2) _tdDone = true;
+  // 남은 높이에 맞춰 지상속도 기준을 줄인다(일정 감속 · √) → 그 지상속도를 내는 IAS 를 기준으로
+  const vg = _tdV0 * Math.sqrt(Math.max(0, Math.min(1, h / _tdH0)));
+  selSpd = Math.max(0, tdIasForGs(vg));
+  if (h < 3 || vg < 3) {
+    // 다 내려왔다 — 땅 위 제자리 호버로 넘긴다: GSPD 0kt(바람이 있어도 제자리) + CRHT = HHT(전파고도)
+    tdOn = false; _tdDone = false;
+    selCrht = selHht; crhtOn = true; altHoldOn = false;
+    try { if (!gspdOn) toggleGspd(); gspdRefFwd = 0; gspdRefLat = 0; } catch (e) { _swallow(e); }
+    updateGaBtn();
+    try { updateHoverBtns(); updateApInhibit(); } catch (e) { _swallow(e); }
+    return;
   }
-  if (_tdDone) selSpd = 0;
   // 30kt 밑 — 롤 축을 놓는다(한 번만 · 다시 거는 것은 조종사 몫)
   if (!_tdDecpl && S.spd < TD_DECPL_KT) {
     _tdDecpl = true;
@@ -298,9 +325,7 @@ function tdStep(dt) {
 // T/DOWN 이 원하는 상승률(fpm, 내려가면 −)
 function _tdVsCmd() {
   const h = _tdH();
-  const ahead = h + (S.vs || 0) / 60 * SIM_AFCS_LEAD;
-  if (_tdDone) return Math.max(-300, Math.min(300, -ahead * SIM_AFCS_ALT_K));   // HHT 를 지킨다
-  const base = Math.max(0, groundSpdKt()) * Math.tan(TD_ANG * D2R) * FT_PER_NM / 60;   // 3° 선의 강하율
+  const base = Math.max(0, tdGsFwd()) * Math.tan(TD_ANG * D2R) * FT_PER_NM / 60;   // 3° 선의 강하율(지상속도 기준)
   return -Math.min(1500, Math.max(base, Math.min(150, h * 3)));
 }
 // FMA 롤 축 — 45kt 밑이면 황색(성능 감소)
@@ -381,7 +406,10 @@ const VS_JERK      = 500;   // 속도·상승률 변화 빠르기를 종전의 �
 const SIM_RATE_K   = 0.9;
 const VS_ACC_MAX   = 1250;   // 속도·상승률 변화 빠르기를 종전의 반으로     // 상승률이 바뀌는 최대 빠르기(fpm/s)
 const VS_IGE_TAU   = 0.3;     // 지면효과 안(땅 가까이)에서 상승률이 토크를 따라가는 시간(s)
-const TQ_TAU       = 0.02;    // 토크가 레버를 따라가는 시간(s) — 엔진·로터 관성(종전 0.5 의 반 = 2배 빠르게)
+const TQ_TAU       = 0.25;    // 토크가 레버를 따라가는 시간(s) — 엔진·거버너 지연(처음 0.5 의 반 = 2배 빠르게)
+// 레버를 급히 올리면 엔진이 따라붙는 동안 모자란 몫을 로터 회전이 내줘 NR 이 잠깐 처지고,
+// 급히 내리면 잠깐 넘친다 — 엔진 토크가 레버를 따라잡는 만큼 돌아온다.
+const NR_GOV_DROOP = 0.2, NR_GOV_RISE = 0.1;   // 토크 지연 1% 당 NR(%)
 // ── 남는 토크 → 상승률 ──
 // 상승률 = 남는 동력 ÷ 무게 — 남는 토크(레버 토크 − 그 속도의 필요 토크, tqRequired)에 곧게 비례한다.
 // 속도에 따른 차이는 필요 동력 곡선(U 자 · 01-state.js)이 이미 담는다: 100% 에서 제자리(77%)는 약
@@ -522,8 +550,9 @@ const TQ_KT  = 1;           // 남는(모자란) 토크 1% 당 같은 자세의 
 const TQ_KT_MAX = 10;
 const TQ_KT_VS0 = 500, TQ_KT_VS1 = 700;   // 오르내림이 500fpm 을 넘어야 속도차가 생기기 시작해 700fpm 에서 다 붙는다
 const DESC_TQ = 5;          // 수평 비행 토크보다 이만큼(%) 모자라야 강하 파워로 본다(고도 유지 중 미세한 차는 빼고)      // 강하 파워에서 감속이 돌려주는 상승률 몫(반)
-const SIM_KE_EFF = 0.14;       // 감속할 때 운동에너지 중 고도로 옮겨 가는 몫(10kt → 약 350fpm) · 종전 0.5
-const SIM_KE_EFF_ACC = 0.17;   // 가속할 때 고도로 치르는 몫(10kt → 약 330fpm)
+// 운동에너지 중 고도와 주고받는 몫 — 감속·가속에 같은 값을 써야 줄였다 늘려도 고도가 쌓이거나 빠지지 않는다
+const SIM_KE_ETA = 0.12;
+const SIM_KE_EFF = SIM_KE_ETA, SIM_KE_EFF_ACC = SIM_KE_ETA;
 const SIM_KE_FPM = 0.514444 * 0.514444 / 9.80665 * 196.8504;   // kt × kt/s → fpm (≈5.31)
 // 지금의 속도·가감속이 만드는 상승률(fpm). 땅 위에서는 미끄럼이 멈춰 세울 뿐이다.
 let _simKePowered = false;     // 지금 가감속이 남는 출력의 속도차 몫인가(simFly 가 채운다)
@@ -690,7 +719,7 @@ function simFtrRelease() {
   const a = simModeAxes();
   // 새 트림 = 놓는 순간의 자세 전체(조종간이 밀려 있는 동안은 종전 트림을 붙잡아 두므로 자세가 튀지 않는다)
   // 블로우 백으로 들린 몫(simBb)은 트림에 넣지 않는다 — 넣으면 놓은 뒤 블로우 백이 그 위에 또 얹혀 2.5° 더 든다
-  const out = { roll: S.bnk, pitch: -(S.pit - rcPitchOff(a) - (simBb || 0)) };
+  const out = { roll: S.bnk - (simTf || 0), pitch: -(S.pit - rcPitchOff(a) - (simBb || 0)) };
   for (const k of ['roll', 'pitch']) {
     const max = k === 'roll' ? SIM_TRIM_MAX_ROLL : SIM_TRIM_MAX_PITCH;
     const stick = k === 'roll' ? a.roll : a.pitch;
@@ -1263,14 +1292,25 @@ function simVyKt() {
 // 지금 속도에서 100% 토크로 낼 상승률(fpm)
 function simClimbMax() { return simVsForTq(CLIMB_REF_TQ - tqRequired()); }
 // 남는 토크(%) → 상승·강하율(fpm) — 곧게 비례
+// 무게 보정 — 상승률은 '남는 동력 ÷ 무게' 다. 기준(PERF 16,000lb)보다 무거우면 같은 남는 토크로 덜 오르고,
+// 오토로테이션 강하율(필요 동력 ÷ 무게)도 그만큼 바뀐다 — 필요 토크가 이미 무게·밀도고도를 담고 있어
+// 결과는 √(무게/밀도) 꼴로 커진다(무겁고 덥고 높을수록 빨리 내려간다).
+const CLIMB_WT_REF = 16000;
+function simWtK() {
+  let w = CLIMB_WT_REF;
+  try { if (typeof perfWeightLb === 'function') w = perfWeightLb(); } catch (e) { _swallow(e); }
+  return Math.max(0.7, Math.min(1.4, CLIMB_WT_REF / (w || CLIMB_WT_REF)));
+}
 function simVsForTq(dTq) {
-  if (dTq > 0) return Math.min(SIM_VS_UP_MAX, CLIMB_FPM_UP * dTq);
-  return Math.max(-SIM_VS_DN_MAX, CLIMB_FPM_DN * dTq);
+  const k = simWtK();
+  if (dTq > 0) return Math.min(SIM_VS_UP_MAX, CLIMB_FPM_UP * k * dTq);
+  return Math.max(-SIM_VS_DN_MAX, CLIMB_FPM_DN * k * dTq);
 }
 // 위의 역 — 그 상승·강하율에 드는 남는 토크(%)
 function simTqForVs(vs) {
-  if (vs > 0) return Math.min(vs, SIM_VS_UP_MAX) / CLIMB_FPM_UP;
-  return vs / CLIMB_FPM_DN;
+  const k = simWtK();
+  if (vs > 0) return Math.min(vs, SIM_VS_UP_MAX) / (CLIMB_FPM_UP * k);
+  return vs / (CLIMB_FPM_DN * k);
 }
 // ── 바람 ── SIM 의 S.spd(앞) · simLat(오른쪽)은 대기속도다. 땅에 대한 속도 = 대기속도 + 바람.
 // 땅에 대한 속도가 0(제자리)일 때의 대기속도 — 맞바람이면 앞(+), 오른쪽에서 불면 오른쪽(+).
@@ -1357,7 +1397,8 @@ function simFly(dt) {
     // ── 사이클릭 좌우 → 뱅크 ──
     // HDG·NAV 가 걸려 있으면 뱅크는 AFCS 가 잡는다(07-sim.js) — 조종간 좌우는 무시한다.
     if (!simAfcsLat()) {
-      const bTgt = (gnd3 ? 0 : roll * SIM_BANK_MAX) + deckAtt.bank + rotorSign() * simRbs.r;
+      simTf = (rcOn('transverse') && !onGnd) ? -rotorSign() * RC_TF_BANK * rcTransverseK(simAirspeed()) * (aseOn ? RC_TF_ASE : 1) : 0;
+      const bTgt = (gnd3 ? 0 : roll * SIM_BANK_MAX) + deckAtt.bank + rotorSign() * simRbs.r + simTf;
       const dB = bTgt - S.bnk;
       S.bnk += Math.sign(dB) * Math.min(Math.abs(dB), SIM_ROLL_RATE * dt);
       bankTarget = S.bnk;           // 모드를 빠져나가도 자세가 튀지 않게
@@ -1435,21 +1476,21 @@ function simFly(dt) {
     // 자세가 정한 속도와의 차이 → 오르내림(simKeVs)
     if (onGnd) _simKeVsF = 0;
     else {
-      const dev = Math.max(-KE_DEV_MAX, Math.min(KE_DEV_MAX, S.spd - sTgt));
-      let ke = (dev > 0 ? KE_FPM_PER_KT : KE_FPM_PER_KT_ACC) * dev * Math.min(1, Math.abs(S.spd) / KE_FULL_KT);
-      // 자세 배율로 가감속이 빨라진 만큼 같은 시간에 더 주고받는다 — 주고받는 고도 총량은 그대로(에너지)
-      ke *= simAccPitchK(dev > 0 && S.spd > 0, pitRef) * SIM_RATE_K;
-      if (dev > 0) ke /= SIM_DEC_TIME;   // 감속이 느려진 만큼 오래 주고받는다 — 강하율이 줄어드는 시간은 두 배, 고도 총량은 그대로
-      if (_simKePowered && dev < 0) ke = 0;                        // 남는 출력이 낸 속도차(그 속도까지 붙는 가속)는 엔진 몫 — 감속은 그대로 고도로 돌아온다
+      // 운동에너지 ↔ 위치에너지 — 상승률 = −η·V·a/g. 감속(줄어드는 ½V²)은 고도로 돌아오고 가속은 고도로 치른다.
+      // 같은 η 를 양쪽에 쓰므로 줄였다 늘리면 고도가 제자리로 돌아온다(에너지 보존). 가감속의 빠르기(자세 배율·
+      // 감속 시간 배율)는 이미 a 에 들어 있어 따로 곱하지 않는다 — 감속이 느리면 강하율 감소도 그만큼 느리고 오래 간다.
+      const accUp = S.spd * simAcc > 0;                           // 속도 크기가 느는 쪽(가속)
+      let ke = -SIM_KE_ETA * SIM_KE_FPM * S.spd * simAcc;
+      if (_simKePowered && accUp) ke = 0;                        // 남는 출력이 낸 속도차(그 속도까지 붙는 가속)는 엔진 몫 — 감속은 그대로 고도로 돌아온다
       // 남는 출력(수평 비행 토크보다 많이)을 걸고 가속할 때는 엔진이 속도를 낸다 — 고도로 치르지 않는다
       // (남는 토크 0 → 5% 사이에서 서서히). 수평 비행 출력에서 기수를 숙여 가속하면 종전대로 고도로 치른다.
       // 그래서 같은 토크로 이륙 가속하면 Vy 까지 상승률이 점점 오르고(속도·TQ 효율), Vy 를 넘으면 상승 효율이 떨어져 준다.
       // (ALT·CRHT 가 출력을 몰 때는 빼고 — 그때는 AFCS 가 가속에 드는 출력을 더 써서 고도를 지킨다)
-      if (dev < 0 && !simAfcsVert()) ke *= 1 - Math.max(0, Math.min(1, (S.tq - tqRequired()) / KE_PWR_FREE));
-      if (dev < 0 && Math.abs(S.spd) < SPD_ETL_KT && S.tq >= hoverPowerTq() + HOV_TO_MARGIN) ke = 0;   // 호버 이륙 가속
+      if (accUp && !simAfcsVert()) ke *= 1 - Math.max(0, Math.min(1, (S.tq - tqRequired()) / KE_PWR_FREE));
+      if (accUp && Math.abs(S.spd) < SPD_ETL_KT && S.tq >= hoverPowerTq() + HOV_TO_MARGIN) ke = 0;   // 호버 이륙 가속
       // 전이양력 지대(20kt 언저리)를 지나며 가속할 때의 침하는 회전익 특성 — 끄면 없다
       // (지면효과(IGE)를 받는 40ft 이내에서만 — 그 위에서는 침하가 없다)
-      if (dev < 0 && Math.abs(S.spd) < SPD_ETL_KT && (!rcOn('etl') || S.alt - simGroundFt() > RC_IGE_FT)) ke = 0;
+      if (accUp && Math.abs(S.spd) < SPD_ETL_KT && (!rcOn('etl') || S.alt - simGroundFt() > RC_IGE_FT)) ke = 0;
       _simKeVsF += (ke - _simKeVsF) * Math.min(1, dt / KE_TAU);
     }
 
@@ -1536,7 +1577,8 @@ function simFly(dt) {
   const wA = Math.max(0, Math.min(1, -(S.vs || 0) / (CLIMB_FPM_DN * Math.max(10, preq))));
   const flareNr = (!onGnd && (U > 0 || wA > 0.3)) ? NR_FLARE_K * Math.max(0, -simAcc) : 0;
   const lowLev = (U === 0 && !onGnd) ? NR_AUTO_K * Math.max(0, AUTO_LREF - demand) * wA : 0;   // 엔진이 돌아도 레버를 다 내리고 내려가면 넘친다
-  const nrTgt = Math.max(NR_FLOOR, Math.min(115, U > 0 ? 100 + NR_AUTO_K * (wA * AUTO_LREF - U) + flareNr : 100 + lowLev + flareNr));
+  const govLag = onGnd ? 0 : (tTgt > S.tq ? -NR_GOV_DROOP * (tTgt - S.tq) : NR_GOV_RISE * (S.tq - tTgt));   // 거버너 지연
+  const nrTgt = Math.max(NR_FLOOR, Math.min(115, (U > 0 ? 100 + NR_AUTO_K * (wA * AUTO_LREF - U) + flareNr : 100 + lowLev + flareNr) + govLag));
   const nr0 = simNr;
   simNr += (nrTgt - simNr) * Math.min(1, dt / (nrTgt < simNr ? NR_TAU_DN : NR_TAU_UP));
   if (onGnd && simNr < 100 && U === 0) simNr = Math.min(100, simNr + 20 * dt);
