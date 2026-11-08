@@ -84,6 +84,28 @@ export async function run(page, t) {
   t.ok(!r.altTake.ga && !r.altTake.vsm, 'ALT 를 걸면 GA·VS 가 풀린다');
   t.eq(r.offSim, false, 'SIM 모드가 아니면 걸리지 않는다');
 
+  // 회전익 특성 + 실제 레버(절대값 축)를 맨 아래에서 켠 뒤 호버에서 G/A — 뒤로 가지 않고 앞으로 가속한다
+  // (종전: 레버 자리가 컬렉티브→피치로 기수를 5° 더 들어 −19kt 로 뒤로 갔다)
+  const lv = await page.evaluate(`(() => {
+    (${SIM_SETUP_SRC})();
+    const fly = ${SIM_FLY_SRC};
+    joyAxes = { roll: { i: 0, inv: false }, pitch: { i: 1, inv: false }, yaw: { i: 2, inv: false }, coll: { i: 3, inv: false, abs: true } };
+    rotorChar = true;
+    _ax(3, -1); for (const k in _joyNeutral) delete _joyNeutral[k]; joyPoll(600);   // 레버 맨 아래에서 시작
+    S.alt = 10; S.spd = 0; S.pit = pitchFromSpd(0); S.vs = 0; simAcc = 0;
+    _ax(3, hoverTqRef() / SIM_LEVER_TOP * 2 - 1);
+    simTrimReset(); simTrim.pitch = -pitchFromSpd(0); simTrimAct.pitch = simTrim.pitch;
+    fly(5);
+    const hovPit = S.pit;
+    document.getElementById('ga-btn').click();
+    let minSpd = 99; for (let i = 0; i < 25; i++) { fly(1); minSpd = Math.min(minSpd, S.spd); }
+    const o = { hovPit, minSpd, spd: S.spd, vs: S.vs };
+    rotorChar = false; gaRelease(); toggleSimMode(false);
+    return o;
+  })()`);
+  t.ok(Math.abs(lv.hovPit - 8.5) < 0.5, `레버를 맨 아래에서 켜도 호버 자세가 기수 들림 없이 그대로다 (${lv.hovPit.toFixed(1)}°)`);
+  t.ok(lv.minSpd > -1 && lv.spd > 55, `회전익 특성·실제 레버로도 G/A 는 뒤로 가지 않고 가속한다 (최저 ${lv.minSpd.toFixed(1)} → 25초 ${lv.spd.toFixed(0)}kt)`);
+
   await page.evaluate(() => {
     try { gaRelease(); } catch (e) {}
     if (simModeOn) toggleSimMode(false);
