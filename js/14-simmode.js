@@ -689,7 +689,8 @@ function simFtrRelease() {
   if (!simModeOn || gspdOn || simAfcsPitch()) return;
   const a = simModeAxes();
   // 새 트림 = 놓는 순간의 자세 전체(조종간이 밀려 있는 동안은 종전 트림을 붙잡아 두므로 자세가 튀지 않는다)
-  const out = { roll: S.bnk, pitch: -(S.pit - rcPitchOff(a)) };
+  // 블로우 백으로 들린 몫(simBb)은 트림에 넣지 않는다 — 넣으면 놓은 뒤 블로우 백이 그 위에 또 얹혀 2.5° 더 든다
+  const out = { roll: S.bnk, pitch: -(S.pit - rcPitchOff(a) - (simBb || 0)) };
   for (const k of ['roll', 'pitch']) {
     const max = k === 'roll' ? SIM_TRIM_MAX_ROLL : SIM_TRIM_MAX_PITCH;
     const stick = k === 'roll' ? a.roll : a.pitch;
