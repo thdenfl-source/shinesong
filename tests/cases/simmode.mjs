@@ -2489,7 +2489,7 @@ export async function run(page, t) {
     rotorChar = false; updateRotorBtns();
     return o;
   });
-  t.ok(rcb.n === 6 && rcb.p0 === 5 && rcb.p1 === 0 && rcb.btnOff && rcb.y === 0, `회전익 특성 아래 6개 항목을 하나씩 끄고 켠다 (${rcb.n}개)`);
+  t.ok(rcb.n === 7 && rcb.p0 === 5 && rcb.p1 === 0 && rcb.btnOff && rcb.y === 0, `회전익 특성 아래 7개 항목을 하나씩 끄고 켠다 (${rcb.n}개)`);
 
   // 같은 토크로 이륙 가속 — Vy 까지 상승률이 오르고, Vy 를 넘으면 준다(가속을 고도로 치르지 않는다)
   const tko = await page.evaluate(`(() => {

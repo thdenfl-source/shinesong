@@ -751,12 +751,26 @@ function computeTrack() {
 
 // 지상속도(kt) — 대기속도 벡터 + 유효 바람 벡터의 크기.
 // 선회 선행거리·VNAV TOD 등 "지면 기준" 계산은 모두 이 값을 쓴다.
+// ── 진대기속도(TAS) ── 계기속도(IAS)는 동압을 재므로, 공기가 옅은 높은 고도에서는 같은 IAS 로도
+// 실제로 더 빨리 난다: TAS = IAS × √(ρ₀/ρ). SIM 모드는 이 TAS 로 움직이고 돈다(위치·선회율·지상속도).
+// 밀도는 ISA 기압(고도)과 기온(METAR 지면온도 _oatSurfaceC 에서 2°C/1000ft 로 내려감)으로 셈한다.
+// SIM 밖(절차 훈련)은 종전대로 속도 값을 그대로 쓴다.
+function tasRatio(altFt = S.alt) {
+  const a = Math.max(0, altFt || 0);
+  const t0 = (typeof _oatSurfaceC === 'number' && Number.isFinite(_oatSurfaceC)) ? _oatSurfaceC : 15;
+  const tK = t0 - 2 * a / 1000 + 273.15;
+  const p = Math.pow(1 - 6.87535e-6 * a, 5.2558797);           // p / p₀
+  const rho = p * 288.15 / tK;                                   // ρ / ρ₀
+  return Math.sqrt(1 / Math.max(0.2, rho));
+}
+function tasKt(v = S.spd) { return simModeOn ? v * tasRatio() : v; }
 function groundSpdKt() {
   const wEff = effectiveWindSpd();
-  if (wEff <= 0) return S.spd;
+  const vT = tasKt(S.spd);
+  if (wEff <= 0) return vT;
   const wt = normA(windDir + 180) * D2R;
-  const gN = S.spd * Math.cos(S.hdg * D2R) + wEff * Math.cos(wt);
-  const gE = S.spd * Math.sin(S.hdg * D2R) + wEff * Math.sin(wt);
+  const gN = vT * Math.cos(S.hdg * D2R) + wEff * Math.cos(wt);
+  const gE = vT * Math.sin(S.hdg * D2R) + wEff * Math.sin(wt);
   return Math.sqrt(gN * gN + gE * gE);
 }
 
@@ -768,7 +782,7 @@ function groundSpdKt() {
 // 인바운드 선회를 마쳤을 때 코스 위에 놓이도록 바람 쪽으로 더 치우쳐 난다.
 function windCorrectedHdg(desiredTrack, mult) {
   const wEff = effectiveWindSpd();
-  const v = Math.max(20, S.spd);
+  const v = Math.max(20, tasKt(S.spd));
   if (wEff <= 0.1) return desiredTrack;
   const s = wEff * Math.sin((windDir - desiredTrack) * D2R) / v;
   let wca = Math.asin(Math.max(-1, Math.min(1, s))) / D2R;

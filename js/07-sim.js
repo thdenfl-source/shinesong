@@ -497,8 +497,10 @@ function simStep(ts, noLoop){   // noLoop — 새 창이 대신 한 프레임을
           // SIM 모드의 옆미끄럼(저속에서 뱅크를 주면 옆으로 간다)도 함께 더한다
           const lat = simModeOn ? simLat : 0;
           const ch = Math.cos(S.hdg * D2R), sh = Math.sin(S.hdg * D2R);
-          gsN = S.spd * ch - lat * sh + wEff * Math.cos(wt);
-          gsE = S.spd * sh + lat * ch + wEff * Math.sin(wt);
+          // SIM 은 진대기속도(TAS)로 움직인다 — 높은 곳에서는 같은 IAS 로 더 멀리 간다(01-state.js tasKt)
+          const vT = tasKt(S.spd), lT = tasKt(lat);
+          gsN = vT * ch - lT * sh + wEff * Math.cos(wt);
+          gsE = vT * sh + lT * ch + wEff * Math.sin(wt);
         }
         const sc = 1852/3600 * dt / 111320;
         const _lat0 = S.lat, _lon0 = S.lon;
@@ -560,7 +562,7 @@ function simStep(ts, noLoop){   // noLoop — 새 창이 대신 한 프레임을
 
         // Coordinated turn: bank angle drives heading change (g·tan(bank)/V).
         if (Math.abs(S.bnk) > 0.5 && !gspdOn && !gspdCoasting) {
-          const V_ms = Math.max(10, Math.abs(S.spd)) * 0.5144;
+          const V_ms = Math.max(10, Math.abs(tasKt(S.spd))) * 0.5144;   // 선회율 = g·tanφ / TAS
           let turnRate = 9.81 * Math.tan(S.bnk * D2R) / V_ms / D2R;  // °/s
           // SIM 모드의 저속에서는 뱅크가 선회가 아니라 옆걸음으로 쓰인다
           // 저속일수록 선회 몫이 급히 줄어든다(제곱) — 그 자리에서 도는 것이 아니라

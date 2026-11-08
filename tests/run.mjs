@@ -38,6 +38,7 @@ import * as simmode from './cases/simmode.mjs';
 import * as ga from './cases/ga.mjs';
 import * as tdown from './cases/tdown.mjs';
 import * as bbtrim from './cases/bbtrim.mjs';
+import * as physics2 from './cases/physics2.mjs';
 import * as ship3d from './cases/ship3d.mjs';
 import * as heli3d from './cases/heli3d.mjs';
 import * as ralt from './cases/ralt.mjs';
@@ -50,7 +51,7 @@ import * as apptune from './cases/apptune.mjs';
 import * as lock from './cases/lock.mjs';
 import * as popout from './cases/popout.mjs';
 
-const SUITES = [smoke, actions, coords, chartcal, hold, nav, gspd, dialog, chartview, procdata, simspd, tascalc, brg, fpwpt, maprot, map3d, dmearc, dme, fporder, wptcrs, brglbl, directto, crssync, locsta, susp, layout, gslope, joystick, geosearch, simmode, ga, tdown, bbtrim, ship3d, heli3d, ralt, startapt, hdgref, sound, view3d, runway, apptune, lock, popout];
+const SUITES = [smoke, actions, coords, chartcal, hold, nav, gspd, dialog, chartview, procdata, simspd, tascalc, brg, fpwpt, maprot, map3d, dmearc, dme, fporder, wptcrs, brglbl, directto, crssync, locsta, susp, layout, gslope, joystick, geosearch, simmode, ga, tdown, bbtrim, physics2, ship3d, heli3d, ralt, startapt, hdgref, sound, view3d, runway, apptune, lock, popout];
 const filter = process.argv.slice(2);
 
 function makeT() {
