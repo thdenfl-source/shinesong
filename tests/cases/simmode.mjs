@@ -981,12 +981,6 @@ async function part2(page, t) {
   // 앞으로 보내 흉내 냈다 — 그래서 하늘 대신 '전진' 하는 그림이 됐다.
   // 이제는 카메라가 정말로 들린다. 정면 먼 곳(지평선)이 화면 어디에 찍히는지,
   // 그리고 카메라 자리가 그대로인지를 본다.
-  // 3D 지도의 제 마커는 지도 모양을 다 읽은 뒤(비동기) 생긴다 — 묶음을 나눠 새 페이지에서 돌면 여기서 아직 없을 수 있다
-  await page.evaluate(async () => {
-    const was = _view3dOn; if (!was) toggle3dMap();
-    let n = 0; while (!_ml3dMarker && n < 200) { await new Promise(r => setTimeout(r, 50)); n++; }
-    if (!was && _view3dOn) toggle3dMap();
-  });
   const lookUp = await page.evaluate(`(() => {
     (${SETUP.toString()})();
     const cam = ${CAM};
@@ -1021,11 +1015,8 @@ async function part2(page, t) {
     S.bnk = 30;
     proto.rotate = function (a) { if (adi === null) adi = a; return orig.call(this, a); };
     drawPFD(); proto.rotate = orig;
-    const marker = _ml3dMarker ? _ml3dMarker.getElement().isConnected : null;
     toggleSimMode(false);
-    _update3dMarker();
-    const markerAfter = _ml3dMarker ? _ml3dMarker.getElement().isConnected : null;
-    return { H, lvl, up10, up20, up40, dn20, bank45, marker, markerAfter, right30, left30, adi };
+    return { H, lvl, up10, up20, up40, dn20, bank45, right30, left30, adi };
   })()`);
   const fr = (r) => (r.horizonY / lookUp.H).toFixed(2);
   t.ok(lookUp.lvl.horizonY < lookUp.H / 2 - lookUp.H * 0.05 && lookUp.lvl.horizonY > lookUp.H * 0.25,
@@ -1049,8 +1040,6 @@ async function part2(page, t) {
   // ADI 는 캔버스를 rotate(−뱅크) 로 돌린다 — 음수(반시계)면 지평선 오른쪽이 올라간다
   t.ok(lookUp.adi < 0,
     `PFD 의 ADI 도 같은 쪽으로 기운다 (회전 ${lookUp.adi === null ? '없음' : lookUp.adi.toFixed(2)}rad · 오른쪽 뱅크 30°)`);
-  t.eq(lookUp.marker, false, '1인칭에서는 제 마커를 지도에서 뗀다(눈이 곧 헬기 자리)');
-  t.eq(lookUp.markerAfter, true, '끄면 마커가 다시 붙는다');
 
 }
 async function part3(page, t) {
@@ -1111,6 +1100,23 @@ async function part3(page, t) {
     const r = scale[k], err = Math.abs(r.calc / r.ref - 1);
     t.ok(err < 0.06, `3D 축척(${k.slice(1)}°)이 실제 땅 위 거리와 맞는다 (${r.calc.toFixed(2)} · 실측 ${r.ref.toFixed(2)} m/px)`);
   }
+
+  // 1인칭(SIM)에서는 3D 지도의 제 마커를 뗀다(눈이 곧 헬기 자리) — 마커는 지도 모양을 다 읽은 뒤(비동기) 생기므로 기다렸다 잰다
+  const mk = await page.evaluate(`(async () => {
+    (${SETUP.toString()})();
+    const wait = ms => new Promise(r => setTimeout(r, ms));
+    toggleSimMode(false);
+    if (!_view3dOn) toggle3dMap();
+    let n = 0; while (!_ml3dMarker && n < 200) { await wait(50); n++; }
+    toggleSimMode(true); _update3dMarker();
+    const on = _ml3dMarker ? _ml3dMarker.getElement().isConnected : null;
+    toggleSimMode(false); _update3dMarker();
+    const off = _ml3dMarker ? _ml3dMarker.getElement().isConnected : null;
+    if (_view3dOn) toggle3dMap();
+    return { on, off };
+  })()`);
+  t.eq(mk.on, false, '1인칭에서는 제 마커를 지도에서 뗀다(눈이 곧 헬기 자리)');
+  t.eq(mk.off, true, '끄면 마커가 다시 붙는다');
 
   // ── 땅 위에서는 고도계만큼, 앉아 있으면 눈높이만큼 떠 있다 ──
   // 지면 위 높이(AGL)는 비행 모델의 땅에서 재고, 카메라는 '화면에 그려진 땅' 위에
