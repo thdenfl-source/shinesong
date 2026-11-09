@@ -54,6 +54,9 @@ export async function run(page, t) {
     rotorDir = 'CCW'; o.tfCcw = tf(15, false); rotorDir = 'CW';
     rcOpt.blowback = true; rotorChar = false; aseOn = false;
     o.turnSl = turn(0); o.turnHi = turn(10000);
+    // 롤 반응 — 조종간을 오른쪽 끝까지 밀면 1초에 24° · 피치는 12°/s
+    S.alt = 2000; S.spd = 100; S.bnk = 0; S.pit = pitchFromSpd(100); simTrimReset(); simTrim.pitch = -pitchFromSpd(100); simTrimAct.pitch = simTrim.pitch;
+    _ax(0, 1); fly(0.5); o.roll05 = S.bnk; fly(0.5); o.roll1 = S.bnk; _ax(0, 0); fly(3);
     toggleSimMode(false);
     return o;
   })()`);
@@ -71,5 +74,6 @@ export async function run(page, t) {
   t.ok(r.tf15.tf < -1.8 && r.tf15.tf > -2.1, `횡류 효과 — CW 로터 15kt 에서 왼쪽으로 약 2° (${r.tf15.tf.toFixed(2)}° · ${r.tf15.spd.toFixed(0)}kt)`);
   t.ok(r.tfCcw.tf > 1.8, `CCW 로터는 오른쪽 (${r.tfCcw.tf.toFixed(2)}°)`);
   t.ok(Math.abs(r.tf15ase.tf) < 0.7 && Math.abs(r.tf15ase.tf) > 0.4, `ASE 면 SAS 가 대부분 잡는다 (${r.tf15ase.tf.toFixed(2)}°)`);
+  t.ok(Math.abs(r.roll05 - 12) < 1 && Math.abs(r.roll1 - 24) < 1, `롤은 24°/s 로 들어간다 — 피치(12°/s)보다 빠르게 (0.5초 ${r.roll05.toFixed(1)}° · 1초 ${r.roll1.toFixed(1)}°)`);
   t.ok(r.tf40.tf === 0 && r.tf5.tf === 0, `전이양력 지대 밖(5kt · 40kt)에서는 없다 (${r.tf5.tf.toFixed(2)}@${r.tf5.spd.toFixed(0)}kt · ${r.tf40.tf.toFixed(2)}@${r.tf40.spd.toFixed(0)}kt)`);
 }
