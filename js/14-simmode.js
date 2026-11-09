@@ -106,6 +106,15 @@ const RC_YAW_K = 0.3, RC_YAW_MAX = 7.5;     // 7.5°/s(종전 최대의 2배)
 let _rcLevPrev = null;
 const RC_YAW_DELAY = 0.5;      // 컬렉티브 → 요가 나타나기까지(s)
 let _rcYawBuf = [], _rcT = 0;
+// 회전익 특성이 쓰는 컬렉티브 변위(−1…1) — 조종사 레버 축이 아니라 '실제로 걸린 컬렉티브'(레버가 요구하는
+// 토크 · ALT·CRHT·G/A 등 AFCS 가 몰 때는 AFCS 가 낸 값)를 호버 토크 기준으로 잰다. 레버 축 값을 그대로 쓰면
+// 절대값 레버는 켤 때의 자리가 중립이 되어(맨 아래에서 켜면 호버에서도 +1 언저리) 호버에서 기수가 5° 들린 채 남고,
+// AFCS 가 컬렉티브를 몰아도 손에 쥔 레버 자리가 피치를 흔들었다(G/A 에서 뒤로 간 원인).
+function rcCollDefl() {
+  const hov = hoverTqRef(), d = (Number.isFinite(simTqCmd) ? simTqCmd : hov) - hov;   // 이 높이의 호버 토크가 기준(가운데로 돌아오는 레버의 중립과 같다)
+  return Math.max(-1, Math.min(1, d > 0 ? d / (SIM_LEVER_TOP - hov) : d / TQ_SPAN));
+}
+function rcAxes(a) { return { coll: rcCollDefl(), yaw: a.yaw }; }
 function rcLeverTq(a) {
   const hov = hoverPowerTq();
   return hov + a.coll * (a.coll > 0 ? SIM_LEVER_TOP - hov : TQ_SPAN);
@@ -153,7 +162,7 @@ function aseHoverFollow(a, onGnd, rollRate, pitRate) {
     const axes = [
       // 블로우 백·횡류 효과 몫은 트림에 넣지 않는다(넣으면 그 위에 또 얹힌다 — FORCE TRIM 과 같다)
       ['roll', a.roll, rollRate, !simAfcsLat(), S.bnk - (simTf || 0), SIM_TRIM_MAX_ROLL],
-      ['pitch', a.pitch, pitRate, !simAfcsPitch(), -(S.pit - rcPitchOff(a) - (simBb || 0)), SIM_TRIM_MAX_PITCH],
+      ['pitch', a.pitch, pitRate, !simAfcsPitch(), -(S.pit - rcPitchOff(rcAxes(a)) - (simBb || 0)), SIM_TRIM_MAX_PITCH],
     ];
     for (const [k, stick, rate, free, att, max] of axes) {
       if (!free || Math.abs(stick) <= SIM_TRIM_HOLD_DEAD || simTrimHeld[k] === null) continue;
@@ -719,7 +728,7 @@ function simFtrRelease() {
   const a = simModeAxes();
   // 새 트림 = 놓는 순간의 자세 전체(조종간이 밀려 있는 동안은 종전 트림을 붙잡아 두므로 자세가 튀지 않는다)
   // 블로우 백으로 들린 몫(simBb)은 트림에 넣지 않는다 — 넣으면 놓은 뒤 블로우 백이 그 위에 또 얹혀 2.5° 더 든다
-  const out = { roll: S.bnk - (simTf || 0), pitch: -(S.pit - rcPitchOff(a) - (simBb || 0)) };
+  const out = { roll: S.bnk - (simTf || 0), pitch: -(S.pit - rcPitchOff(rcAxes(a)) - (simBb || 0)) };
   for (const k of ['roll', 'pitch']) {
     const max = k === 'roll' ? SIM_TRIM_MAX_ROLL : SIM_TRIM_MAX_PITCH;
     const stick = k === 'roll' ? a.roll : a.pitch;
@@ -1413,7 +1422,8 @@ function simFly(dt) {
       pTgt = Math.max(-SIM_PITCH_MAX, Math.min(SIM_PITCH_MAX, simIasPitch() - a.pitch * SIM_PITCH_MAX));
       if (!a.pitch) pRate = SIM_IAS_RATE;
     }
-    pTgt += rcPitchOff(a);              // 회전익 특성 — 컬렉티브·페달이 피치로 옮겨 간다
+    // 회전익 특성 — 컬렉티브·페달이 피치로 옮겨 간다. IAS·G/A·T/D 처럼 AFCS 가 자세를 잡고 있으면 AFCS 가 메운다
+    if (!simAfcsPitch()) pTgt += rcPitchOff(rcAxes(a));
     // 블로우 백(flapback) — 전진하며 8~10kt 를 지나면 원판이 뒤로 젖혀져 기수가 2.5° 들린다. 후진 비행에는 없다.
     //  · ASE 꺼짐: 들린 채 남는다 — 조종사가 조종간(또는 트림)으로 한 번 더 밀어 줘야 한다(들린 만큼 속도도 준다).
     //  · ASE 켜짐: SAS 가 잡아 준다 — 10~15kt 에서 한 번 들렸다가 18kt 에서 사라지고, 속도 기준은 그대로다.
@@ -1519,7 +1529,7 @@ function simFly(dt) {
   // 회전익 특성 — 선회 중 1/2 볼 외활(skid): 볼이 선회 바깥쪽으로 반 볼 비킨다(20kt 위 · 뱅크 10° 에서 다)
   simSkidHalf = (rotorChar && !onGnd && !simAfcsAny()) ? -Math.sign(S.bnk) * Math.min(1, Math.abs(S.bnk) / 10) * (1 - rcLowK()) : 0;
   // 회전익 특성 — 컬렉티브 토크의 반작용으로 동체가 로터 반대 방향으로 돈다(공중에서만)
-  const lev = rcLeverTq(a);
+  const lev = Number.isFinite(simTqCmd) ? simTqCmd : rcLeverTq(a);   // 실제로 걸린 컬렉티브(AFCS 가 몰 때 포함)
   const dLev = (_rcLevPrev === null) ? 0 : (lev - _rcLevPrev) / dt;
   _rcLevPrev = lev;
   // 0.5초 늦게 나타난다(RC_YAW_DELAY) — 레버를 움직인 뒤 토크 반작용이 동체를 돌리기까지
