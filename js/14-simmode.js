@@ -560,7 +560,7 @@ const TQ_KT_MAX = 10;
 const TQ_KT_VS0 = 500, TQ_KT_VS1 = 700;   // 오르내림이 500fpm 을 넘어야 속도차가 생기기 시작해 700fpm 에서 다 붙는다
 const DESC_TQ = 5;          // 수평 비행 토크보다 이만큼(%) 모자라야 강하 파워로 본다(고도 유지 중 미세한 차는 빼고)      // 강하 파워에서 감속이 돌려주는 상승률 몫(반)
 // 운동에너지 중 고도와 주고받는 몫 — 감속·가속에 같은 값을 써야 줄였다 늘려도 고도가 쌓이거나 빠지지 않는다
-const SIM_KE_ETA = 0.12;
+const SIM_KE_ETA = 0.10;   // 100kt 에서 기수로 10kt 바꾸면 약 350~400fpm
 const SIM_KE_EFF = SIM_KE_ETA, SIM_KE_EFF_ACC = SIM_KE_ETA;
 const SIM_KE_FPM = 0.514444 * 0.514444 / 9.80665 * 196.8504;   // kt × kt/s → fpm (≈5.31)
 // 지금의 속도·가감속이 만드는 상승률(fpm). 땅 위에서는 미끄럼이 멈춰 세울 뿐이다.
@@ -1449,7 +1449,7 @@ function simFly(dt) {
     const manual = !simAfcsPitch() && !simAfcsVert() && S.spd > 40;   // 조종사가 직접 몰 때(40kt 위)만
     // 상승 중 자세에 따른 속도 차 — 남는 토크만큼 같은 자세에서 빠르다. 오르내림이 500fpm 아래면 없다
     // (강하 쪽은 '자세가 곧 속도' 그대로 — 강하 파워에서 기수를 들면 남은 속도에 정비례해 준다)
-    const vsK = Math.max(0, Math.min(1, (Math.abs(S.vs) - TQ_KT_VS0) / (TQ_KT_VS1 - TQ_KT_VS0)));
+    const vsK = Math.max(0, Math.min(1, ((S.vs || 0) - TQ_KT_VS0) / (TQ_KT_VS1 - TQ_KT_VS0)));   // 오를 때만(가라앉는 중의 남는 토크는 속도가 되지 않는다 — RPM LOW 등)
     const tqKt = manual ? vsK * Math.max(0, Math.min(TQ_KT_MAX, TQ_KT * (S.tq - tqRequired()))) : 0;
     // 남는 출력이 낸 속도차(자세가 정한 속도보다 빠른 몫)는 엔진이 치른다 — 고도와 맞바꾸지 않는다(simKeVs)
     // 속도 기준 자세 — 트림이 잡고 있으면 블로우 백 들림은 빼고 본다(트림 자세 그대로)
