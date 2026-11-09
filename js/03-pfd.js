@@ -77,6 +77,77 @@ function drawPFD() {
 
   drawAI(aiX, 0, aiW, aiH);
   drawHSI(aiX, aiH, aiW, hsiH);
+  if (hocasOn) drawHocas(aiX, aiH, aiW, hsiH);
+}
+
+// ── HOCAS 표시 ── FCP 의 HOCAS 버튼으로 켠다. HSI 왼쪽(바람 표시와 TAS 줄 사이)에
+// 사이클릭(전후·좌우)과 페달이 가운데(중립)인지, 한쪽으로 얼마나 치우쳤는지 보여 준다.
+//   ● 조종 장치(조이스틱·화면 조종간)가 지금 밀려 있는 자리 — 가운데면 초록, 치우치면 호박색
+//   ○ (SIM) 트림이 잡고 있는 자리 — 손을 놓으면 기체는 이 자세로 간다
+// 사이클릭은 위가 앞(밀기)·오른쪽이 오른쪽, 페달은 오른쪽이 오른 페달이다.
+let hocasOn = false;
+const HOCAS_DEAD = 0.05;          // 이 안이면 가운데(중립)로 본다
+function toggleHocas() {
+  hocasOn = !hocasOn;
+  const b = document.getElementById('hocas-btn');
+  if (b) b.classList.toggle('on', hocasOn);
+  try { drawPFD(); } catch (e) { _swallow(e); }
+}
+function hocasAxes() {
+  let a = { roll: 0, pitch: 0, yaw: 0 };
+  try { if (typeof simModeAxes === 'function') a = simModeAxes(); } catch (e) { _swallow(e); }
+  const trim = (simModeOn && typeof simTrimAct !== 'undefined')
+    ? { roll: simTrimAct.roll / SIM_BANK_MAX, pitch: simTrimAct.pitch / SIM_PITCH_MAX } : null;
+  return { roll: a.roll || 0, pitch: a.pitch || 0, yaw: a.yaw || 0, trim };
+}
+function drawHocas(x, y, w, h) {
+  if (!(w >= 40) || !(h >= 40)) return;
+  const r = Math.min(w * 0.38, h * 0.46);
+  const sideW = Math.max(60, (w - r * 2) / 2 - 8);
+  const ax = hocasAxes();
+  const clamp = v => Math.max(-1, Math.min(1, v));
+  const col = v => Math.abs(v) <= HOCAS_DEAD ? '#00ff88' : '#ffb74d';
+  const fs = Math.max(8, Math.min(11, sideW * 0.10));
+  const box = Math.min(sideW - 8, h * 0.40);
+  const bx = x + 4 + (sideW - box) / 2, by = y + h * 0.24;
+  ctx.save();
+  // 바탕
+  ctx.fillStyle = 'rgba(0,0,0,0.72)';
+  ctx.fillRect(bx - 4, by - fs - 6, box + 8, box + fs * 3.6 + 18);
+  ctx.strokeStyle = '#446688'; ctx.lineWidth = 1;
+  ctx.strokeRect(bx - 4 + 0.5, by - fs - 6 + 0.5, box + 7, box + fs * 3.6 + 17);
+  ctx.font = `bold ${fs}px Helvetica Neue, Arial, sans-serif`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+  ctx.fillStyle = '#8ac6ff';
+  ctx.fillText('HOCAS', bx + box / 2, by - 3);
+  // ── 사이클릭 ──
+  const c = box / 2, cx = bx + c, cy = by + c;
+  ctx.strokeStyle = '#555'; ctx.strokeRect(bx + 0.5, by + 0.5, box - 1, box - 1);
+  ctx.beginPath(); ctx.moveTo(cx, by); ctx.lineTo(cx, by + box); ctx.moveTo(bx, cy); ctx.lineTo(bx + box, cy); ctx.stroke();
+  // 가운데(중립) 칸
+  const dz = Math.max(3, HOCAS_DEAD * c);
+  ctx.strokeStyle = '#2f6f4f'; ctx.strokeRect(cx - dz, cy - dz, dz * 2, dz * 2);
+  if (ax.trim) {
+    ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.arc(cx + clamp(ax.trim.roll) * (c - 4), cy - clamp(ax.trim.pitch) * (c - 4), 4.5, 0, Math.PI * 2); ctx.stroke();
+  }
+  const dev = Math.max(Math.abs(ax.roll), Math.abs(ax.pitch));
+  ctx.fillStyle = col(dev);
+  ctx.beginPath(); ctx.arc(cx + clamp(ax.roll) * (c - 4), cy - clamp(ax.pitch) * (c - 4), 3.8, 0, Math.PI * 2); ctx.fill();
+  // 수치(% · 앞 F / 뒤 A · 좌 L / 우 R)
+  const pct = (v, p, n) => Math.abs(v) <= HOCAS_DEAD ? '0' : (v > 0 ? p : n) + Math.round(Math.abs(v) * 100);
+  ctx.font = `${fs * 0.95}px Helvetica Neue, Arial, sans-serif`;
+  ctx.fillStyle = col(dev);
+  ctx.fillText(`CYC ${pct(ax.pitch, 'F', 'A')} · ${pct(ax.roll, 'R', 'L')}`, cx, by + box + fs * 1.15);
+  // ── 페달 ──
+  const py = by + box + fs * 1.8, pw = box;
+  ctx.strokeStyle = '#555'; ctx.lineWidth = 1;
+  ctx.strokeRect(bx + 0.5, py + 0.5, pw - 1, 7);
+  ctx.beginPath(); ctx.moveTo(cx, py - 2); ctx.lineTo(cx, py + 10); ctx.stroke();
+  ctx.fillStyle = col(ax.yaw);
+  ctx.fillRect(cx + clamp(ax.yaw) * (pw / 2 - 3) - 3, py - 1, 6, 10);
+  ctx.fillText(`PED ${pct(ax.yaw, 'R', 'L')}`, cx, py + 8 + fs * 1.15);
+  ctx.restore();
 }
 
 // 같은 PFD 를 다른 캔버스에도 그린다 — 3D 화면에 겹쳐 띄우는 계기(07-sim.js pfdOverlayDraw).
