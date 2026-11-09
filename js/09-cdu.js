@@ -3508,6 +3508,7 @@ function act(name, ...args) {
     function joyAxUnbind(role) { joyAxClear(role); switchMode('JOYSTICK'); }
     function joyAxFlip(role) { joyAxInvert(role); switchMode('JOYSTICK'); }
     function joyAxAbs(role) { joyAxToggleAbs(role); switchMode('JOYSTICK'); }
+    function joyCenterNow() { joyRecenter(); switchMode('JOYSTICK'); }
     function joyResetBinds() {
       joyResetToDefault(); joyCancelCapture(); switchMode('JOYSTICK');
     }
@@ -3590,7 +3591,10 @@ function act(name, ...args) {
         `그대로 토크(0…110%)가 됩니다. 가운데로 돌아오는 축이면 끄십시오(호버 토크 기준 ±45%).<br>` +
         `<b>4방향 햇</b>을 트림 ▲▼◀▶ 에 배정해 두면 SIM 모드에서 <b>사이클릭 비퍼 트림</b>이 됩니다 — ` +
         `좌우는 롤, 전후는 피치를 조금씩 옮겨 둡니다.</div>`);
-      const foot = `<div data-act="joyResetBinds" style="text-align:right;margin:8px 0 4px;">` +
+      const foot = `<div data-act="joyCenterNow" style="text-align:right;margin:8px 0 4px;">` +
+        `<span style="display:inline-block;color:#7fffb0;font-size:9px;border:1px solid #1f5a3a;border-radius:3px;` +
+        `padding:3px 9px;cursor:pointer;" title="조종간·페달에서 손을 뗀 채 누르면 지금 자리가 가운데가 됩니다">조종간 중립 맞추기</span></div>` +
+        `<div data-act="joyResetBinds" style="text-align:right;margin:8px 0 4px;">` +
         `<span style="display:inline-block;color:#ff8877;font-size:9px;border:1px solid #5a2a2a;border-radius:3px;` +
         `padding:3px 9px;cursor:pointer;">기본 배정으로 되돌리기</span></div>`;
       // 입력 진단 — 지금 들어오는 버튼/축 값을 그대로 보여 준다.
@@ -4720,7 +4724,7 @@ switchMode('HOME');
       joyAxUnbind,
       joyAxFlip,
       joyAxAbs,
-      joyResetBinds,
+      joyResetBinds, joyCenterNow,
       addInput,
       addSelcalInput,
       addXpdrInput,
