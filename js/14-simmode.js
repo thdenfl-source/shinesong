@@ -444,6 +444,8 @@ const NR_TAU_DN     = 1.0;     // NR 이 처지는 시간(s)
 const NR_TAU_UP     = 1.5;     // NR 이 돌아오는 시간(s)
 const SIM_NR_SINK   = 40000;   // 양력이 다(100%) 모자랄 때의 강하율(fpm) — 2% 모자라면 800fpm
 let simNr = 100;               // 로터 회전(NR, %)
+let _simNrGov = 0;             // 계기 NR 가운데 거버너 지연 몫(%)
+let _simTrTqF = 0;             // 상승률 셈에 쓰는 꼬리로터 토크(엔진 토크처럼 TQ_TAU 로 따라간다)
 let simTqCmd = 0;              // 레버가 요구하는 토크(%) — MTA 를 넘어도 그대로(계기의 레버 표식)
 function simRpmLow() { return simModeOn && simNr < SIM_NR_LOW; }
 // ── 엔진(쌍발) ── 2: 두 엔진(AEO) · 1: 한 엔진 고장(OEI) · 0: 두 엔진 IDLE(동력 없는 오토로테이션 연습)
@@ -560,7 +562,7 @@ const TQ_KT_MAX = 10;
 const TQ_KT_VS0 = 500, TQ_KT_VS1 = 700;   // 오르내림이 500fpm 을 넘어야 속도차가 생기기 시작해 700fpm 에서 다 붙는다
 const DESC_TQ = 5;          // 수평 비행 토크보다 이만큼(%) 모자라야 강하 파워로 본다(고도 유지 중 미세한 차는 빼고)      // 강하 파워에서 감속이 돌려주는 상승률 몫(반)
 // 운동에너지 중 고도와 주고받는 몫 — 감속·가속에 같은 값을 써야 줄였다 늘려도 고도가 쌓이거나 빠지지 않는다
-const SIM_KE_ETA = 0.12;
+const SIM_KE_ETA = 0.10;   // 100kt 에서 기수로 10kt 바꾸면 약 350~400fpm
 const SIM_KE_EFF = SIM_KE_ETA, SIM_KE_EFF_ACC = SIM_KE_ETA;
 const SIM_KE_FPM = 0.514444 * 0.514444 / 9.80665 * 196.8504;   // kt × kt/s → fpm (≈5.31)
 // 지금의 속도·가감속이 만드는 상승률(fpm). 땅 위에서는 미끄럼이 멈춰 세울 뿐이다.
@@ -1449,7 +1451,7 @@ function simFly(dt) {
     const manual = !simAfcsPitch() && !simAfcsVert() && S.spd > 40;   // 조종사가 직접 몰 때(40kt 위)만
     // 상승 중 자세에 따른 속도 차 — 남는 토크만큼 같은 자세에서 빠르다. 오르내림이 500fpm 아래면 없다
     // (강하 쪽은 '자세가 곧 속도' 그대로 — 강하 파워에서 기수를 들면 남은 속도에 정비례해 준다)
-    const vsK = Math.max(0, Math.min(1, (Math.abs(S.vs) - TQ_KT_VS0) / (TQ_KT_VS1 - TQ_KT_VS0)));
+    const vsK = Math.max(0, Math.min(1, ((S.vs || 0) - TQ_KT_VS0) / (TQ_KT_VS1 - TQ_KT_VS0)));   // 오를 때만(가라앉는 중의 남는 토크는 속도가 되지 않는다 — RPM LOW 등)
     const tqKt = manual ? vsK * Math.max(0, Math.min(TQ_KT_MAX, TQ_KT * (S.tq - tqRequired()))) : 0;
     // 남는 출력이 낸 속도차(자세가 정한 속도보다 빠른 몫)는 엔진이 치른다 — 고도와 맞바꾸지 않는다(simKeVs)
     // 속도 기준 자세 — 트림이 잡고 있으면 블로우 백 들림은 빼고 본다(트림 자세 그대로)
@@ -1589,11 +1591,15 @@ function simFly(dt) {
   const lowLev = (U === 0 && !onGnd) ? NR_AUTO_K * Math.max(0, AUTO_LREF - demand) * wA : 0;   // 엔진이 돌아도 레버를 다 내리고 내려가면 넘친다
   const govLag = onGnd ? 0 : (tTgt > S.tq ? -NR_GOV_DROOP * (tTgt - S.tq) : NR_GOV_RISE * (S.tq - tTgt));   // 거버너 지연
   const nrTgt = Math.max(NR_FLOOR, Math.min(115, (U > 0 ? 100 + NR_AUTO_K * (wA * AUTO_LREF - U) + flareNr : 100 + lowLev + flareNr) + govLag));
+  // 거버너 지연 몫은 따로 들고 있는다 — 계기 NR 에는 보이되(잠깐 처짐·넘침), 양력 손실·로터 에너지 셈에는
+  // 넣지 않는다(레버를 올려 추력이 느는 동안 엔진이 따라붙는 것이라 그만큼 가라앉지 않는다)
+  const gov0 = _simNrGov;
+  _simNrGov += (govLag - _simNrGov) * Math.min(1, dt / (govLag < _simNrGov ? NR_TAU_DN : NR_TAU_UP));
   const nr0 = simNr;
   simNr += (nrTgt - simNr) * Math.min(1, dt / (nrTgt < simNr ? NR_TAU_DN : NR_TAU_UP));
   if (onGnd && simNr < 100 && U === 0) simNr = Math.min(100, simNr + 20 * dt);
   // 처지는 NR 의 운동에너지는 레버가 요구하는 만큼(U)까지 잠깐 양력이 된다 — 오르는 NR 은 그만큼 받아들인다
-  simNrRel = Math.max(-20, Math.min(U, NR_E_K * (nr0 - simNr) / dt));
+  simNrRel = Math.max(-20, Math.min(U, NR_E_K * ((nr0 - gov0) - (simNr - _simNrGov)) / dt));
   // 레버를 따라 천천히 붙되(TQ_TAU), 한 번에 TQ_RATE 보다 빨리 변하지는 않는다
   const dT = (tTgt - S.tq) * Math.min(1, dt / TQ_TAU);
   S.tq += Math.sign(dT) * Math.min(Math.abs(dT), TQ_RATE * dt);
@@ -1605,7 +1611,9 @@ function simFly(dt) {
   // 선회를 걸면 가라앉고(필요 토크 증가), 속도가 붙으면 저절로 떠오른다.
   // 오르는 쪽: 제자리 호버 → 100% 가 0 → 1,000fpm, Vy 에서는 100% 에 2,300fpm(simVsForTq).
   // 내리는 쪽: PERF 의 강하 토크표.
-  const dTq = S.tq - trTq + simNrRel - preq;
+  // 꼬리로터 몫도 엔진 토크와 같은 지연으로 빠진다 — 페달을 차는 순간 출력만 먼저 빠져 가라앉지 않게
+  _simTrTqF += (trTq - _simTrTqF) * Math.min(1, dt / TQ_TAU);
+  const dTq = S.tq - _simTrTqF + simNrRel - preq;
   let vRaw = simVsForTq(dTq);
   // VRS — 저속에서 출력을 건 채 빠르게 가라앉으면 자기 내리흐름에 빠진다
   {
@@ -1617,7 +1625,8 @@ function simFly(dt) {
     if (simVrs > 0.01) { if (vRaw > 0) vRaw *= 1 - 0.8 * simVrs; vRaw -= VRS_SINK * simVrs * Math.max(0.5, S.tq / Math.max(30, preq)); }
   }
   // RPM LOW — 양력이 NR² 로 줄어 오르던 힘이 빠지고 그만큼 가라앉는다
-  const nrDef = 1 - (simNr / 100) * (simNr / 100);
+  const nrL = Math.min(115, simNr - _simNrGov);   // 양력에 쓰는 NR(거버너 지연 몫은 뺀다)
+  const nrDef = 1 - (nrL / 100) * (nrL / 100);
   if (nrDef > 1e-4) vRaw = vRaw * Math.max(0, 1 - 5 * nrDef) - SIM_NR_SINK * nrDef;
   const vTgt = Math.max(-SIM_VS_DN_MAX, Math.min(SIM_VS_UP_MAX, vRaw));
   // 출력 몫은 점점 빨라지며 붙고(simVsAcc), 운동에너지 몫은 가감속과 함께 바로 붙는다.
