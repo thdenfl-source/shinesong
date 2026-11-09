@@ -1672,5 +1672,5 @@ function simFly(dt) {
   }, 200);
 })();
 // toggleFcp3d 는 04-map.js 에 있다(그 파일은 appRegister 보다 먼저 읽혀 여기서 연결한다)
-try { appRegister({ toggleSimMode, simModeBtnPress, toggleRotorChar, setRotorDir, toggleAse, toggleRcOpt, cycleSimEng, toggleFcp3d, toggleVStick, toggleGyro, gyroAlign, gaEngage, tdownSet, tdhEngage }); } catch (e) { _swallow(e); }
+try { appRegister({ toggleSimMode, simModeBtnPress, toggleRotorChar, setRotorDir, toggleAse, toggleRcOpt, cycleSimEng, toggleFcp3d, toggleVStick, toggleGyro, gyroAlign, gaEngage, tdownSet, tdhEngage, toggleHocas }); } catch (e) { _swallow(e); }
 try { updateSimModeBtn(); } catch (e) { _swallow(e); }
