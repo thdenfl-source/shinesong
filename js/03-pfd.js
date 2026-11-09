@@ -93,6 +93,14 @@ function toggleHocas() {
   if (b) b.classList.toggle('on', hocasOn);
   try { drawPFD(); } catch (e) { _swallow(e); }
 }
+// CTR — 손을 뗀 지금 자리를 조종간·페달의 가운데로(12-joystick.js joyRecenter)
+function hocasCenter() {
+  let ok = false;
+  try { ok = typeof joyRecenter === 'function' && joyRecenter(); } catch (e) { _swallow(e); }
+  const b = document.getElementById('hocas-ctr-btn');
+  if (b && ok) { b.classList.add('flash'); setTimeout(() => b.classList.remove('flash'), 600); }
+  try { drawPFD(); } catch (e) { _swallow(e); }
+}
 function hocasAxes() {
   let a = { roll: 0, pitch: 0, yaw: 0 };
   try { if (typeof simModeAxes === 'function') a = simModeAxes(); } catch (e) { _swallow(e); }
