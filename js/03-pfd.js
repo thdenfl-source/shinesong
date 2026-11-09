@@ -55,6 +55,7 @@ function drawPFD() {
   // Right column:
   //   Top half (aiH):  ALT tape + VSI (only beside ALT)
   //   Bottom half (hsiH): CRHT display takes the full right-column width (tapW + vsiW)
+  _pfdAltFs = { tick: Math.max(9, tapW * 0.16), box: Math.max(12, tapW * 0.17) };   // 승강계 숫자를 고도계와 같은 크기로
   drawAltTape(W - tapW - vsiW, 0, tapW, aiH);
   drawVSI(W - vsiW, 0, vsiW, aiH);
   drawCrhtDisplay(W - tapW - vsiW, aiH, tapW + vsiW, hsiH);
@@ -935,6 +936,7 @@ function vsiFrac(fpm) {
   const f = a <= VSI_KNEE ? 0.5 * a / VSI_KNEE : 0.5 + 0.5 * (a - VSI_KNEE) / (mx - VSI_KNEE);
   return Math.sign(fpm) * f;
 }
+let _pfdAltFs = null;   // 고도계 숫자 크기(눈금 · 값 칸) — drawPFD 가 채운다
 function drawVSI(x, y, w, h) {
   ctx.save(); ctx.beginPath(); ctx.rect(x,y,w,h); ctx.clip();
   ctx.fillStyle='#0d0d0d'; ctx.fillRect(x,y,w,h);
@@ -955,11 +957,12 @@ function drawVSI(x, y, w, h) {
     if(ty<y+2||ty>y+h-2) continue;
     const maj=Math.abs(v)>1e-6 && Math.abs(v%vsMaj)<1e-6;
     ctx.strokeStyle=maj?'#888':'#444'; ctx.lineWidth=maj?1.5:0.8;
-    const tw=maj?w*0.55:w*0.32;
+    const tfs = _pfdAltFs ? _pfdAltFs.tick : Math.max(7, w * 0.17);   // 고도계 눈금 숫자와 같은 크기
+    const tw=maj?Math.min(w*0.55, w - tfs * 0.75 - 3):w*0.32;
     ctx.beginPath(); ctx.moveTo(x,ty); ctx.lineTo(x+tw,ty); ctx.stroke();
     if(maj){
-      ctx.fillStyle='#ccc'; ctx.font=`${Math.max(7,w*0.17)}px Helvetica Neue, Arial, sans-serif`;
-      ctx.textAlign='left'; ctx.fillText(met?Math.abs(v):Math.abs(v/1000),x+tw+1,ty+3);
+      ctx.fillStyle='#ccc'; ctx.font=`${tfs}px Helvetica Neue, Arial, sans-serif`;
+      ctx.textAlign='left'; ctx.fillText(met?Math.abs(v):Math.abs(v/1000),x+tw+1,ty+tfs*0.36);
     }
   }
 
@@ -976,11 +979,17 @@ function drawVSI(x, y, w, h) {
   ctx.beginPath(); ctx.moveTo(x+w,py); ctx.lineTo(x+w-9,py-5); ctx.lineTo(x+w-9,py+5); ctx.closePath(); ctx.fill();
 
   // value box at bottom
-  const bh=18;
+  // 값 칸 — 고도계 값과 같은 크기로(칸이 좁아 넘치면 그만큼만 줄인다)
+  const vtxt = String(met ? vs.toFixed(1) : Math.round(vs));
+  let vfs = _pfdAltFs ? _pfdAltFs.box : Math.max(9, w * 0.2);
+  ctx.font = `bold ${vfs}px Helvetica Neue, Arial, sans-serif`;
+  const tw0 = ctx.measureText(vtxt).width;
+  if (tw0 > w - 2) { vfs = Math.max(8, vfs * (w - 2) / tw0); ctx.font = `bold ${vfs}px Helvetica Neue, Arial, sans-serif`; }
+  const bh = Math.max(18, vfs + 6);
   ctx.fillStyle='#000'; ctx.fillRect(x,y+h-bh,w,bh);
   ctx.strokeStyle='#333'; ctx.lineWidth=1; ctx.strokeRect(x,y+h-bh,w,bh);
-  ctx.fillStyle=pc; ctx.font=`bold ${Math.max(9,w*0.2)}px Helvetica Neue, Arial, sans-serif`;
-  ctx.textAlign='center'; ctx.fillText(met?vs.toFixed(1):Math.round(vs),x+w/2,y+h-4);
+  ctx.fillStyle=pc;
+  ctx.textAlign='center'; ctx.fillText(vtxt,x+w/2,y+h-(bh-vfs*0.72)/2);
 
   // label at top
   ctx.fillStyle='#aaa'; ctx.font='bold 7px Helvetica Neue, Arial, sans-serif';

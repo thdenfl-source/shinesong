@@ -54,10 +54,32 @@ export async function run(page, t) {
     rotorDir = 'CCW'; o.tfCcw = tf(15, false); rotorDir = 'CW';
     rcOpt.blowback = true; rotorChar = false; aseOn = false;
     o.turnSl = turn(0); o.turnHi = turn(10000);
+    // ── 오토로테이션(두 엔진 IDLE · 80kt) — 레버는 NR 을 다루고(강하율은 크게 안 바뀜), 플레어는 강하를 줄이고, 쿠션은 NR 을 강하와 맞바꾼다
+    { joyAxes = { coll: { i: 3, inv: false, abs: true } };
+      const lev = tq => _ax(3, Math.max(-1, Math.min(1, tq / SIM_LEVER_TOP * 2 - 1)));
+      S.alt = 8000; S.spd = 80; S.bnk = 0; S.pit = pitchFromSpd(80); simTrimReset(); simTrim.pitch = -pitchFromSpd(80); simTrimAct.pitch = simTrim.pitch;
+      simAcc = 0; S.vs = 0; simVsAcc = 0; simNr = 100; lev(tqRequired()); fly(3);
+      simEng = 0; const A = {};
+      lev(12); fly(14); A.l12 = { vs: S.vs, nr: simNr };
+      lev(0); fly(10); A.l0 = { vs: S.vs, nr: simNr };
+      lev(25); fly(10); A.l25 = { vs: S.vs, nr: simNr };
+      lev(12); fly(10);
+      // 플레어 20° — 강하율이 얼마나 줄어드나
+      const v0 = S.vs; let best = v0; simTrim.pitch = -20; simTrimAct.pitch = -20;
+      S.running = true; let ts = 1000; S.lastT = ts;
+      for (let i = 0; i < 8 * 20 && S.spd > 20; i++) { ts += 50; joyPoll(ts); simStep(ts); best = Math.max(best, S.vs); }
+      S.running = false; A.flare = { v0, best };
+      // 쿠션 — 낮은 속도로 가라앉는 중에 레버를 크게 당기면 1초 안에 강하가 크게 준다(그러나 떠오르지는 않는다)
+      simTrim.pitch = -pitchFromSpd(10); simTrimAct.pitch = simTrim.pitch; lev(12); fly(2.5);
+      const c0 = S.vs, nr0 = simNr; lev(80); let cMax = c0; fly(0.5); cMax = Math.max(cMax, S.vs); fly(0.5); cMax = Math.max(cMax, S.vs);
+      A.cush = { c0, cMax, nr0, nr1: simNr };
+      simEng = 2; lev(tqRequired()); fly(2);
+      o.auto = A; joyAxes = { roll: { i: 0, inv: false }, pitch: { i: 1, inv: false }, yaw: { i: 2, inv: false }, coll: { i: 3, inv: false } }; _ax(3, 0); simTrimReset(); }
     // Vy 플레어 — Vy 에서 −500fpm 으로 내려가다 기수를 20° 들면(레버 그대로) 20kt 까지 줄며 강하율이 1,700fpm 남짓 준다
     { joyAxes = { coll: { i: 3, inv: false, abs: true } };
       const vy = simVyKt();
       S.alt = 3000; S.spd = vy; S.bnk = 0; S.pit = pitchFromSpd(vy); simTrimReset(); simTrim.pitch = -pitchFromSpd(vy); simTrimAct.pitch = simTrim.pitch; simAcc = 0;
+      simEng = 2; S.vs = -500; simVsAcc = 0; simNr = 100; simFlareVs = 0; simFlareVyVs = 0; _flareV0 = null;
       const tq = tqRequired() + simTqForVs(-500); S.tq = tq; _ax(3, tq / SIM_LEVER_TOP * 2 - 1); fly(10);
       const vs0 = S.vs, pts = []; simTrim.pitch = -20; simTrimAct.pitch = -20;
       let t20 = null; S.running = true; let ts = 1000; S.lastT = ts;
@@ -93,5 +115,12 @@ export async function run(page, t) {
     t.ok(p55.dvs > 150 && p45.dvs > p55.dvs && p25.dvs > p45.dvs, `기수 20° — 속도가 줄수록 강하율이 점점 준다 (55kt +${p55.dvs.toFixed(0)} · 45kt +${p45.dvs.toFixed(0)} · 25kt +${p25.dvs.toFixed(0)}fpm)`);
     t.ok(p25.dvs > 1200 && p25.dvs < 2100, `20kt 언저리면 약 1,700fpm 줄어 강하가 멎고 오른다 (+${p25.dvs.toFixed(0)}fpm)`);
     t.ok(f.dec === 2.4 && f.t20 > 5.5, `감속 시간은 종전의 120% (Vy → 20kt ${f.t20}초)`); }
+  { const A = r.auto;
+    t.ok(A.l12.vs < -1600 && A.l12.vs > -2200 && Math.abs(A.l12.nr - 100) < 1.5, `오토로테이션 80kt — 약 1,900fpm · NR 100% (${A.l12.vs.toFixed(0)}fpm · ${A.l12.nr.toFixed(1)}%)`);
+    t.ok(A.l0.nr > 104 && A.l25.nr < 95, `레버로 NR 을 다룬다 — 내리면 과속(${A.l0.nr.toFixed(1)}%) · 조금 올리면 견제(${A.l25.nr.toFixed(1)}%)`);
+    t.ok(Math.abs(A.l25.vs - A.l12.vs) < 250 && A.l0.vs > -2300, `NR 이 90% 위면 레버를 조금 써도 강하율이 크게 늘지 않는다 (12% ${A.l12.vs.toFixed(0)} · 0% ${A.l0.vs.toFixed(0)} · 25% ${A.l25.vs.toFixed(0)}fpm — 종전 −4,000)`);
+    t.ok(A.flare.best - A.flare.v0 > 1500, `플레어 20° — 강하율을 1,500fpm 넘게 줄인다 (${A.flare.v0.toFixed(0)} → ${A.flare.best.toFixed(0)}fpm)`);
+    t.ok(A.cush.cMax - A.cush.c0 > 800 && A.cush.cMax < 600 && A.cush.nr1 < A.cush.nr0 - 5,
+      `쿠션 — 레버를 당기면 NR 을 강하와 맞바꿔 1초 안에 크게 준다(떠오르지는 않는다) (${A.cush.c0.toFixed(0)} → ${A.cush.cMax.toFixed(0)}fpm · NR ${A.cush.nr0.toFixed(0)} → ${A.cush.nr1.toFixed(0)}%)`); }
   t.ok(r.tf40.tf === 0 && r.tf5.tf === 0, `전이양력 지대 밖(5kt · 40kt)에서는 없다 (${r.tf5.tf.toFixed(2)}@${r.tf5.spd.toFixed(0)}kt · ${r.tf40.tf.toFixed(2)}@${r.tf40.spd.toFixed(0)}kt)`);
 }

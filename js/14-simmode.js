@@ -476,6 +476,7 @@ function updateEngBtn() {
 // (wA) 흘러드는 바람이 로터를 돌린다. 레버를 AUTO_LREF(12%) 에 두면 100%, 다 내리면 넘친다(ROTOR HIGH),
 // 올리면 처진다. 플레어(감속)는 NR 을 올리고, 처지는 NR 의 운동에너지는 잠깐 양력으로 쓰인다(쿠션).
 const NR_AUTO_K = 0.6, AUTO_LREF = 12, NR_FLARE_K = 1.0, NR_FLOOR = 60, NR_HIGH = 106;
+const AUTO_ENG_TQ = 15, AUTO_NR_OK = 90, AUTO_NR_SINK = 8000, AUTO_NR_E = 1, AUTO_NR_TAU_DN = 2.5, AUTO_CUSH_TAU = 0.4;   // 오토로테이션에서 레버를 당기면 NR 이 처지는 시간(로터 관성)   // 오토로테이션: 엔진 가용 15% 미만 · NR 90% 부터 · 양력 손실 세기
 const NR_E_K = 5;              // NR 이 1%/s 처질 때 내주는 동력(토크 %)
 let simNrRel = 0;              // 지금 NR 이 내주는(+)·받아들이는(−) 동력(토크 %)
 function simRotorHigh() { return simModeOn && simNr > NR_HIGH; }
@@ -615,6 +616,7 @@ let simFlareVs = 0;       // 지금 플레어가 만든 상승률 몫(fpm)
 const FLARE_VY_GAIN = 1700, FLARE_V_END = 20, FLARE_EX_ON = 2, FLARE_EX_OFF = 0.5;
 let _flareV0 = null, _flarePreq0 = 0, _flareVyTgt = 0, simFlareVyVs = 0;
 const FLARE_VY_TAU = 0.6;   // 속도를 따라 곧 붙는다(줄어든 속도에 비례)
+const FLARE_VY_TAU_OFF = 1.5;   // 기수를 고르면 유입류가 바뀌는 동안(1~2초) 서서히 사라진다
 function simFlareVy(onGnd, ex) {
   if (onGnd || simAfcsVert() || !(S.spd > -5)) { _flareV0 = null; return 0; }
   const vy = simVyKt();
@@ -1620,10 +1622,12 @@ function simFly(dt) {
   const gov0 = _simNrGov;
   _simNrGov += (govLag - _simNrGov) * Math.min(1, dt / (govLag < _simNrGov ? NR_TAU_DN : NR_TAU_UP));
   const nr0 = simNr;
-  simNr += (nrTgt - simNr) * Math.min(1, dt / (nrTgt < simNr ? NR_TAU_DN : NR_TAU_UP));
+  simNr += (nrTgt - simNr) * Math.min(1, dt / (nrTgt < simNr ? (avail < AUTO_ENG_TQ && U > AUTO_LREF ? AUTO_NR_TAU_DN : NR_TAU_DN) : NR_TAU_UP));
   if (onGnd && simNr < 100 && U === 0) simNr = Math.min(100, simNr + 20 * dt);
   // 처지는 NR 의 운동에너지는 레버가 요구하는 만큼(U)까지 잠깐 양력이 된다 — 오르는 NR 은 그만큼 받아들인다
-  simNrRel = Math.max(-20, Math.min(U, NR_E_K * ((nr0 - gov0) - (simNr - _simNrGov)) / dt));
+  // 오토로테이션(엔진 가용 AUTO_ENG_TQ 미만)에서 로터에 담긴 에너지는 호버 동력 1초 남짓이다 — 레버를 당겨 쓰는 쿠션은
+  // 강하를 멈출 만큼이지 떠오를 만큼은 아니다(AUTO_NR_E 배)
+  simNrRel = Math.max(-20, Math.min(U, NR_E_K * (avail < AUTO_ENG_TQ ? AUTO_NR_E : 1) * ((nr0 - gov0) - (simNr - _simNrGov)) / dt));
   // 레버를 따라 천천히 붙되(TQ_TAU), 한 번에 TQ_RATE 보다 빨리 변하지는 않는다
   const dT = (tTgt - S.tq) * Math.min(1, dt / TQ_TAU);
   S.tq += Math.sign(dT) * Math.min(Math.abs(dT), TQ_RATE * dt);
@@ -1650,8 +1654,13 @@ function simFly(dt) {
   }
   // RPM LOW — 양력이 NR² 로 줄어 오르던 힘이 빠지고 그만큼 가라앉는다
   const nrL = Math.min(115, simNr - _simNrGov);   // 양력에 쓰는 NR(거버너 지연 몫은 뺀다)
-  const nrDef = 1 - (nrL / 100) * (nrL / 100);
-  if (nrDef > 1e-4) vRaw = vRaw * Math.max(0, 1 - 5 * nrDef) - SIM_NR_SINK * nrDef;
+  // 엔진이 출력을 거의 못 낼 때(두 엔진 IDLE·고장 — 오토로테이션)는 NR 이 내려가도 로터가 내주는 에너지(simNrRel)
+  // 로 받치는 것이 중심이다 — 레버를 조금 올려 NR 과속을 견제하거나, 마지막에 레버를 당겨(쿠션) NR 을 강하율과
+  // 맞바꾸는 조작이 먹혀야 한다. 양력 손실은 NR 이 AUTO_NR_OK(90%) 아래로 처질 때부터, 출력 비행의 RPM LOW 보다
+  // 훨씬 부드럽게 붙는다. (출력 비행에서 MTA 를 넘겨 당긴 RPM LOW 는 종전대로)
+  const autoRot = avail < AUTO_ENG_TQ;
+  const nrDef = autoRot ? 1 - Math.pow(Math.min(100, nrL + (100 - AUTO_NR_OK)) / 100, 2) : 1 - (nrL / 100) * (nrL / 100);
+  if (nrDef > 1e-4) vRaw = autoRot ? vRaw - AUTO_NR_SINK * nrDef : vRaw * Math.max(0, 1 - 5 * nrDef) - SIM_NR_SINK * nrDef;
   const vTgt = Math.max(-SIM_VS_DN_MAX, Math.min(SIM_VS_UP_MAX, vRaw));
   // 출력 몫은 점점 빨라지며 붙고(simVsAcc), 운동에너지 몫은 가감속과 함께 바로 붙는다.
   // 땅 가까이(지면효과 안)에서는 곧(0.3초) 따라간다 — 높이마다 드는 토크가 가파르게
@@ -1660,17 +1669,20 @@ function simFly(dt) {
   const aglG = S.alt - gnd;
   const wG = Math.max(0, Math.min(1, (aglG - 12) / 8));
   // 내려가던 중 강하율이 줄어드는 쪽(레버를 올려 강하를 멈출 때)은 두 배 느리게 붙는다
-  const vsSlow = vsPow < 0 && vTgt > vsPow ? SIM_DEC_TIME : 1;
+  // (오토로테이션에서 레버를 당기는 쿠션은 로터 에너지가 곧바로 추력이 되므로 늦추지 않는다)
+  const vsSlow = vsPow < 0 && vTgt > vsPow && !(simEngAvail() < AUTO_ENG_TQ) ? SIM_DEC_TIME : 1;
   const accSlow = simJerkStep(vTgt - vsPow, simVsAcc, dt, VS_ACC_MAX * SIM_RATE_K / vsSlow, VS_JERK * SIM_RATE_K / (vsSlow * vsSlow), 50);
-  const vsFast = vsPow + (vTgt - vsPow) * Math.min(1, dt / VS_IGE_TAU);
-  const vsP = vsFast + (vsPow + accSlow * dt - vsFast) * wG;
+  // 오토로테이션 쿠션 — 레버를 당겨 로터 에너지(simNrRel)를 쓰는 동안은 추력이 곧바로 붙는다(엔진 출력처럼 점점 붙지 않는다)
+  const cushion = simEngAvail() < AUTO_ENG_TQ && simNrRel > 2;
+  const vsFast = vsPow + (vTgt - vsPow) * Math.min(1, dt / (cushion ? AUTO_CUSH_TAU : VS_IGE_TAU));
+  const vsP = vsFast + (vsPow + accSlow * dt - vsFast) * (cushion ? 0 : wG);
   // 이어 받는 '변화 빠르기' 는 평소 한계(VS_ACC_MAX) 안에 둔다 — 땅 가까이의 빠른 몫까지
   // 그대로 넘기면, 20ft 위로 올라선 뒤 평소 셈이 그 큰 값을 몇십 초 동안 풀지 못해
   // 상승률이 수천 fpm 으로 치솟는다(플레어 뒤 레버를 올려 받칠 때 드러났다)
   simVsAcc = Math.max(-VS_ACC_MAX * SIM_RATE_K, Math.min(VS_ACC_MAX * SIM_RATE_K, (vsP - vsPow) / dt));
   // 오토로테이션 플레어 — 로터 추력이 곧(FLARE_TAU) 따라온다
   simFlareVs = onGnd ? 0 : simFlareVs + (simFlareTgt(onGnd) - simFlareVs) * Math.min(1, dt / FLARE_TAU);
-  simFlareVyVs = onGnd ? 0 : simFlareVyVs + (_flareVyTgt - simFlareVyVs) * Math.min(1, dt / FLARE_VY_TAU);
+  simFlareVyVs = onGnd ? 0 : simFlareVyVs + (_flareVyTgt - simFlareVyVs) * Math.min(1, dt / (_flareVyTgt < simFlareVyVs ? FLARE_VY_TAU_OFF : FLARE_VY_TAU));
   // 기수를 숙여 가속하며 레버를 내려도 강하는 4,000fpm 에서 멎는다(운동에너지 몫 포함)
   S.vs = Math.max(-SIM_VS_DN_MAX, vsP + simKeVs(onGnd) + Math.max(simFlareVs, simFlareVyVs));
   if (S.vs <= -SIM_VS_DN_MAX && simVsAcc < 0) simVsAcc = 0;   // 한계에 눌린 채 쌓이지 않게
