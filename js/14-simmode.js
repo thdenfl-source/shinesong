@@ -406,7 +406,7 @@ const SPD_DEC_JERK = 18.0;   // 자세에 따른 증감속 — 종전보다 50% 
 const SPD_DEC_MAX = 11.25;   // 자세에 따른 증감속 — 종전보다 50% 빠르게
 // 감속·강하율 감소에 걸리는 시간 배율 — 2 면 같은 변화에 두 배 걸린다(오토로테이션·접근 감속이 너무 빨랐다).
 // 시간을 T 배로 늘리려면 최대 감속은 1/T, 그것이 붙는 빠르기(저크)는 1/T² 로 줄인다.
-const SIM_DEC_TIME = 2;
+const SIM_DEC_TIME = 2.4;   // 2 → 2.4(그 120%)
 // 상승·강하율이 바뀌는 빠르기 — 변화의 빠르기가 일정하게 커져(저크) 바뀐 양이 시간의 제곱으로 는다.
 // 종전보다 저크 4배 · 한계 5배(레버에 상승률이 훨씬 빨리 붙는다). 차차 맞춰 간다
 // 피치로 바뀌는 상승·강하(감속·가속이 돌려주는 운동에너지 몫)는 가감속 저크를 4배(가속 8 · 감속 24kt/s²)로 해 4배 빨리 붙는다
@@ -606,9 +606,31 @@ const FLARE_DEF0 = 25;    // 출력이 이만큼(%) 넘게 모자라면 플레�
 const FLARE_DEF1 = 50;    // 이만큼(%) 모자라면 오토로테이션으로 보고 다 붙는다
 const FLARE_TAU  = 1.5 * SIM_DEC_TIME;   // 로터 추력이 따라오는 시간(s) — 강하율이 줄어드는 시간 두 배
 let simFlareVs = 0;       // 지금 플레어가 만든 상승률 몫(fpm)
+// ── Vy 플레어 ── 기수를 그 속도의 자세보다 FLARE_EX_ON 넘게 들어 감속하면, Vy 에서 20kt 로 줄어드는
+// 만큼에 비례해 강하율이 점점 줄어 20kt 에서 FLARE_VY_GAIN(1,700fpm) 줄어든다(레버는 그대로).
+// 원판이 뒤로 젖혀져 아래에서 위로 흘러드는 바람이 로터를 받쳐 주는 동안이라, 속도가 줄며 늘어나는
+// 필요 동력(U 자 곡선 — Vy 아래로 갈수록 많이 든다)은 플레어 중에는 치르지 않는다(그 몫을 메운다).
+// 기수를 고르면(그 속도 자세 가까이) 사라지고, 출력이 정한 오르내림으로 돌아간다. AFCS 가 컬렉티브를
+// 몰 때(ALT·CRHT·G/A·T/D)는 AFCS 가 고도를 잡으므로 붙지 않는다.
+const FLARE_VY_GAIN = 1700, FLARE_V_END = 20, FLARE_EX_ON = 2, FLARE_EX_OFF = 0.5;
+let _flareV0 = null, _flarePreq0 = 0, _flareVyTgt = 0, simFlareVyVs = 0;
+const FLARE_VY_TAU = 0.6;   // 속도를 따라 곧 붙는다(줄어든 속도에 비례)
+function simFlareVy(onGnd, ex) {
+  if (onGnd || simAfcsVert() || !(S.spd > -5)) { _flareV0 = null; return 0; }
+  const vy = simVyKt();
+  if (_flareV0 === null) {
+    if (!(ex > FLARE_EX_ON) || S.spd > vy + 40) return 0;
+    _flareV0 = Math.min(vy, S.spd); _flarePreq0 = tqRequired();
+  } else if (!(ex > FLARE_EX_OFF)) { _flareV0 = null; return 0; }
+  const L = Math.max(0, Math.min(1, (Math.min(vy, _flareV0) - S.spd) / Math.max(10, vy - FLARE_V_END)));
+  if (S.spd > vy) _flarePreq0 = tqRequired();                    // Vy 위에서는 아직 시작하지 않았다
+  const comp = Math.max(0, tqRequired() - _flarePreq0) * CLIMB_FPM_DN * simWtK();   // 늘어난 필요 동력 몫을 메운다
+  return FLARE_VY_GAIN * L + comp;
+}
 function simFlareTgt(onGnd) {
+  const ex = S.pit - pitchFromSpd(Math.max(0, S.spd));   // 그 속도의 자세보다 더 든 각(°)
+  _flareVyTgt = simFlareVy(onGnd, ex);
   if (onGnd || !(S.spd > 0)) return 0;
-  const ex = S.pit - pitchFromSpd(S.spd);          // 그 속도의 자세보다 더 든 각(°)
   if (!(ex > 0)) return 0;
   const auto = Math.max(0, Math.min(1, (tqRequired() - S.tq - FLARE_DEF0) / (FLARE_DEF1 - FLARE_DEF0)));
   return FLARE_K * (S.spd / FLARE_VREF) ** 2 * ex * auto;
@@ -1170,7 +1192,7 @@ function simDeckHandoff(toDeck) {
 
 function simStartGround() {
   _simOnGnd = true;              // 바퀴가 붙은 채 시작한다 — 바람에 밀리지 않는다
-  S.vs = 0; S.spd = 0; simLat = 0; simAcc = 0; simVsAcc = 0; simFlareVs = 0; simNr = 100; simVrs = 0; simNrRel = 0;
+  S.vs = 0; S.spd = 0; simLat = 0; simAcc = 0; simVsAcc = 0; simFlareVs = 0; simFlareVyVs = 0; _flareV0 = null; simNr = 100; simVrs = 0; simNrRel = 0;
   S.pit = 0; S.bnk = 0; bankTarget = 0;
   S.tq = 0;                      // 레버를 내려 둔 상태에서 올리며 뜬다
   simSetOnGround();              // 지면 높이 = AGL 0
@@ -1231,7 +1253,7 @@ function toggleSimMode(on, opt) {
     // 손을 떼면 그 자리에서 날던 대로 — 지금 자세를 그대로 이어받는다
     bankTarget = S.bnk;
     simTrimReset();
-    simAcc = 0; simVsAcc = 0; simFlareVs = 0; simNr = 100; // 지금 날던 대로 이어 간다
+    simAcc = 0; simVsAcc = 0; simFlareVs = 0; simFlareVyVs = 0; _flareV0 = null; simNr = 100; // 지금 날던 대로 이어 간다
     simLookReset();
     // 지금 날고 있는 상태를 유지할 만큼의 토크로 레버를 맞춰 둔다(진입 충격 방지)
     const add = simTqForVs(S.vs || 0);
@@ -1245,7 +1267,7 @@ function toggleSimMode(on, opt) {
     simExitView();
     simIasOn = false;                    // 평소에는 속도가 늘 IAS 로 난다
     // 손을 뗀 자리에서 수평으로 돌려 놓는다(기울어진 채 남지 않게)
-    bankTarget = 0; S.vs = 0; simLat = 0; simAcc = 0; simVsAcc = 0; simFlareVs = 0; simNr = 100;
+    bankTarget = 0; S.vs = 0; simLat = 0; simAcc = 0; simVsAcc = 0; simFlareVs = 0; simFlareVyVs = 0; _flareV0 = null; simNr = 100;
     simLookReset();
     selHdg = ((Math.round(hdgInd()) + 359) % 360) + 1;
   }
@@ -1382,7 +1404,7 @@ function simFly(dt) {
   // 상승률 가운데 감속이 돌려준 몫(운동에너지)은 빼고 본다 — 이미 속도로 치른
   // 것을 또 치르면 감속 → 상승 → 감속 이 되먹임으로 번진다.
   const vsKe0 = simKeVs(onGnd);
-  const vsPow = S.vs - vsKe0 - simFlareVs;   // 출력(토크)이 만든 상승률(플레어 몫도 뺀다)
+  const vsPow = S.vs - vsKe0 - Math.max(simFlareVs, simFlareVyVs);   // 출력(토크)이 만든 상승률(플레어 몫도 뺀다)
 
   // GSPD 가 걸려 있으면 자세·속도는 GSPD 가 맡는다 — 조종간 좌우·전후는
   // 07-sim.js 의 GSPD 수렴에서 fly-through 로 쓰인다(simGspdStick).
@@ -1648,8 +1670,9 @@ function simFly(dt) {
   simVsAcc = Math.max(-VS_ACC_MAX * SIM_RATE_K, Math.min(VS_ACC_MAX * SIM_RATE_K, (vsP - vsPow) / dt));
   // 오토로테이션 플레어 — 로터 추력이 곧(FLARE_TAU) 따라온다
   simFlareVs = onGnd ? 0 : simFlareVs + (simFlareTgt(onGnd) - simFlareVs) * Math.min(1, dt / FLARE_TAU);
+  simFlareVyVs = onGnd ? 0 : simFlareVyVs + (_flareVyTgt - simFlareVyVs) * Math.min(1, dt / FLARE_VY_TAU);
   // 기수를 숙여 가속하며 레버를 내려도 강하는 4,000fpm 에서 멎는다(운동에너지 몫 포함)
-  S.vs = Math.max(-SIM_VS_DN_MAX, vsP + simKeVs(onGnd) + simFlareVs);
+  S.vs = Math.max(-SIM_VS_DN_MAX, vsP + simKeVs(onGnd) + Math.max(simFlareVs, simFlareVyVs));
   if (S.vs <= -SIM_VS_DN_MAX && simVsAcc < 0) simVsAcc = 0;   // 한계에 눌린 채 쌓이지 않게
   // 땅 아래로는 내려가지 않는다 — 바닥은 해수면이 아니라 '발밑의 지면' 이다
   if (S.alt <= gnd + 0.5 && S.vs < 0) { S.vs = 0; S.alt = gnd; if (simVsAcc < 0) simVsAcc = 0; }
