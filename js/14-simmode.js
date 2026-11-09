@@ -624,6 +624,8 @@ function simFlareVy(onGnd, ex) {
     if (!(ex > FLARE_EX_ON) || S.spd > vy + 40) return 0;
     _flareV0 = Math.min(vy, S.spd); _flarePreq0 = tqRequired();
   } else if (!(ex > FLARE_EX_OFF)) { _flareV0 = null; return 0; }
+  // 기준보다 빨라졌으면(새로 감속을 시작했다) 그 속도를 새 기준으로 — 지난 플레어의 낮은 기준을 이어 쓰지 않게
+  if (S.spd > _flareV0 + 2) { _flareV0 = Math.min(vy, S.spd); _flarePreq0 = tqRequired(); }
   const L = Math.max(0, Math.min(1, (Math.min(vy, _flareV0) - S.spd) / Math.max(10, vy - FLARE_V_END)));
   if (S.spd > vy) _flarePreq0 = tqRequired();                    // Vy 위에서는 아직 시작하지 않았다
   const comp = Math.max(0, tqRequired() - _flarePreq0) * CLIMB_FPM_DN * simWtK();   // 늘어난 필요 동력 몫을 메운다
