@@ -67,6 +67,7 @@ const JOY_ACTIONS = [
 
   // 상위모드(NAV·HDG·ALT·CRHT·G/S 강하선·IAS·GSPD)를 한꺼번에 푼다 — B1 이 기본이다
   { id: 'apOff',   grp: 'AFCS',  label: '상위모드 모두 해제', kind: 'press', run: () => afcsReleaseAll() },
+  { id: 'center',  grp: '운항',  label: '조종간 중립 맞추기 (손을 뗀 자리를 가운데로)', kind: 'press', run: () => joyRecenter() },
   { id: 'altHold', grp: 'AFCS',  label: 'ALT 유지',  kind: 'press', run: () => toggleAltHold() },
   { id: 'crht',    grp: 'AFCS',  label: 'CRHT 유지', kind: 'press', run: () => toggleCrht() },
   { id: 'navap',   grp: 'AFCS',  label: 'NAV (AP)',  kind: 'press', run: () => toggleNavAp() },
@@ -439,6 +440,51 @@ function joyAxVal(role) {
   const k = (Math.abs(d) - JOY_AX_DEAD) / (1 - JOY_AX_DEAD);
   return Math.max(-1, Math.min(1, Math.sign(d) * k));
 }
+// ── 조종간 중립 다시 잡기 ──
+// 손을 뗀 지금 자리를 가운데로 삼는다(설정 화면 버튼 · 배정할 수 있는 동작 '조종간 중립 맞추기').
+function joyRecenter() {
+  const pads = joyPads();
+  const p = pads.find(q => q.index === joyActiveIdx) || pads[0];
+  if (!p) { try { uiToast('조종 장치가 없습니다', 'err', 2000); } catch (e) { _swallow(e); } return false; }
+  _joyNeutral[p.index] = Array.prototype.slice.call(p.axes || []);
+  for (const k in _joyRest) delete _joyRest[k];
+  try { uiToast('조종간 중립을 지금 자리로 맞췄습니다', '', 2000); } catch (e) { _swallow(e); }
+  return true;
+}
+// SIM 을 켤 때 — 사이클릭·페달(가운데로 돌아오는 축)의 가운데를 지금 자리로 다시 잡는다.
+// 크롬은 조종 장치를 한 번 움직여야 보여 주므로, 처음 잡은 가운데가 그때 밀려 있던 자리일 수 있다
+// (손을 떼도 조종간이 한쪽으로 밀린 것으로 읽힌다). SIM 버튼을 누르는 순간에는 대개 손이 떨어져 있다.
+function joyRecenterCyclic() {
+  const pads = joyPads();
+  const p = pads.find(q => q.index === joyActiveIdx) || pads[0];
+  if (!p) return;
+  const neu = _joyNeutral[p.index] || (_joyNeutral[p.index] = Array.prototype.slice.call(p.axes || []));
+  for (const role of ['roll', 'pitch', 'yaw']) {
+    const a = joyAxes[role];
+    if (!a || a.abs) continue;
+    const v = (p.axes || [])[a.i];
+    if (Number.isFinite(v)) neu[a.i] = v;
+  }
+}
+// ── 가운데 저절로 맞추기 ── 가운데로 돌아오는 축(사이클릭 전후·좌우 · 페달)이 JOY_REST_SEC 동안
+// 거의 움직이지 않고(JOY_REST_BAND 안) 가운데에서 조금(JOY_REST_MAX 안) 비켜 서 있으면, 그 자리가
+// 장치의 실제 가운데다(스프링이 돌려놓은 자리 — 손으로 쥔 조종간은 이만큼 가만있지 않는다).
+const JOY_REST_SEC = 4, JOY_REST_BAND = 0.0025, JOY_REST_MAX = 0.12;
+const _joyRest = {};          // 축번호 → { v, since }
+function _joyRestTrack(p, now) {
+  const neu = _joyNeutral[p.index];
+  if (!neu || !(now > 0)) return;
+  for (const role of ['roll', 'pitch', 'yaw']) {
+    const a = joyAxes[role];
+    if (!a || a.abs) continue;
+    const v = (p.axes || [])[a.i];
+    if (!Number.isFinite(v)) continue;
+    const r = _joyRest[a.i];
+    if (!r || Math.abs(v - r.v) > JOY_REST_BAND) { _joyRest[a.i] = { v, since: now }; continue; }
+    const off = Math.abs(v - (Number.isFinite(neu[a.i]) ? neu[a.i] : 0));
+    if (off > 1e-4 && off < JOY_REST_MAX && now - r.since >= JOY_REST_SEC * 1000) { neu[a.i] = v; r.since = now; }
+  }
+}
 // 레버식(절대값) 축 — 중립을 빼지 않고 자리 그대로 -1…1 로 읽는다.
 // 스로틀·컬렉티브처럼 민 자리에 서 있는 레버에 쓴다.
 function joyAxRaw(role) {
@@ -513,6 +559,7 @@ function joyPoll(now) {
     _joyEdge(code, on, now);
   });
   joyAxApplyDefault(p, neu);
+  _joyRestTrack(p, now);
   if (!joyLookDefaultDone) joyLookDefault(_joyHadSaved);
   if (!joyApOffDone) joyApOffDefault();
   const hat = _joyHat[p.index] || (_joyHat[p.index] = {});

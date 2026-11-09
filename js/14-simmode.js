@@ -1214,6 +1214,8 @@ function toggleSimMode(on, opt) {
   try { if (typeof simCamTx !== 'undefined') simCamTx = null; } catch (e) { _swallow(e); }   // 시점 전환 효과는 SIM 을 켜고 끌 때 거둔다
   gaOn = false; vsModeOn = false; tdOn = false; try { updateGaBtn(); } catch (e) { _swallow(e); }
   if (simModeOn) {
+    // 사이클릭·페달의 가운데를 지금 자리로(처음 잡은 가운데가 밀린 자리였을 수 있다 — 12-joystick.js)
+    try { if (typeof joyRecenterCyclic === 'function') joyRecenterCyclic(); } catch (e) { _swallow(e); }
     // 들어올 때는 AFCS 를 놓는다 — 상위모드는 들어온 뒤 조종사가 다시 건다
     // (걸면 그 축은 AFCS 가 몰고 조종간 값은 무시한다 — simAfcsLat·simAfcsVert)
     try { if (navApOn) toggleNavAp(); } catch (e) { _swallow(e); }
