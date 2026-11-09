@@ -22,6 +22,11 @@ export async function run(page, t) {
     _ax(1, 0.5); _ax(0, -0.3); _ax(2, 0.6); joyPoll(2100);
     const d = shot(); o.cyc1 = d.find(x => x[0].startsWith('CYC')); o.ped1 = d.find(x => x[0].startsWith('PED'));
     _ax(0, 0); _ax(1, 0); _ax(2, 0); joyPoll(2200);
+    // CTR — 가운데가 밀린 자리로 잡혀(손을 떼도 A49) 있을 때 누르면 0 으로
+    const pi = joyAxes.pitch.i; _joyNeutral[_pad.index][pi] = 0.55; _ax(1, 0); joyPoll(2300);
+    o.skew = shot().find(x => x[0].startsWith('CYC'));
+    document.getElementById('hocas-ctr-btn').click(); joyPoll(2350);
+    o.ctr = shot().find(x => x[0].startsWith('CYC'));
     b.click(); o.after = hocasOn; o.offAgain = shot().some(x => x[0] === 'HOCAS');
     toggleSimMode(false);
     return o;
@@ -33,5 +38,7 @@ export async function run(page, t) {
   t.ok(r.ped0 && r.ped0[0] === 'PED 0', `페달 가운데 (${r.ped0 && r.ped0[0]})`);
   t.ok(r.cyc1 && /^CYC F\d+ · L\d+$/.test(r.cyc1[0]) && r.cyc1[1] === '#ffb74d', `밀고 왼쪽으로 치우치면 F·L 과 호박색 (${r.cyc1 && r.cyc1.join(' ')})`);
   t.ok(r.ped1 && /^PED R\d+$/.test(r.ped1[0]), `오른 페달 (${r.ped1 && r.ped1[0]})`);
+  t.ok(r.skew && /^CYC A\d+/.test(r.skew[0]), `가운데가 밀린 자리로 잡히면 손을 떼도 치우쳐 보인다 (${r.skew && r.skew[0]})`);
+  t.ok(r.ctr && r.ctr[0] === 'CYC 0 · 0', `CTR 을 누르면 지금 자리가 가운데가 된다 (${r.ctr && r.ctr[0]})`);
   t.ok(!r.after && !r.offAgain, '다시 누르면 꺼진다');
 }
