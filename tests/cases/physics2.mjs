@@ -54,6 +54,19 @@ export async function run(page, t) {
     rotorDir = 'CCW'; o.tfCcw = tf(15, false); rotorDir = 'CW';
     rcOpt.blowback = true; rotorChar = false; aseOn = false;
     o.turnSl = turn(0); o.turnHi = turn(10000);
+    // Vy 플레어 — Vy 에서 −500fpm 으로 내려가다 기수를 20° 들면(레버 그대로) 20kt 까지 줄며 강하율이 1,700fpm 남짓 준다
+    { joyAxes = { coll: { i: 3, inv: false, abs: true } };
+      const vy = simVyKt();
+      S.alt = 3000; S.spd = vy; S.bnk = 0; S.pit = pitchFromSpd(vy); simTrimReset(); simTrim.pitch = -pitchFromSpd(vy); simTrimAct.pitch = simTrim.pitch; simAcc = 0;
+      const tq = tqRequired() + simTqForVs(-500); S.tq = tq; _ax(3, tq / SIM_LEVER_TOP * 2 - 1); fly(10);
+      const vs0 = S.vs, pts = []; simTrim.pitch = -20; simTrimAct.pitch = -20;
+      let t20 = null; S.running = true; let ts = 1000; S.lastT = ts;
+      for (let i = 1; i <= 12 * 20 && S.spd > 18; i++) { ts += 50; joyPoll(ts); simStep(ts);
+        if (pts.length < 3 && S.spd < [55, 45, 25][pts.length]) pts.push({ spd: S.spd, dvs: S.vs - vs0 });
+        if (t20 === null && S.spd < 21) t20 = i / 20; }
+      S.running = false;
+      o.flare = { vy, vs0, pts, t20, dec: SIM_DEC_TIME };
+      simTrimReset(); joyAxes = { roll: { i: 0, inv: false }, pitch: { i: 1, inv: false }, yaw: { i: 2, inv: false }, coll: { i: 3, inv: false } }; _ax(3, 0); }
     // 롤 반응 — 조종간을 오른쪽 끝까지 밀면 1초에 24° · 피치는 12°/s
     S.alt = 2000; S.spd = 100; S.bnk = 0; S.pit = pitchFromSpd(100); simTrimReset(); simTrim.pitch = -pitchFromSpd(100); simTrimAct.pitch = simTrim.pitch;
     _ax(0, 1); fly(0.5); o.roll05 = S.bnk; fly(0.5); o.roll1 = S.bnk; _ax(0, 0); fly(3);
@@ -75,5 +88,10 @@ export async function run(page, t) {
   t.ok(r.tfCcw.tf > 1.8, `CCW 로터는 오른쪽 (${r.tfCcw.tf.toFixed(2)}°)`);
   t.ok(Math.abs(r.tf15ase.tf) < 0.7 && Math.abs(r.tf15ase.tf) > 0.4, `ASE 면 SAS 가 대부분 잡는다 (${r.tf15ase.tf.toFixed(2)}°)`);
   t.ok(Math.abs(r.roll05 - 12) < 1 && Math.abs(r.roll1 - 24) < 1, `롤은 24°/s 로 들어간다 — 피치(12°/s)보다 빠르게 (0.5초 ${r.roll05.toFixed(1)}° · 1초 ${r.roll1.toFixed(1)}°)`);
+  { const f = r.flare, [p55, p45, p25] = f.pts;
+    t.ok(Math.abs(f.vs0 + 500) < 60, `Vy(${f.vy.toFixed(0)}kt) 에서 −500fpm 으로 내려간다 (${f.vs0.toFixed(0)})`);
+    t.ok(p55.dvs > 150 && p45.dvs > p55.dvs && p25.dvs > p45.dvs, `기수 20° — 속도가 줄수록 강하율이 점점 준다 (55kt +${p55.dvs.toFixed(0)} · 45kt +${p45.dvs.toFixed(0)} · 25kt +${p25.dvs.toFixed(0)}fpm)`);
+    t.ok(p25.dvs > 1200 && p25.dvs < 2100, `20kt 언저리면 약 1,700fpm 줄어 강하가 멎고 오른다 (+${p25.dvs.toFixed(0)}fpm)`);
+    t.ok(f.dec === 2.4 && f.t20 > 5.5, `감속 시간은 종전의 120% (Vy → 20kt ${f.t20}초)`); }
   t.ok(r.tf40.tf === 0 && r.tf5.tf === 0, `전이양력 지대 밖(5kt · 40kt)에서는 없다 (${r.tf5.tf.toFixed(2)}@${r.tf5.spd.toFixed(0)}kt · ${r.tf40.tf.toFixed(2)}@${r.tf40.spd.toFixed(0)}kt)`);
 }
