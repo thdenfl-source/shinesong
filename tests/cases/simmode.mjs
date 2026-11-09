@@ -981,6 +981,8 @@ async function part2(page, t) {
   // 앞으로 보내 흉내 냈다 — 그래서 하늘 대신 '전진' 하는 그림이 됐다.
   // 이제는 카메라가 정말로 들린다. 정면 먼 곳(지평선)이 화면 어디에 찍히는지,
   // 그리고 카메라 자리가 그대로인지를 본다.
+  // 3D 지도의 제 마커는 지도 모양을 다 읽은 뒤(비동기) 생긴다 — 묶음을 나눠 새 페이지에서 돌면 여기서 아직 없을 수 있다
+  await page.waitForFunction(() => typeof _ml3dMarker !== 'undefined' && !!_ml3dMarker, null, { timeout: 30000 }).catch(() => {});
   const lookUp = await page.evaluate(`(() => {
     (${SETUP.toString()})();
     const cam = ${CAM};
