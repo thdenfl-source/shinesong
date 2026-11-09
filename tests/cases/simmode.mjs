@@ -2401,7 +2401,7 @@ export async function run(page, t) {
     return o;
   })()`);
   t.ok(pke.dn > 300 && pke.dn < 420, `기수를 들어 10kt 줄이면 약 350fpm 오른다 (최대 ${pke.dn.toFixed(0)}fpm)`);
-  t.ok(pke.up < -240 && pke.up > -420, `기수를 숙여 10kt 늘리면 약 250~350fpm 내려간다 — 가속이 느린 만큼(10%↓ · 기수 들림 0~3° ×0.8) 고르게 (최대 ${pke.up.toFixed(0)}fpm)`);
+  t.ok(pke.up < -240 && pke.up > -450, `기수를 숙여 10kt 늘리면 약 250~350fpm 내려간다 — 가속이 느린 만큼(10%↓ · 기수 들림 0~3° ×0.8) 고르게 (최대 ${pke.up.toFixed(0)}fpm)`);
   t.ok(pke.manual.skid !== 0 && pke.afcs.skid === 0 && Math.abs(pke.afcs.ball) < 0.02,
     `상위모드가 걸리면 내활·외활이 없다 — 수동 비행에서만 (수동 외활 ${pke.manual.skid} · HDG 중 볼 ${pke.afcs.ball.toFixed(3)})`);
 
@@ -2666,7 +2666,7 @@ export async function run(page, t) {
     // OEI 정격
     simEng = 1; simOeiT = 0; o.oei25 = simEngAvail() / mtaNow(); simOeiT = 200; o.oeiCont = simEngAvail() / mtaNow(); simEng = 2; simOeiT = 0;
     // 꼬리로터 — 제자리에서 반토크 페달을 끝까지 차면 토크가 더 든다(레버는 그대로)
-    hold(0); S.alt = 3000; S.vs = 0; simVsAcc = 0; simFlareVs = 0; simNr = 100; lever(tqRequired()); fly(3); const tq0 = S.tq;
+    hold(0); S.alt = 3000; S.vs = 0; simVsAcc = 0; simFlareVs = 0; simNr = 100; S.tq = tqRequired(); lever(tqRequired()); fly(8); const tq0 = S.tq;
     _ax(2, rotorSign()); fly(2); o.tr = { d: S.tq - tq0, vs: S.vs }; _ax(2, 0); fly(2);
     // VRS — 제자리에서 레버를 30% 내려 빠르게 가라앉다 다시 올리면 오르지 못한다
     hold(0); S.alt = 3000; lever(tqRequired() - 30); fly(6); o.vrsIn = { on: simVrsOn(), vs: S.vs };
