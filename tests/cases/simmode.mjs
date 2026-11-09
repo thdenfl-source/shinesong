@@ -1574,7 +1574,7 @@ export async function run(page, t) {
     const lever = tq => _ax(3, Math.max(-1, Math.min(1, tq / SIM_LEVER_TOP * 2 - 1)));
     const run = (dTq) => {
       S.alt = 3000; _simGndFt = 0; S.bnk = 0; S.spd = 120; S.pit = 0;
-      S.tq = tqRequired(); simAcc = 0; S.vs = 0; simVsAcc = 0; simTrimReset();
+      S.tq = tqRequired(); simAcc = 0; S.vs = 0; simVsAcc = 0; simFlareVs = 0; simFlareVyVs = 0; _flareV0 = null; _simKeVsF = 0; simNr = 100; simTrimReset();
       simTrim.pitch = -12;                   // 퀵스톱 — 기수를 12° 들기
       lever(tqRequired() + dTq);
       const dec = [], spd = [], alt0 = S.alt; let altMax = 0, altMin = 0;
