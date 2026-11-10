@@ -13,7 +13,7 @@ export async function run(page, t) {
              L: txt('left-tabs'), M: txt('mid-tabs'), R: txt('page-tabs') };
   });
   t.ok(tabs.tri && tabs.sel === 'pfd·cdu·map', `처음에는 3분할 PFD · CDU · MAP (${tabs.sel})`);
-  t.ok(/^PFD\|▦ 4분할\|⧉ POP UP$/.test(tabs.L), `PFD 창 탭: PFD · 분할(→4분할) · POP UP (+ 📌 Top) (${tabs.L})`);
+  t.ok(/^PFD\|▦ 4분할\|⧉ 창 배치\|⧉ POP UP$/.test(tabs.L), `PFD 창 탭: PFD · 분할(→4분할) · 창 배치 · POP UP (+ 📌 Top) (${tabs.L})`);
   t.ok(tabs.M === 'CDU|MAP|3D|UPPER|LOWER|SYSTEM|⧉ POP UP|⟳', `CDU 창 탭: CDU · MAP · 3D · UPPER · LOWER · SYSTEM · POP UP · 새로고침 (+ 📌 Top) (${tabs.M})`);
   t.ok(tabs.R === 'CDU|MAP|3D|UPPER|LOWER|SYSTEM|⛶ 3D Only|⧉ POP UP', `MAP 창 탭: CDU · MAP · 3D · UPPER · LOWER · SYSTEM · 3D Only · POP UP (+ 📌 Top) (${tabs.R})`);
   const two = await page.evaluate(() => { toggleTriple(false); const o = [leftSel, rightSel].join('·'); toggleTriple(true); return o; });
@@ -142,4 +142,30 @@ export async function run(page, t) {
     await page.waitForTimeout(1200);
     t.ok(await page.evaluate(() => popoutSides().length === 0 && document.getElementById('right-panel').ownerDocument === document), '닫으면 본 창으로 돌아온다');
   }
+
+  // ── SIM Mode 창 배치판 — 화면마다 새 창으로 ──
+  await page.evaluate(() => { try { popoutCloseAll(); } catch (e) {} simLayoutShow(); });
+  await page.waitForTimeout(300);
+  const shots = {};
+  for (const k of ['ovhd', 'pfd']) {
+    const pw = ctx.waitForEvent('page');
+    await page.click(`#simlay .simlay-btn[data-scr="${k}"]`);
+    const w = await pw; await page.waitForTimeout(900);
+    shots[k] = await w.evaluate(id => { const el = document.getElementById(id); const r = el && el.getBoundingClientRect();
+      return { here: !!el, w: r ? Math.round(r.width) : 0, h: r ? Math.round(r.height) : 0, title: document.title }; }, k === 'ovhd' ? 'ovhd-wrap' : 'pfd-wrap');
+  }
+  const lay = await page.evaluate(() => ({ open: popoutScreens().join(','), on: [...document.querySelectorAll('#simlay .simlay-btn.on')].map(b => b.dataset.scr).join(','),
+    ovhdHere: !!document.getElementById('ovhd-wrap') && document.getElementById('ovhd-wrap').ownerDocument === document }));
+  t.ok(shots.ovhd.here && shots.ovhd.w > 300 && shots.ovhd.h > 300 && /UPPER/.test(shots.ovhd.title),
+    `창 배치판에서 UPPER 를 누르면 UPPER 콘솔만 새 창에 가득 뜬다 (${shots.ovhd.w}×${shots.ovhd.h} · ${shots.ovhd.title})`);
+  t.ok(shots.pfd.here && shots.pfd.w > 300, `PFD(FCP 포함)도 따로 새 창으로 (${shots.pfd.w}×${shots.pfd.h})`);
+  t.ok(lay.open === 'ovhd,pfd' && lay.on === 'pfd,ovhd' && !lay.ovhdHere, `배치판은 떠 있는 화면을 표시한다 (${lay.open} · 표시 ${lay.on})`);
+  await page.click('#simlay .simlay-btn[data-scr="ovhd"]');       // 한 번 더 — 본 창으로
+  await page.waitForTimeout(600);
+  const back = await page.evaluate(() => ({ open: popoutScreens().join(','), ovhdHere: document.getElementById('ovhd-wrap').ownerDocument === document }));
+  await page.evaluate(() => { simLayoutAllBack(); simLayoutHide(); });
+  await page.waitForTimeout(600);
+  const all = await page.evaluate(() => ({ open: popoutScreens().length, pfdHome: document.getElementById('pfd-wrap').parentElement.id }));
+  t.ok(back.open === 'pfd' && back.ovhdHere, '한 번 더 누르면 그 화면만 본 창으로 돌아온다');
+  t.ok(all.open === 0 && all.pfdHome === 'left-panel', `'모두 본 창으로' 는 모든 화면을 분할 패널로 되돌린다 (PFD → ${all.pfdHome})`);
 }

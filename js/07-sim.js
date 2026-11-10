@@ -300,6 +300,8 @@ function toggleHdgRef() {
   hdgRef = hdgRef === 'MG' ? 'DG' : 'MG';
   if (hdgRef === 'MG') dgErr = 0;
   updateHdgRefBtns();
+  // LOWER 창 AHRS 패널 — 고른 AHRS 의 TG/MG DG 버튼도 함께(19-lower.js)
+  try { if (typeof lconAhrsDgFromRef === 'function') lconAhrsDgFromRef(); } catch (e) { _swallow(e); }
 }
 // HSI 를 왼쪽(−)·오른쪽(+)으로 1° — 계기 헤딩이 그만큼 줄고 는다
 function dgAdjust(d) {
@@ -989,7 +991,9 @@ function applyPanels() {
 
   const wrapIds = { pfd: 'pfd-wrap', map: 'map-wrap', cdu: 'cdu-wrap', m3d: 'map3d-wrap',
                     plan: 'fp-wrap', ovhd: 'ovhd-wrap', sysp: 'sysp-wrap', lcon: 'lcon-wrap' };
-  const hostOf = k => (leftSel === k ? L : (tripleMode && midSel === k ? M : (rightSel === k ? R : (quadMode && botSel === k ? B : null))));
+  // 화면 하나만 새 창에 띄운 것(SIM Mode 창 배치판 · 00-popout.js popoutScreen)은 그 그릇이 먼저다
+  const scrHost = k => (window._scrHost && window._scrHost[k]) ? document.getElementById('po-host-' + k) : null;
+  const hostOf = k => scrHost(k) || (leftSel === k ? L : (tripleMode && midSel === k ? M : (rightSel === k ? R : (quadMode && botSel === k ? B : null))));
   ['pfd', 'map', 'cdu', 'm3d', 'plan', 'ovhd', 'sysp', 'lcon'].forEach(k => {
     const el = document.getElementById(wrapIds[k]);
     if (!el) return;
@@ -1740,4 +1744,43 @@ function exitSolo() {
     scaleCdu();
   }, 80);
 }
+
+// ── SIM Mode 창 배치판 ── 시작 화면에서 'SIM Mode' 를 고르면 SIM 조종을 켜고 이 판을 띄운다.
+// 화면마다 버튼을 누르면 그 화면만 새 창으로 떠서(00-popout.js popoutScreen) 모니터마다 따로 배치한다.
+// 브라우저는 한 번 누를 때 새 창을 하나만 열어 주므로 하나씩 누른다. 본 창은 시뮬을 돌리는 바탕으로 남는다
+// (최소화하면 브라우저가 멈춰 세우니 다른 모니터 구석에 두거나 작게 둔다). 탭 줄의 '⧉ 창 배치' 로 다시 연다.
+const SIM_LAYOUT_ORDER = ['pfd', 'm3d', 'map', 'cdu', 'ovhd', 'lcon', 'sysp'];
+function simLayoutShow() {
+  let el = document.getElementById('simlay');
+  if (!el) {
+    el = document.createElement('div'); el.id = 'simlay';
+    const names = window.POPOUT_SCREENS || {};
+    el.innerHTML = `<div class="simlay-box"><div class="simlay-title">SIM Mode — 창 배치</div>` +
+      `<div class="simlay-note">화면마다 눌러 새 창으로 띄운 뒤, 창을 모니터마다 끌어다 놓으십시오(한 번에 한 창).<br>` +
+      `본 창은 시뮬을 돌리는 바탕입니다 — 닫거나 최소화하지 마십시오.</div>` +
+      `<div class="simlay-grid">` + SIM_LAYOUT_ORDER.map(k =>
+        `<button type="button" class="simlay-btn" data-act="popoutScreen" data-arg='["${k}"]' data-scr="${k}"><b>${names[k] || k}</b><span></span></button>`).join('') +
+      `</div><div class="simlay-foot"><button type="button" class="simlay-sm" data-act="simLayoutAllBack">모두 본 창으로</button>` +
+      `<button type="button" class="simlay-sm" data-act="simLayoutHide">닫기</button></div></div>`;
+    document.body.appendChild(el);
+  }
+  el.classList.add('show');
+  simLayoutSync();
+}
+function simLayoutHide() { const el = document.getElementById('simlay'); if (el) el.classList.remove('show'); }
+function simLayoutAllBack() { try { if (typeof popoutCloseAll === 'function') popoutCloseAll(); } catch (e) { _swallow(e); } simLayoutSync(); }
+function simLayoutSync() {
+  const open = (typeof popoutScreens === 'function') ? popoutScreens() : [];
+  document.querySelectorAll('#simlay .simlay-btn').forEach(b => {
+    const on = open.includes(b.dataset.scr);
+    b.classList.toggle('on', on);
+    const sp = b.querySelector('span'); const t = on ? '새 창에 떠 있음 · 누르면 복귀' : '누르면 새 창으로';
+    if (sp && sp.textContent !== t) sp.textContent = t;
+  });
+}
+function simLayoutStart() {
+  try { if (typeof simModeOn !== 'undefined' && !simModeOn && typeof toggleSimMode === 'function') toggleSimMode(true); } catch (e) { _swallow(e); }
+  simLayoutShow();
+}
+// (화면 버튼 등록은 19-lower.js — appRegister 는 09-cdu.js 에서 정의되어 이 파일보다 늦다)
 

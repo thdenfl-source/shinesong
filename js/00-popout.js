@@ -117,7 +117,10 @@
       '#app.po-root{position:absolute;inset:0;display:flex !important;flex-direction:row;}' +
       '#app.po-root > #left-panel,#app.po-root > #mid-panel,#app.po-root > #right-panel,#app.po-root > #bot-panel' +
       '{display:flex !important;flex:1 1 0 !important;width:100% !important;min-width:0;}' +
-      '.po-top-btn{display:inline-block !important;}';
+      '.po-top-btn{display:inline-block !important;}' +
+      // 화면 하나만 띄운 창(SIM Mode 의 창 배치판) — 그 화면이 창을 가득 채운다
+      '#app.po-root > .po-screen-host{display:flex !important;flex-direction:column;flex:1 1 0;width:100%;min-width:0;height:100%;}' +
+      '#app.po-root > .po-screen-host > .page-content, #app.po-root > .po-screen-host > #pfd-wrap{display:block;flex:1 1 0;}';
     doc.head.appendChild(st);
     doc.body.className = D.body.className;
   }
@@ -207,7 +210,9 @@
     const panel = gid(PANEL_ID[side]);
     if (!panel) return false;
     const r = panel.getBoundingClientRect();
-    const feat = `popup=yes,width=${Math.max(480, Math.round(r.width))},height=${Math.max(420, Math.round(r.height))}`;
+    const sz = SCR_SIZE[side.replace(/^scr-/, '')];          // 화면 하나만 띄울 때는 그 화면에 맞는 크기로
+    const feat = sz ? `popup=yes,width=${sz[0]},height=${sz[1]}`
+                    : `popup=yes,width=${Math.max(480, Math.round(r.width))},height=${Math.max(420, Math.round(r.height))}`;
     const win = W.open('', 'shinesong-' + side, feat);
     if (!win) {
       try { uiAlert('새 창이 막혔습니다 — 브라우저 주소창 오른쪽의 팝업 차단을 이 사이트에 허용해 주세요.'); }
@@ -236,10 +241,39 @@
     } catch (e) { console.warn('[popout] 되돌리기 실패', e); }
     try { if (!rec.win.closed) rec.win.close(); } catch (e) { /* 무시 */ }
     try { if (rec.base && !rec.base.closed) rec.base.close(); } catch (e) { /* 무시 */ }
+    if (side.indexOf('scr-') === 0 && W._scrHost) delete W._scrHost[side.slice(4)];   // 그 화면은 다시 분할 패널로
     syncAppClasses();
     relayout();
+    try { if (typeof simLayoutSync === 'function') simLayoutSync(); } catch (e) { /* 무시 */ }
     return true;
   }
+
+  // ── 화면 하나씩 새 창으로(SIM Mode 의 창 배치판) ──
+  // 패널(좌·중·우·하) 대신 화면(PFD · 3D · MAP · CDU · UPPER · LOWER · SYSTEM) 하나를 그 화면만 담은 그릇에 옮겨 새 창으로 띄운다.
+  // 브라우저는 한 번 누를 때 새 창을 하나만 열어 주므로, 배치판의 버튼을 하나씩 누른다.
+  const SCR_TITLE = { pfd: 'PFD · FCP', m3d: '3D', map: 'MAP', cdu: 'CDU', ovhd: 'UPPER CONSOLE', lcon: 'LOWER CONSOLE', sysp: 'SYSTEM' };
+  const SCR_SIZE = { pfd: [640, 900], m3d: [1280, 760], map: [900, 760], cdu: [460, 860], ovhd: [760, 940], lcon: [680, 940], sysp: [900, 600] };
+  function popoutScreen(k) {
+    if (!SCR_TITLE[k]) return false;
+    const side = 'scr-' + k;
+    if (wins.some(w => w.side === side)) return popoutClose(side);
+    let host = gid('po-host-' + k);
+    if (!host) {
+      host = D.createElement('div'); host.id = 'po-host-' + k; host.className = 'po-screen-host';
+      const app = gid('app'); if (!app) return false;
+      app.appendChild(host);
+    }
+    PANEL_ID[side] = host.id; TITLE[side] = SCR_TITLE[k];
+    W._scrHost = W._scrHost || {};
+    W._scrHost[k] = true;
+    try { if (typeof applyPanels === 'function') applyPanels(); } catch (e) { console.warn('[popout]', e); }
+    const ok = popoutOpen(side);
+    if (!ok) { delete W._scrHost[k]; relayout(); }
+    try { if (typeof simLayoutSync === 'function') simLayoutSync(); } catch (e) { /* 무시 */ }
+    return ok;
+  }
+  function popoutScreens() { return wins.filter(w => w.side.indexOf('scr-') === 0).map(w => w.side.slice(4)); }
+  function popoutCloseAll() { wins.slice().forEach(w => popoutClose(w.side)); }
 
   // 새 창 안에 있는 3D 지도(본 화면·CHIN 창)를 곧바로 다시 그린다
   function popoutRedrawMaps(win) {
@@ -276,4 +310,5 @@
 
   W.popoutOpen = popoutOpen; W.popoutTop = popoutTop; W.popoutClose = popoutClose; W.popoutToggle = popoutToggle;
   W.popoutGamepads = popoutGamepads; W.popoutSides = popoutSides;
+  W.popoutScreen = popoutScreen; W.popoutScreens = popoutScreens; W.popoutCloseAll = popoutCloseAll; W.POPOUT_SCREENS = SCR_TITLE;
 })();

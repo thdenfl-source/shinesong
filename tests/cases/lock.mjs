@@ -73,21 +73,25 @@ export async function run(page, t) {
     await tb.fill('#gate-pw', 'x'); await tb.click('#gate-ok');
     const mid = await tb.evaluate(() => ({ locked: window.gateLocked, choose: getComputedStyle(document.getElementById('gate-mode')).display !== 'none',
                                           pwHidden: getComputedStyle(document.getElementById('gate-pw')).display === 'none' }));
-    await tb.click(which === '3d' ? '#gate-mode-3d' : '#gate-mode-pc');
+    await tb.click('#gate-mode-' + which);
     await tb.waitForTimeout(1500);
     const end = await tb.evaluate(() => ({ locked: window.gateLocked, shown: getComputedStyle(document.getElementById('gate-overlay')).display !== 'none',
-                                          solo: _soloActive, cur: _soloCurrent, mode: sessionStorage.getItem('vfrStartMode') }));
+                                          solo: _soloActive, cur: _soloCurrent, mode: sessionStorage.getItem('vfrStartMode'),
+                                          lay: !!document.querySelector('#simlay.show'), sim: simModeOn,
+                                          btns: [...document.querySelectorAll('#simlay .simlay-btn')].map(b => b.dataset.scr).join(',') }));
     await tb.reload(); await ready(tb); await tb.waitForTimeout(1500);
     end.reload = await tb.evaluate(() => ({ solo: _soloActive, cur: _soloCurrent }));
     await tb.close();
     return { mid, end };
   };
-  const m3 = await pick('3d'), mp = await pick('pc');
+  const m3 = await pick('3d'), mp = await pick('pc'), ms = await pick('sim');
   t.ok(m3.mid.locked && m3.mid.choose && m3.mid.pwHidden, '비밀번호가 맞으면 화면 고르기(PC 모드 · 3D 단독 모드)가 뜨고, 고르기 전에는 열리지 않는다');
   t.ok(!m3.end.locked && !m3.end.shown && m3.end.solo && m3.end.cur === 'm3d' && m3.end.mode === '3d',
     '3D 단독 모드를 고르면 3D Only 로 바로 열린다');
   t.ok(m3.end.reload.solo && m3.end.reload.cur === 'm3d', '같은 탭에서 새로고침해도 3D Only 로 열린다');
-  t.ok(!mp.end.locked && !mp.end.solo && mp.end.mode === 'pc', 'PC 모드를 고르면 지금처럼(분할) 열린다');
+  t.ok(!mp.end.locked && !mp.end.solo && mp.end.mode === 'pc' && !mp.end.lay, 'PC 모드를 고르면 지금처럼(분할) 열린다');
+  t.ok(!ms.end.locked && ms.end.mode === 'sim' && ms.end.lay && ms.end.sim && ms.end.btns === 'pfd,m3d,map,cdu,ovhd,lcon,sysp',
+    `SIM Mode 를 고르면 SIM 조종이 켜지고 창 배치판(화면마다 새 창 버튼)이 뜬다 (${ms.end.btns})`);
 
   // 비밀번호 글자는 앱 파일 어디에도 없다(SHA-256 값만 둔다)
   if (PW) {

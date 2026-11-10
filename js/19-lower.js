@@ -161,3 +161,36 @@ ovhdOn(id => {
   try { if (typeof sysDraw === 'function') sysDraw(); } catch (e) { _swallow(e); }
 });
 lconSyncPark();
+
+// ── AHRS 패널 → PFD 방향 기준(MG Slaved / DG) ──
+// AHRS 노브(1 · N · 2 · BACKUP)가 PFD 에 쓰는 AHRS 를 고른다 — 2 면 AHRS 2, 그 밖(1 · N · BACKUP)은 AHRS 1.
+// 고른 AHRS 의 TG/MG DG 버튼이 들어가 있으면 DG, 나와 있으면 MG(Slaved).
+// DG 일 때 고른 AHRS 의 HIQ 노브를 돌리면 HSI 를 그만큼(한 칸 1°) 맞춘다(노브는 다시 가운데로).
+function lconAhrsActive() { return ovhdGet('ahrsSel') === '2' ? 2 : 1; }
+let _lconQuiet = false;
+function lconSyncHdgRef() {
+  const want = ovhdGet(`ahrs${lconAhrsActive()}Dg`) === 'IN' ? 'DG' : 'MG';
+  if (typeof hdgRef === 'undefined' || hdgRef === want) return;
+  hdgRef = want;
+  if (want === 'MG') dgErr = 0;
+  try { updateHdgRefBtns(); } catch (e) { _swallow(e); }
+}
+// 3D 창 MG/DG 버튼으로 바꾸면 패널 버튼도 맞춘다
+function lconAhrsDgFromRef() {
+  const id = `ahrs${lconAhrsActive()}Dg`, v = hdgRef === 'DG' ? 'IN' : 'OUT';
+  if (ovhdGet(id) !== v) { _lconQuiet = true; try { ovhdSet(id, v); } finally { _lconQuiet = false; } }
+}
+ovhdOn((id, v, prev) => {
+  if (_lconQuiet) return;
+  if (id === 'ahrsSel' || id === 'ahrs1Dg' || id === 'ahrs2Dg') lconSyncHdgRef();
+  const m = /^ahrs([12])Hiq$/.exec(id);
+  if (m && Number(m[1]) === lconAhrsActive() && v !== 5) {
+    try { if (typeof dgAdjust === 'function') dgAdjust(v - prev); } catch (e) { _swallow(e); }
+    _lconQuiet = true;                                   // 노브는 다시 가운데(5)로 — 끝에 걸리지 않게
+    try { ovhdState[id] = 5; _ovhdPaint(id); _ovhdSave(); } finally { _lconQuiet = false; }
+  }
+});
+lconSyncHdgRef();
+
+// SIM Mode 창 배치판 버튼(07-sim.js · 00-popout.js) — appRegister 가 정의된 뒤(09-cdu.js)라 여기서 등록한다
+try { appRegister({ popoutScreen: k => window.popoutScreen && window.popoutScreen(k), simLayoutShow, simLayoutHide, simLayoutAllBack }); } catch (e) { _swallow(e); }
