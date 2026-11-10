@@ -17,7 +17,7 @@
      CDN 을 쓰면 한 번이라도 못 받는 순간 앱이 통째로 죽는다 — 비행 중에는
      그럴 여지를 두지 않는다. -->
 <!-- 패널 새 창(다중 모니터) — 라이브러리가 거는 이벤트까지 받아 적어야 하므로 맨 먼저 -->
-<script src="js/00-popout.js?v=560"></script>
+<script src="js/00-popout.js?v=561"></script>
 <link rel="stylesheet" href="vendor/leaflet.css"/>
 <script src="vendor/leaflet.js"></script>
 <link rel="stylesheet" href="vendor/leaflet-velocity.min.css"/>
@@ -2107,13 +2107,15 @@ body.gate-open #gate-overlay { display: none; }
 /* Simple mode(07-sim.js) — 위 막대에서 고른 창 하나만 화면 가득 */
 #simple-bar, #simple-view { display: none; }
 body.simple-mode #app, body.simple-mode #solo-bar, body.simple-mode #solo-half-btn { display: none !important; }
-body.simple-mode #simple-bar { display: flex; position: fixed; left: 0; right: 0; top: 0; height: 34px; z-index: 20000;
+/* iPad·iPhone 홈 화면 앱은 상태바(시계·배터리)가 화면 위에 겹친다(black-translucent) — 그만큼 내려 둔다 */
+body.simple-mode #simple-bar { display: flex; position: fixed; left: 0; right: 0; top: 0; height: calc(40px + env(safe-area-inset-top)); z-index: 20000;
+  padding-top: env(safe-area-inset-top); padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); box-sizing: border-box;
   background: #0b0e12; border-bottom: 1px solid #263240; }
 #simple-bar button { flex: 1 1 0; min-width: 0; background: transparent; border: none; border-right: 1px solid #1e2732; color: #9fb4c6;
   font: bold 12px 'Helvetica Neue', Arial, sans-serif; letter-spacing: 0.5px; cursor: pointer; }
 #simple-bar button.on { color: #00e5ff; background: rgba(0,229,255,0.10); box-shadow: inset 0 -3px 0 #00e5ff; }
 #simple-bar button.simple-exit { flex: 0 0 auto; padding: 0 12px; color: #ffb000; border-right: none; }
-body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 0; top: 34px; bottom: 0; background: #000; }
+body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 0; top: calc(40px + env(safe-area-inset-top)); bottom: 0; background: #000; }
 #simple-host { flex: 1 1 0; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 #simple-host > .page-content, #simple-host > #pfd-wrap { flex: 1 1 0; }
 #pfdov-size { position: static; align-items: center; }
@@ -2140,7 +2142,7 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
     </div>
   </form>
 </div>
-<script src="js/00-gate.js?v=560"></script>
+<script src="js/00-gate.js?v=561"></script>
 <!-- ── 단일화면 선택 바 (기본 숨김) ── -->
 <!-- ── 시작 안내(사용법/키보드) 오버레이 ── -->
 <div id="help-overlay" style="display:none;">
@@ -3577,37 +3579,37 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
 <!-- 앱 코드 — 클래식 스크립트(모듈 아님)라 전역 스코프를 공유한다.
      순서가 곧 실행 순서이므로 임의로 바꾸지 말 것. -->
   <!-- AIP 데이터 — 코드보다 먼저 로드한다 -->
-  <script src="js/data/terminal-fixes.js?v=560"></script>
-  <script src="js/data/ifr-fixes.js?v=560"></script>
-  <script src="js/data/ifr-procedures.js?v=560"></script>
-  <script src="js/data/airfield-info.js?v=560"></script>
-  <script src="js/data/enr-vors.js?v=560"></script>
-  <script src="js/data/loc-stations.js?v=560"></script>
-  <script src="js/data/enr-routes.js?v=560"></script>
-  <script src="js/data/airspace.js?v=560"></script>
-  <script src="js/data/runways.js?v=560"></script>
+  <script src="js/data/terminal-fixes.js?v=561"></script>
+  <script src="js/data/ifr-fixes.js?v=561"></script>
+  <script src="js/data/ifr-procedures.js?v=561"></script>
+  <script src="js/data/airfield-info.js?v=561"></script>
+  <script src="js/data/enr-vors.js?v=561"></script>
+  <script src="js/data/loc-stations.js?v=561"></script>
+  <script src="js/data/enr-routes.js?v=561"></script>
+  <script src="js/data/airspace.js?v=561"></script>
+  <script src="js/data/runways.js?v=561"></script>
   <!-- 앱 코드 -->
-  <script src="js/00-ui.js?v=560"></script>
-  <script src="js/01-state.js?v=560"></script>
-  <script src="js/02-math.js?v=560"></script>
-  <script src="js/03-pfd.js?v=560"></script>
-  <script src="js/04-map.js?v=560"></script>
-  <script src="js/05-gps.js?v=560"></script>
-  <script src="js/06-nav.js?v=560"></script>
-  <script src="js/07-sim.js?v=560"></script>
-  <script src="js/08-ifrdb.js?v=560"></script>
-  <script src="js/09-cdu.js?v=560"></script>
-  <script src="js/10-tools.js?v=560"></script>
-  <script src="js/11-charts.js?v=560"></script>
-  <script src="js/12-joystick.js?v=560"></script>
-  <script src="js/13-joyhid.js?v=560"></script>
-  <script src="js/14-simmode.js?v=560"></script>
-  <script src="js/15-heli3d.js?v=560"></script>
-  <script src="js/16-sound.js?v=560"></script>
-  <script src="js/17-upper.js?v=560"></script>
-  <script src="js/18-system.js?v=560"></script>
-  <script src="js/19-lower.js?v=560"></script>
-  <script src="js/20-navaids.js?v=560"></script>
+  <script src="js/00-ui.js?v=561"></script>
+  <script src="js/01-state.js?v=561"></script>
+  <script src="js/02-math.js?v=561"></script>
+  <script src="js/03-pfd.js?v=561"></script>
+  <script src="js/04-map.js?v=561"></script>
+  <script src="js/05-gps.js?v=561"></script>
+  <script src="js/06-nav.js?v=561"></script>
+  <script src="js/07-sim.js?v=561"></script>
+  <script src="js/08-ifrdb.js?v=561"></script>
+  <script src="js/09-cdu.js?v=561"></script>
+  <script src="js/10-tools.js?v=561"></script>
+  <script src="js/11-charts.js?v=561"></script>
+  <script src="js/12-joystick.js?v=561"></script>
+  <script src="js/13-joyhid.js?v=561"></script>
+  <script src="js/14-simmode.js?v=561"></script>
+  <script src="js/15-heli3d.js?v=561"></script>
+  <script src="js/16-sound.js?v=561"></script>
+  <script src="js/17-upper.js?v=561"></script>
+  <script src="js/18-system.js?v=561"></script>
+  <script src="js/19-lower.js?v=561"></script>
+  <script src="js/20-navaids.js?v=561"></script>
 
 <input type="file" id="zipFileInput" accept=".zip,application/zip,application/x-zip-compressed,application/octet-stream" style="display:none" onchange="handleZipFile(this.files[0]); this.value='';"></body>
 </html>
