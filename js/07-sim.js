@@ -1844,3 +1844,116 @@ function simpleExit() {
   setTimeout(() => { try { window.dispatchEvent(new Event('resize')); resizePFD(); } catch (e) { _swallow(e); } }, 60);
 }
 
+
+// ══════════════════════════════════════════════════════
+// FCP SIMPLE — 실기 AFCS 조작 패널 모양(사진)으로 간추린 FCP. 왼쪽 세로 탭 하나로 지금 FCP ⇄ SIMPLE.
+//   위: IAS · HDG · VS · ALT.A · [ALT] · CR.HT  |  BARO · UPLIM
+//   아래: [ ] · [NAVD CPL] · [ ] · [T-DOWN] · [T.D.HOV] · H.HT  |  CRS · DH
+// 노브: 왼쪽(‹)/오른쪽(›)을 누르면 돌린다(누르고 있으면 계속) · 가운데를 누르면 노브 누름(PUSH).
+// 기능은 지금 FCP 와 같은 함수(applyDelta · fcpSync · toggleAltHold …)를 부른다.
+// UPLIM · DH 와 빈 버튼 둘은 아직 기능이 없다(자리만).
+const FCPS_KEY = 'fcpSimple';
+let fcpSimpleOn = false;
+try { fcpSimpleOn = localStorage.getItem(FCPS_KEY) === '1'; } catch (e) { _swallow(e); }
+const FCPS_KNOBS = {
+  ias:  { lbl: 'IAS',   rot: ['spd', 1],   push: ['fcpSync', 'ias'] },
+  hdg:  { lbl: 'HDG',   rot: ['hdg', 1],   push: ['fcpSync', 'hdg'] },
+  vs:   { lbl: 'VS',    rot: ['vs', 100] },
+  alta: { lbl: 'ALT.A', rot: ['alt', 100] },
+  crht: { lbl: 'CR.HT', rot: ['crht', 10], push: ['toggleCrht'] },
+  hht:  { lbl: 'H.HT',  rot: ['hht', 10] },
+  baro: { lbl: 'BARO',  rot: ['baro', 1],  push: ['fcpsBaroStd'] },
+  uplim:{ lbl: 'UPLIM', none: true },
+  crs:  { lbl: 'CRS',   rot: ['crs', 1],   push: ['fcpSync', 'crs'] },
+  dh:   { lbl: 'DH',    none: true },
+};
+function _fcpsKnob(k) {
+  const d = FCPS_KNOBS[k];
+  const push = d.push ? ` data-act="${d.push[0]}"${d.push[1] ? ` data-arg='["${d.push[1]}"]'` : ''}` : '';
+  return `<div class="fks-cell${d.none ? ' fks-none' : ''}" data-k="${k}"><div class="fks-lbl">${d.lbl}</div>` +
+    `<div class="fks-knob">${d.rot ? `<b class="fks-dn" data-rot="${d.rot[0]},${-d.rot[1]}">‹</b><b class="fks-up" data-rot="${d.rot[0]},${d.rot[1]}">›</b>` : ''}` +
+    `<i class="fks-push"${push}></i></div><div class="fks-val" id="fks-${k}"></div></div>`;
+}
+function _fcpsBtn(id, lbl, act, framed) {
+  return `<div class="fks-cell"><div class="fks-lbl">${lbl || '&nbsp;'}</div>` +
+    `<div class="fks-sq${framed ? ' framed' : ''}${act ? '' : ' fks-none'}" id="fks-${id}"${act ? ` data-act="${act}"` : ''}></div><div class="fks-val"></div></div>`;
+}
+function _fcpsBuild() {
+  const bar = document.querySelector('#pfd-wrap .ctrl-bar');
+  if (!bar || document.getElementById('fcp-simple')) return;
+  const tog = document.createElement('button');
+  tog.type = 'button'; tog.id = 'fcps-tog'; tog.className = 'fcps-tog';
+  tog.dataset.act = 'toggleFcpSimple'; tog.title = 'FCP 바꾸기 — 지금 FCP ⇄ SIMPLE(실기 AFCS 조작 패널 모양)';
+  bar.prepend(tog);
+  const p = document.createElement('div'); p.id = 'fcp-simple';
+  p.innerHTML = `<div class="fks-l">` +
+      _fcpsKnob('ias') + _fcpsKnob('hdg') + _fcpsKnob('vs') + _fcpsKnob('alta') + _fcpsBtn('alt', 'ALT', 'toggleAltHold', true) + _fcpsKnob('crht') +
+      _fcpsBtn('b1', '', '') + _fcpsBtn('navd', 'NAVD CPL', 'toggleNavAp', true) + _fcpsBtn('b2', '', '') +
+      _fcpsBtn('tdown', 'T-DOWN', 'tdownSet') + _fcpsBtn('tdh', 'T.D.HOV', 'tdhEngage') + _fcpsKnob('hht') +
+    `</div><div class="fks-div"></div><div class="fks-r">` +
+      _fcpsKnob('baro') + _fcpsKnob('uplim') + _fcpsKnob('crs') + _fcpsKnob('dh') + `</div>`;
+  bar.appendChild(p);
+  // 노브 돌리기 — 누르고 있으면 계속(지금 FCP ▲▼ 와 같은 빠르기)
+  p.querySelectorAll('[data-rot]').forEach(el => {
+    const [f, dStr] = el.dataset.rot.split(','), d = +dStr;
+    let timer = null, interval = null, guard = null;
+    const step = () => { if (f === 'baro') fcpsBaro(d); else applyDelta(f, d); fcpsSync(); };
+    function stop() { clearTimeout(timer); clearInterval(interval); clearTimeout(guard); timer = interval = guard = null; _holdStops.delete(stop); }
+    el.addEventListener('pointerdown', e => {
+      e.preventDefault(); e.stopPropagation();
+      if (timer || interval) return;
+      step(); _holdStops.add(stop);
+      guard = setTimeout(stop, HOLD_MAX_MS);
+      timer = setTimeout(() => { interval = setInterval(step, 80); }, 350);
+    });
+    ['pointerup', 'pointercancel', 'pointerleave'].forEach(ev => el.addEventListener(ev, stop));
+  });
+  fcpSimpleApply();
+}
+// BARO — QNH(hPa) 를 1 씩 · 누르면 STD(1013)
+function fcpsBaro(d) {
+  const q = (typeof window._qnhHpa === 'number' && Number.isFinite(window._qnhHpa)) ? window._qnhHpa : 1013;
+  window._qnhHpa = Math.max(940, Math.min(1060, Math.round(q) + d));
+  try { drawPFD(); } catch (e) { _swallow(e); }
+}
+function fcpsBaroStd() { window._qnhHpa = 1013; try { drawPFD(); } catch (e) { _swallow(e); } fcpsSync(); }
+// 노브 아래 작은 값 · 걸린 모드는 노브 테·버튼이 녹색
+function fcpsSync() {
+  const p = document.getElementById('fcp-simple');
+  if (!p || !fcpSimpleOn) return;
+  const set = (id, txt) => { const e = document.getElementById('fks-' + id); if (e && e.textContent !== txt) e.textContent = txt; };
+  const on = (k, v) => { const c = p.querySelector(`[data-k="${k}"]`) || document.getElementById('fks-' + k); if (c && c.classList.contains('on') !== !!v) c.classList.toggle('on', !!v); };
+  const g = (f, d) => { try { return f(); } catch (e) { return d; } };
+  // 노브가 실제로 옮기는 값을 보인다(applyDelta 와 같은 갈래)
+  set('ias', String(Math.round(simModeOn ? selSpd : S.spd)));
+  set('hdg', String(((Math.round(selHdg) + 359) % 360) + 1).padStart(3, '0') + '°');
+  const vsSel = g(() => ((gaOn || vsModeOn) && !altHoldOn && !crhtOn) || altHoldOn || crhtOn, false);
+  set('vs', String(Math.round(vsSel ? selVS : S.vs)));
+  set('alta', String(Math.round(selAlt)));
+  set('crht', String(Math.round(selCrht)));
+  set('hht', String(Math.round(selHht)));
+  set('baro', String(Math.round(g(() => (Number.isFinite(window._qnhHpa) ? window._qnhHpa : 1013), 1013))));
+  set('crs', fmtA(g(() => (navSrc !== 'FMS' ? vorObsCrs : S.crs), S.crs)) + '°');
+  on('ias', g(() => simModeOn && simIasOn, false));
+  on('hdg', g(() => hdgSelOn, false));
+  on('crht', g(() => crhtOn, false));
+  on('alt', g(() => altHoldOn, false));
+  on('navd', g(() => navApOn, false));
+  on('tdh', g(() => tdOn, false));
+}
+function fcpSimpleApply() {
+  const bar = document.querySelector('#pfd-wrap .ctrl-bar');
+  if (bar) bar.classList.toggle('fcp-simple', fcpSimpleOn);
+  const t = document.getElementById('fcps-tog');
+  if (t) t.textContent = fcpSimpleOn ? 'FULL' : 'SIMPLE';
+  fcpsSync();
+  // FCP 높이가 바뀌면 PFD 를 다시 나눈다
+  requestAnimationFrame(() => { try { resizePFD(); drawPFD(); } catch (e) { _swallow(e); } });
+}
+function toggleFcpSimple() {
+  fcpSimpleOn = !fcpSimpleOn;
+  try { localStorage.setItem(FCPS_KEY, fcpSimpleOn ? '1' : '0'); } catch (e) { _swallow(e); }
+  fcpSimpleApply();
+}
+try { _fcpsBuild(); } catch (e) { _swallow(e); }
+setInterval(() => { try { fcpsSync(); } catch (e) { _swallow(e); } }, 250);

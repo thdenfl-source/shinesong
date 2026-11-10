@@ -17,7 +17,7 @@
      CDN 을 쓰면 한 번이라도 못 받는 순간 앱이 통째로 죽는다 — 비행 중에는
      그럴 여지를 두지 않는다. -->
 <!-- 패널 새 창(다중 모니터) — 라이브러리가 거는 이벤트까지 받아 적어야 하므로 맨 먼저 -->
-<script src="js/00-popout.js?v=563"></script>
+<script src="js/00-popout.js?v=566"></script>
 <link rel="stylesheet" href="vendor/leaflet.css"/>
 <script src="vendor/leaflet.js"></script>
 <link rel="stylesheet" href="vendor/leaflet-velocity.min.css"/>
@@ -242,6 +242,37 @@ html, body {
   border-top: 1px solid #2a2a2a;
   z-index: 20;
 }
+/* ── FCP SIMPLE(07-sim.js) — 실기 AFCS 조작 패널 모양. 왼쪽 세로 탭으로 지금 FCP ⇄ SIMPLE ── */
+#pfd-wrap .ctrl-bar { padding-left: 18px; }
+.fcps-tog { position: absolute; left: 0; top: 0; bottom: 0; width: 17px; padding: 0; z-index: 2; cursor: pointer;
+  background: #13202c; border: none; border-right: 1px solid #2c4a62; color: #7fc8ff; font: bold 9px 'Helvetica Neue', Arial, sans-serif;
+  writing-mode: vertical-rl; transform: rotate(180deg); letter-spacing: 1px; }
+.fcps-tog:active { background: #1d3a52; }
+#fcp-simple { display: none; }
+.ctrl-bar.fcp-simple > .ctrl-sub-row { display: none !important; }
+.ctrl-bar.fcp-simple > #fcp-simple { display: flex; align-items: stretch; justify-content: center; gap: 8px; padding: 6px 10px 6px;
+  background: linear-gradient(#1a1d21, #0e1013); border-top: 1px solid #3a3f46; }
+.fks-l { display: grid; grid-template-columns: repeat(6, minmax(44px, 62px)); row-gap: 4px; column-gap: 4px; }
+.fks-r { display: grid; grid-template-columns: repeat(2, minmax(44px, 62px)); row-gap: 4px; column-gap: 4px; }
+.fks-div { width: 2px; background: #9aa3ad; margin: 4px 2px; border-radius: 1px; }
+.fks-cell { display: flex; flex-direction: column; align-items: center; gap: 2px; user-select: none; -webkit-user-select: none; }
+.fks-lbl { color: #e8edf2; font: bold 10px 'Helvetica Neue', Arial, sans-serif; letter-spacing: .3px; white-space: nowrap; height: 12px; }
+.fks-knob { position: relative; width: 38px; height: 38px; border-radius: 50%; touch-action: none;
+  background: radial-gradient(circle at 40% 35%, #4a5058, #1c1f23 70%); border: 2px solid #8d969f; box-shadow: 0 0 0 3px #22262b, 0 2px 4px #000; }
+.fks-cell.on .fks-knob { border-color: #22e022; box-shadow: 0 0 0 3px #123a12, 0 0 6px #22e022; }
+.fks-dn, .fks-up { position: absolute; top: 0; bottom: 0; width: 50%; display: flex; align-items: center; color: #cfd6dc; font-size: 15px; cursor: pointer; }
+.fks-dn { left: 0; justify-content: flex-start; padding-left: 3px; border-radius: 19px 0 0 19px; }
+.fks-up { right: 0; justify-content: flex-end; padding-right: 3px; border-radius: 0 19px 19px 0; }
+.fks-dn:active, .fks-up:active { background: rgba(0, 200, 255, 0.22); }
+.fks-push { position: absolute; left: 50%; top: 50%; width: 16px; height: 16px; margin: -8px 0 0 -8px; border-radius: 50%; z-index: 1;
+  background: radial-gradient(circle at 40% 35%, #8b939b, #3a3f45); border: 1px solid #0a0a0a; cursor: pointer; }
+.fks-push:active { background: #00b4e6; }
+.fks-sq { width: 40px; height: 30px; margin-top: 4px; border: 2px solid #8d969f; border-radius: 3px; background: linear-gradient(#26292d, #121417); cursor: pointer; }
+.fks-sq.framed { box-shadow: 0 0 0 3px #1a1d21, 0 0 0 4px #6b737b; }
+.fks-sq:active { background: #00b4e6; }
+.fks-sq.on { border-color: #22e022; background: linear-gradient(#1d4a1d, #0f2a0f); box-shadow: 0 0 6px #22e022; }
+.fks-none { opacity: .45; cursor: default; pointer-events: none; }
+.fks-val { color: #00e5ff; font: bold 9px 'Helvetica Neue', Arial, sans-serif; height: 11px; }
 .ctrl-sub-row {
   display: flex;
   justify-content: center;
@@ -2142,7 +2173,7 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
     </div>
   </form>
 </div>
-<script src="js/00-gate.js?v=563"></script>
+<script src="js/00-gate.js?v=566"></script>
 <!-- ── 단일화면 선택 바 (기본 숨김) ── -->
 <!-- ── 시작 안내(사용법/키보드) 오버레이 ── -->
 <div id="help-overlay" style="display:none;">
@@ -2691,7 +2722,12 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
             범위를 벗어난 값(방위 0~360, 거리 0.1~400NM)은 알리고 <b>원래 값을 그대로 둡니다</b>.
             웨이포인트 카드의 <b>VNAV 고도 · 오프셋</b>, <b>홀딩 설정</b>의 <b>INBD CRS · 시간/거리</b>도 같은 방식입니다.
             홀딩 시간은 이제 <b>아무 값이나</b>(10~600초) 넣을 수 있습니다 — 종전에는 30·60·90·120·150·180초만 골랐습니다.</li>
+        <li><b>FCP SIMPLE</b>(PFD 아래 FCP 왼쪽 끝의 세로 탭 <b>SIMPLE / FULL</b>): 누를 때마다 지금 FCP ⇄ 실기 AFCS 조작 패널 모양(간추린 FCP)으로 바뀝니다(고른 것은 기억).
+          위 줄 <b>IAS · HDG · VS · ALT.A · ALT · CR.HT</b>, 아래 줄 <b>NAVD CPL · T-DOWN · T.D.HOV · H.HT</b>, 오른쪽 <b>BARO · UPLIM / CRS · DH</b>.
+          노브는 왼쪽(‹) · 오른쪽(›)을 누르면 돌고(누르고 있으면 계속), 가운데를 누르면 PUSH — IAS · HDG · CRS 는 지금 FCP 의 이름 버튼, CR.HT 는 CRHT 유지, BARO 는 STD(1013).
+          노브 아래 작은 숫자가 지금 기준값이고, 걸린 모드는 녹색으로 켜집니다. UPLIM · DH 와 빈 버튼 둘은 아직 자리만 있습니다.</li>
         <li><b>메시지 시현창</b>(PFD HSI 오른쪽 위 바람 정보 아래): <span style="color:#ffb000">PITOT OFF</span>(PITOT HEAT OFF) ·
+          <span style="color:#ffb000">1 / 2 GEN OFF</span>(그 GEN 스위치 OFF — 엔진이 멎어 발전기가 떨어져도) ·
           <span style="color:#22e022">PARKING BRAKE SET</span> · <span style="color:#22e022">1 / 2 ENG A/I ON</span>(그 엔진 ANTI ICE 스위치 ON, 또는 NgR 87.5 % 이하면 늘) ·
           <span style="color:#22e022">NLG LOCK</span>(NOSE WHEEL LOCK) · <span style="color:#22e022">EMER FLOATS ARMED</span>(FLOATS 스위치 ARMED). UPPER · LOWER 창 스위치를 따라 곧바로 바뀝니다.</li>
         <li><b>HOCAS</b>(CDU <b>Aircraft Systems → HOCAS</b> 칸의 <b>PFD 표시</b> 버튼): 켜면 HSI 오른쪽 아래에 <b>사이클릭(전후·좌우)과 페달</b>이 가운데(중립)인지,
@@ -3582,37 +3618,37 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
 <!-- 앱 코드 — 클래식 스크립트(모듈 아님)라 전역 스코프를 공유한다.
      순서가 곧 실행 순서이므로 임의로 바꾸지 말 것. -->
   <!-- AIP 데이터 — 코드보다 먼저 로드한다 -->
-  <script src="js/data/terminal-fixes.js?v=563"></script>
-  <script src="js/data/ifr-fixes.js?v=563"></script>
-  <script src="js/data/ifr-procedures.js?v=563"></script>
-  <script src="js/data/airfield-info.js?v=563"></script>
-  <script src="js/data/enr-vors.js?v=563"></script>
-  <script src="js/data/loc-stations.js?v=563"></script>
-  <script src="js/data/enr-routes.js?v=563"></script>
-  <script src="js/data/airspace.js?v=563"></script>
-  <script src="js/data/runways.js?v=563"></script>
+  <script src="js/data/terminal-fixes.js?v=566"></script>
+  <script src="js/data/ifr-fixes.js?v=566"></script>
+  <script src="js/data/ifr-procedures.js?v=566"></script>
+  <script src="js/data/airfield-info.js?v=566"></script>
+  <script src="js/data/enr-vors.js?v=566"></script>
+  <script src="js/data/loc-stations.js?v=566"></script>
+  <script src="js/data/enr-routes.js?v=566"></script>
+  <script src="js/data/airspace.js?v=566"></script>
+  <script src="js/data/runways.js?v=566"></script>
   <!-- 앱 코드 -->
-  <script src="js/00-ui.js?v=563"></script>
-  <script src="js/01-state.js?v=563"></script>
-  <script src="js/02-math.js?v=563"></script>
-  <script src="js/03-pfd.js?v=563"></script>
-  <script src="js/04-map.js?v=563"></script>
-  <script src="js/05-gps.js?v=563"></script>
-  <script src="js/06-nav.js?v=563"></script>
-  <script src="js/07-sim.js?v=563"></script>
-  <script src="js/08-ifrdb.js?v=563"></script>
-  <script src="js/09-cdu.js?v=563"></script>
-  <script src="js/10-tools.js?v=563"></script>
-  <script src="js/11-charts.js?v=563"></script>
-  <script src="js/12-joystick.js?v=563"></script>
-  <script src="js/13-joyhid.js?v=563"></script>
-  <script src="js/14-simmode.js?v=563"></script>
-  <script src="js/15-heli3d.js?v=563"></script>
-  <script src="js/16-sound.js?v=563"></script>
-  <script src="js/17-upper.js?v=563"></script>
-  <script src="js/18-system.js?v=563"></script>
-  <script src="js/19-lower.js?v=563"></script>
-  <script src="js/20-navaids.js?v=563"></script>
+  <script src="js/00-ui.js?v=566"></script>
+  <script src="js/01-state.js?v=566"></script>
+  <script src="js/02-math.js?v=566"></script>
+  <script src="js/03-pfd.js?v=566"></script>
+  <script src="js/04-map.js?v=566"></script>
+  <script src="js/05-gps.js?v=566"></script>
+  <script src="js/06-nav.js?v=566"></script>
+  <script src="js/07-sim.js?v=566"></script>
+  <script src="js/08-ifrdb.js?v=566"></script>
+  <script src="js/09-cdu.js?v=566"></script>
+  <script src="js/10-tools.js?v=566"></script>
+  <script src="js/11-charts.js?v=566"></script>
+  <script src="js/12-joystick.js?v=566"></script>
+  <script src="js/13-joyhid.js?v=566"></script>
+  <script src="js/14-simmode.js?v=566"></script>
+  <script src="js/15-heli3d.js?v=566"></script>
+  <script src="js/16-sound.js?v=566"></script>
+  <script src="js/17-upper.js?v=566"></script>
+  <script src="js/18-system.js?v=566"></script>
+  <script src="js/19-lower.js?v=566"></script>
+  <script src="js/20-navaids.js?v=566"></script>
 
 <input type="file" id="zipFileInput" accept=".zip,application/zip,application/x-zip-compressed,application/octet-stream" style="display:none" onchange="handleZipFile(this.files[0]); this.value='';"></body>
 </html>

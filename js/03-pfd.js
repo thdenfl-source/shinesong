@@ -297,6 +297,7 @@ function drawNpNr(x, y, w, h, P) {
 // ── PFD 메시지 시현창(HSI 오른쪽 위 바람 정보 아래) ──
 // UPPER · LOWER 콘솔 스위치와 엔진 상태를 따라 켜진다. 황색은 주의, 녹색은 상태 알림.
 //   PITOT OFF(황) — PITOT HEAT 가 OFF 일 때(AUTO · ON 이면 없음)
+//   1 · 2 GEN OFF(황) — 그 GEN 스위치 OFF(또는 엔진이 멎어 발전기가 버스에 없음)
 //   PARKING BRAKE SET(녹) — 파킹 브레이크 SET
 //   1 · 2 ENG A/I ON(녹) — 그 엔진 ANTI ICE 스위치 ON, 또는 NgR 87.5 % 이하면 늘
 //   NLG LOCK(녹) — NOSE WHEEL LOCK
@@ -308,6 +309,13 @@ function pfdMsgs() {
   try { P = engParams(); } catch (e) { _swallow(e); }
   const out = [];
   if (ov('pitotHeat', 'AUTO') === 'OFF') out.push({ t: 'PITOT OFF', c: PFD_MSG_AMBER });
+  // 1 · 2 GEN OFF(황) — 그 발전기가 버스에 없을 때(UPPER GEN 스위치 OFF, 또는 엔진이 멎어 발전하지 못함 — 18-system.js elecState)
+  let E = null;
+  try { if (typeof elecState === 'function') E = elecState(); } catch (e) { _swallow(e); }
+  [1, 2].forEach(n => {
+    const on = E ? E['gen' + n] : ov('gen' + n, 'ON') === 'ON';
+    if (!on) out.push({ t: `${n} GEN OFF`, c: PFD_MSG_AMBER });
+  });
   if (ov('parkBrake', 'RELEASE') === 'SET') out.push({ t: 'PARKING BRAKE SET', c: PFD_MSG_GREEN });
   [1, 2].forEach(n => {
     const ng = P ? (n === 1 ? P.e1 : P.e2).ng : 100;
