@@ -16,7 +16,7 @@ export async function run(page, t) {
              tab: !!document.querySelector('#page-tabs [data-sel="ovhd"].active') };
   });
   t.ok(info.shown && info.tab, `UPPER 탭으로 상부 콘솔이 열린다`);
-  t.eq(info.plates, 6, '판(plate) 여섯 장 — WIPER · VENT/TRNG · ECS · LIGHTS · APU · CONSOLE/ANTI ICE');
+  t.eq(info.plates, 7, '판(plate) 일곱 장 — WIPER · VENT/TRNG · ECS · LIGHTS · APU · CONSOLE/ANTI ICE · TQS');
   t.ok(info.ctrls === info.defs && info.ctrls >= 45, `스위치·노브가 다 그려진다 (${info.ctrls}/${info.defs}개)`);
 
   // 요소의 위·아래·왼쪽·오른쪽을 마우스로 누른다
@@ -76,7 +76,7 @@ export async function run(page, t) {
   const g1 = await get('trng1');
   await press('[data-ov-cover="trng1"]', 'c');
   const g2 = await get('trng1');
-  t.ok(g0 === 'OFF' && open && g1 === 'TRNG' && g2 === 'OFF',
+  t.ok(g0 === 'NORM' && open && g1 === 'TRNG' && g2 === 'NORM',
     `TRAINING 덮개 — 닫힘이면 그대로 · 열고 TRNG · 닫으면 OFF 로 (${g0} · ${open} · ${g1} · ${g2})`);
   // 스프링 복귀 — 누르는 동안만 TEST
   const during = await press('[data-ov="chipTest"] .ov-bez', 'd', 60);
@@ -107,9 +107,9 @@ export async function run(page, t) {
     const o = { aeo: st() };
     ovhdSet('trng1', 'TRNG'); o.t1 = st();
     ovhdSet('trng2', 'TRNG'); o.both = st();
-    ovhdSet('trng1', 'OFF');  o.t2 = st();
+    ovhdSet('trng1', 'NORM'); o.t2 = st();
     toggleSimMode(false); toggleSimMode(true); o.reset = st();      // SIM 을 다시 켜도 스위치대로 훈련
-    ovhdSet('trng2', 'OFF');  o.off = st();
+    ovhdSet('trng2', 'NORM'); o.off = st();
     cycleSimEng(); o.btnOei = st(); cycleSimEng(); cycleSimEng();   // ENG 버튼의 OEI 는 그대로 2번 고장
     toggleSimMode(false);
     return o;
@@ -125,5 +125,44 @@ export async function run(page, t) {
   t.ok(tr.off.eng === 2 && !tr.off.trng, '스위치를 다 내리면 AEO 로 돌아온다');
   t.ok(tr.btnOei.eng === 1 && tr.btnOei.fail === 2 && !tr.btnOei.trng && tr.btnOei.e1 > 62 && tr.btnOei.e2 === 0,
     'ENG 버튼의 OEI 는 종전대로 2번 고장(훈련과 따로)');
+
+  // ── TQS — PCD 레버(누름쇠) · 연료차단 · 화재소화 레버 → 엔진 상태 ──
+  await page.evaluate(() => { localStorage.removeItem('ovhdState'); ovhdReset(); selectPanel('right', 'ovhd', true); });
+  await page.waitForTimeout(150);
+  const lvTop = () => page.evaluate(() => document.querySelector('[data-ov="pcd1"] .ov-lvh').style.top);
+  const top0 = await lvTop();
+  await press('[data-ov="pcd1"] [data-hz="p0"]');          // FLY 에서 OFF 를 누르면 IDLE 에서 멈춘다
+  const l1 = await get('pcd1'), top1 = await lvTop();
+  await press('[data-ov="pcd1"] [data-hz="p0"]');          // 한 번 더 → OFF
+  const l2 = await get('pcd1');
+  await press('[data-ov="pcd1"] [data-hz="p2"]');          // OFF → FLY 는 한 번에
+  const l3 = await get('pcd1');
+  t.ok(l1 === 'IDLE' && l2 === 'OFF' && l3 === 'FLY' && top0 !== top1,
+    `PCD 레버 — FLY 에서 OFF 를 누르면 IDLE 에서 멈추고(누름쇠) 한 번 더 눌러야 OFF · 손잡이가 움직인다 (${l1} · ${l2} · ${l3})`);
+  const tq = await page.evaluate(`(() => {
+    (${SIM_SETUP_SRC})();
+    const st = () => { const p = engParams(); return { eng: simEng, s: simEngSt[1] + '/' + simEngSt[2], ng1: Math.round(p.e1.ng), ng2: Math.round(p.e2.ng),
+      btn: document.getElementById('eng-3d').textContent }; };
+    const o = { aeo: st() };
+    ovhdSet('pcd1', 'IDLE'); o.idle1 = st();
+    ovhdSet('pcd1', 'OFF');  o.off1 = st();
+    ovhdSet('pcd2', 'OFF');  o.offBoth = st();
+    ovhdSet('pcd1', 'FLY'); ovhdSet('pcd2', 'FLY'); o.back = st();
+    ovhdSet('fuel2', 'SHUT'); o.fuel = st(); ovhdSet('fuel2', 'OPEN');
+    ovhdSet('fire1', 'ARM'); o.fire = st(); ovhdSet('fire1', 'NORM');
+    ovhdSet('pcd2', 'IDLE'); ovhdSet('trng1', 'TRNG'); o.trngBlocked = st(); ovhdSet('trng1', 'NORM'); ovhdSet('pcd2', 'FLY');
+    o.end = st();
+    toggleSimMode(false);
+    return o;
+  })()`);
+  t.ok(tq.aeo.eng === 2 && tq.aeo.s === 'FLY/FLY', 'TQS 처음은 두 PCD FLY — AEO');
+  t.ok(tq.idle1.eng === 1 && tq.idle1.s === 'IDLE/FLY' && tq.idle1.ng1 === 62, `PCD1 IDLE — 1번 IDLE(NG ${tq.idle1.ng1}) · OEI`);
+  t.ok(tq.off1.eng === 1 && tq.off1.ng1 === 0, 'PCD1 OFF — 1번 멎음(NG 0)');
+  t.ok(tq.offBoth.eng === 0 && tq.offBoth.btn === 'ENG OFF', `두 PCD OFF — 동력 없음(${tq.offBoth.btn})`);
+  t.ok(tq.back.eng === 2, 'PCD 를 FLY 로 올리면 AEO 로 돌아온다');
+  t.ok(tq.fuel.eng === 1 && tq.fuel.s === 'FLY/OFF', 'ENG2 FUEL SHUT — 2번 멎음');
+  t.ok(tq.fire.eng === 1 && tq.fire.s === 'OFF/FLY', 'ENG1 FIRE 레버 ARM — 연료가 끊겨 1번 멎음');
+  t.ok(tq.trngBlocked.eng === 1 && tq.trngBlocked.s === 'FLY/IDLE', '한쪽이 이미 IDLE 이면 TRAINING 은 걸리지 않는다');
+  t.ok(tq.end.eng === 2, '모두 되돌리면 AEO');
   await page.evaluate(() => { selectPanel('right', 'map', true); localStorage.removeItem('ovhdState'); });
 }
