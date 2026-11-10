@@ -1891,18 +1891,19 @@ function _fcpsBuild() {
       _fcpsBtn('tdown', 'T-DOWN', 'tdownSet') + _fcpsBtn('tdh', 'T.D.HOV', 'tdhEngage') + _fcpsKnob('hht') +
     `</div><div class="fks-div"></div><div class="fks-r">` +
       _fcpsKnob('baro') + _fcpsKnob('uplim') + _fcpsKnob('crs') + _fcpsKnob('dh') + `</div></div>` +
-    // UPLIM · DH 오른쪽 — 구분선 + 사용자 기능 영역(바람 노브 · RNP · SIM SPD · 인터셉트 · 트림 · FORCE TRIM · G/A · GSPD · 페달)
+    // UPLIM · DH 오른쪽 — 구분선 + 사용자 기능 영역(바람 노브 · RNP · SIM SPD · FORCE TRIM · G/A · GSPD · 트림 · 페달)
     `<div class="fks-div fks-div2"></div><div class="fks-x"><div class="fks-xw">` + _fcpsKnob('wdir') + _fcpsKnob('wspd') + `</div>` +
     `<div class="fks-xr"><div class="fks-xr1"></div><div class="fks-xr2"></div></div></div>`;
   bar.appendChild(p);
   // 옛 FCP 의 나머지 버튼 무리를 그대로(누름 · 홀드가 붙은 채) 옮겨 온다 — 옛 FCP 줄은 모두 없앤다
   const r1 = p.querySelector('.fks-xr1'), r2 = p.querySelector('.fks-xr2');
   const mv = (sel, to) => { const e = bar.querySelector(sel); if (e) to.appendChild(e); };
+  // 두 줄의 폭이 가장 좁게 — 윗줄: RNP · SIM SPD · FORCE TRIM/G/A · GSPD / 아랫줄: COLLECTIVE TRIM · 4-WAY TRIM · ANTI-TORQUE PEDAL
   mv('.nav-src-group', r1);            // RNP
   mv('.simspd-group', r1);             // SIM SPD
-  { const ic = document.getElementById('icpt-btn');   // NAV 인터셉트 각도(30 · 45 · 60°) — 옛 AP 칸에서
-    if (ic) { const g = document.createElement('div'); g.className = 'ctrl-group fks-icpt'; g.innerHTML = '<div class="ctrl-lbl">INTCPT</div>'; g.appendChild(ic); r1.appendChild(g); } }
-  mv('#trim-group', r2);               // COLLECTIVE TRIM · 4-WAY TRIM · FORCE TRIM · G/A · GSPD · ANTI-TORQUE PEDAL
+  mv('.ftr-col', r1);                  // FORCE TRIM · G/A
+  mv('#gspd-btn', r1);                 // GSPD
+  mv('#trim-group', r2);               // COLLECTIVE TRIM · 4-WAY TRIM · ANTI-TORQUE PEDAL
   bar.querySelectorAll(':scope > .ctrl-sub-row').forEach(r => r.remove());
   // 노브 돌리기 — 누르고 있으면 계속(지금 FCP ▲▼ 와 같은 빠르기)
   p.querySelectorAll('[data-rot]').forEach(el => {

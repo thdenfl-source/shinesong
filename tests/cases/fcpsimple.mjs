@@ -15,8 +15,12 @@ export async function run(page, t) {
     // UPLIM 오른쪽 — 구분선 + 사용자 기능(바람 노브 · RNP · SIM SPD · 인터셉트 · 트림 · FORCE TRIM · G/A · GSPD · 페달)
     const x = document.querySelector('#fcp-simple .fks-x');
     o.xDiv = !!document.querySelector('#fcp-simple .fks-div2');
-    o.x = ['[data-k="wdir"]', '[data-k="wspd"]', '#rnp-1', '#simspd-8', '#icpt-btn', '#coll-up', '#trim-pad', '#force-trim-btn', '#ga-btn', '#gspd-btn', '#ped-l']
+    o.x = ['[data-k="wdir"]', '[data-k="wspd"]', '#rnp-1', '#simspd-8', '#coll-up', '#trim-pad', '#force-trim-btn', '#ga-btn', '#gspd-btn', '#ped-l']
       .filter(sel => !x.querySelector(sel));
+    o.noIcpt = !document.getElementById('icpt-btn');
+    const r1 = x.querySelector('.fks-xr1'), r2 = x.querySelector('.fks-xr2');
+    o.rows = { up: ['#force-trim-btn', '#ga-btn', '#gspd-btn', '#rnp-1', '#simspd-1'].every(q => r1.querySelector(q)),
+               dn: ['#coll-up', '#trim-pad', '#ped-l'].every(q => r2.querySelector(q)) };
     const wd0 = windDir; turn('wdir', 'up'); o.wdir = (windDir - wd0 + 360) % 360; windDir = wd0;
     const ws0 = windSpd; turn('wspd', 'up'); o.wspd = windSpd - ws0; windSpd = ws0;
     // 노브 — 돌리면 지금 FCP 와 같은 값이 움직인다
@@ -43,7 +47,8 @@ export async function run(page, t) {
     return o;
   });
   t.ok(r.fullRows, '옛 FCP 줄 · SIMPLE/FULL 탭 · OBS/NAV · WDIR/WSPD ▲▼ · STOP WATCH 는 없다 — FCP 는 이 패널 하나');
-  t.ok(r.xDiv && r.x.length === 0, `UPLIM 오른쪽 구분선 + 바람 노브 · RNP · SIM SPD · INTCPT · 트림 · FORCE TRIM · G/A · GSPD · 페달 (빠짐: ${r.x.join(',') || '없음'})`);
+  t.ok(r.xDiv && r.x.length === 0, `UPLIM 오른쪽 구분선 + 바람 노브 · RNP · SIM SPD · 트림 · FORCE TRIM · G/A · GSPD · 페달 (빠짐: ${r.x.join(',') || '없음'})`);
+  t.ok(r.noIcpt && r.rows.up && r.rows.dn, '인터셉트 버튼은 없다 · 윗줄 RNP · SIM SPD · FORCE TRIM · G/A · GSPD / 아랫줄 COLLECTIVE TRIM · 4-WAY TRIM · 페달');
   t.ok(r.wdir === 5 && r.wspd === 1, `WIND DIR 노브 +5° · WIND SPD 노브 +1kt (${r.wdir} · ${r.wspd})`);
   t.eq(r.lbls, 'IAS,HDG,VS,ALT.A,ALT,CR.HT,NAVD CPL,T-DOWN,T.D.HOV,H.HT,BARO,UPLIM,CRS,DH', '사진의 배치(위 · 아래 · 오른쪽 BARO/UPLIM · CRS/DH)');
   t.ok(r.hdg === 1 && r.alt === 100 && r.crht === -10 && r.hht === 10, `노브를 돌리면 HDG +1 · ALT.A +100 · CR.HT −10 · H.HT +10 (${r.hdg} · ${r.alt} · ${r.crht} · ${r.hht})`);
