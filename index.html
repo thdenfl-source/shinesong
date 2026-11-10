@@ -17,7 +17,7 @@
      CDN 을 쓰면 한 번이라도 못 받는 순간 앱이 통째로 죽는다 — 비행 중에는
      그럴 여지를 두지 않는다. -->
 <!-- 패널 새 창(다중 모니터) — 라이브러리가 거는 이벤트까지 받아 적어야 하므로 맨 먼저 -->
-<script src="js/00-popout.js?v=576"></script>
+<script src="js/00-popout.js?v=577"></script>
 <link rel="stylesheet" href="vendor/leaflet.css"/>
 <script src="vendor/leaflet.js"></script>
 <link rel="stylesheet" href="vendor/leaflet-velocity.min.css"/>
@@ -251,7 +251,6 @@ html, body {
 .pfd-sk em { font-style: normal; color: #00e5ff; font-size: 9px; pointer-events: none; }
 .pfd-sk i { position: absolute; left: 22%; right: 22%; bottom: 2px; height: 3px; border-radius: 1px; background: transparent; pointer-events: none; }
 .pfd-sk.on i { background: #22e022; }
-.pfd-sk.auto i { background: #e8edf2; }   /* SUSP 가 홀딩으로 저절로 걸림 */
 .pfd-sk:active { background: linear-gradient(#2a6a8a, #1a3a52); }
 .pfd-sk.none { cursor: default; }
 .pfd-sk.none:active { background: linear-gradient(#5b6168, #33383e 55%, #262a2f); }
@@ -2187,7 +2186,7 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
     </div>
   </form>
 </div>
-<script src="js/00-gate.js?v=576"></script>
+<script src="js/00-gate.js?v=577"></script>
 <!-- ── 단일화면 선택 바 (기본 숨김) ── -->
 <!-- ── 시작 안내(사용법/키보드) 오버레이 ── -->
 <div id="help-overlay" style="display:none;">
@@ -2735,7 +2734,7 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
             웨이포인트 카드의 <b>VNAV 고도 · 오프셋</b>, <b>홀딩 설정</b>의 <b>INBD CRS · 시간/거리</b>도 같은 방식입니다.
             홀딩 시간은 이제 <b>아무 값이나</b>(10~600초) 넣을 수 있습니다 — 종전에는 30·60·90·120·150·180초만 골랐습니다.</li>
         <li><b>PFD 소프트키</b>(PFD 바로 아래 12칸 — KUH-1CG FLM 그림 5~8 의 트리): 최상위 Map Range − · Map Range + · <b>PFD Map Settings ▸</b> · Traffic Map · <b>PFD Settings ▸</b> · <b>OBS</b> · <b>Active NAV</b> · <b>Sensors ▸</b> · <b>Hover Display</b> · <b>Hover Position</b> · CAS · <b>SIM</b>.
-          <b>OBS</b> 는 지금 FCP 와 같고(NAV 로 날며 홀딩 지점 · 비행계획 마지막 지점(접근 끝 · 미스드어프로치)을 향하거나 보류 중이면 <b>SUSP</b> 로 바뀌어 옛 FCP 의 SUSP 처럼 다음 지점으로 넘어가지 않게 붙잡고, 다시 누르면 풀어 다음으로 — 손으로 켜면 녹색 바, 홀딩으로 저절로 걸리면 흰 바), <b>Hover Display · Hover Position</b> 은 옛 FCP 의 HOVER PAGE · HOVER POS(FCP 버튼은 없앴습니다), <b>SIM</b> 은 옛 FCP 의 SIM 버튼(조종간으로 직접 모는 모드 — FCP 버튼은 없앴습니다), <b>Active NAV</b> 는 VOR1 → VOR2 → FMS 로 돌며, Map Range −/+ 는 지도 축척.
+          <b>OBS</b> 는 지금 FCP 와 같고(NAV 로 날며 홀딩 지점 · 비행계획 마지막 지점(접근 끝 · 미스드어프로치)을 향하거나 보류 중이면 <b>SUSP</b> 로 바뀌어 옛 FCP 의 SUSP 처럼 다음 지점으로 넘어가지 않게 붙잡고, 다시 누르면 풀어 다음으로 — 걸려 있으면(손으로 켬 · 홀딩으로 저절로) 녹색 바), <b>Hover Display · Hover Position</b> 은 옛 FCP 의 HOVER PAGE · HOVER POS(FCP 버튼은 없앴습니다), <b>SIM</b> 은 옛 FCP 의 SIM 버튼(조종간으로 직접 모는 모드 — FCP 버튼은 없앴습니다), <b>Active NAV</b> 는 VOR1 → VOR2 → FMS 로 돌며, Map Range −/+ 는 지도 축척.
           ▸ 칸은 하위 메뉴 — PFD Map Settings(Map Layout ▸ · Detail · Traffic · Terrain · WX Overlay · Lightning) · PFD Settings(<b>Bearing1 · Bearing2</b> OFF → NAV1 → NAV2 → FMS · Other PFD Settings ▸ Altitude Units ▸ Meters · <b>IN · HPA</b>) · Sensors(RA Settings ▸ RA1 · RA2).
           <b>Back</b> 은 한 단계 위로, 45초 동안 누르지 않으면 최상위로 돌아갑니다. 켜진 기능은 칸 아래 녹색 바, 지금 쓸 수 없는 칸은 회색. Traffic · Terrain · WX · Detail · Map Layout · Meters · RA · CAS 는 아직 고른 상태만 기억합니다.</li>
         <li><b>FCP</b>(실기 AFCS 조작 패널 모양 — 옛 FCP 의 줄들과 SIMPLE/FULL 탭은 없앴습니다. 모든 버튼이 이 패널과 PFD 소프트키로 옮겨 왔습니다): 왼쪽은 실기 패널(IAS · HDG · VS · ALT.A · ALT · CR.HT / NAVD CPL · T-DOWN · T.D.HOV · H.HT | BARO · UPLIM / CRS · DH), <b>UPLIM 오른쪽 구분선 뒤</b>는 사용자 기능 — <b>WIND DIR · WIND SPD</b> 노브(위아래) · <b>RNP</b> · <b>SIM SPD</b> · <b>FORCE TRIM · G/A · GSPD</b>(윗줄) · <b>COLLECTIVE TRIM · 4-WAY TRIM · ANTI-TORQUE PEDAL</b>(아랫줄). PFD 창이 좁으면 오른쪽 영역은 아래 줄로 내려갑니다. 위 줄 <b>IAS · HDG · VS · ALT.A · ALT · CR.HT</b>, 아래 줄 <b>NAVD CPL · T-DOWN · T.D.HOV · H.HT</b>, 오른쪽 <b>BARO · UPLIM / CRS · DH</b>.
@@ -3484,37 +3483,37 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
 <!-- 앱 코드 — 클래식 스크립트(모듈 아님)라 전역 스코프를 공유한다.
      순서가 곧 실행 순서이므로 임의로 바꾸지 말 것. -->
   <!-- AIP 데이터 — 코드보다 먼저 로드한다 -->
-  <script src="js/data/terminal-fixes.js?v=576"></script>
-  <script src="js/data/ifr-fixes.js?v=576"></script>
-  <script src="js/data/ifr-procedures.js?v=576"></script>
-  <script src="js/data/airfield-info.js?v=576"></script>
-  <script src="js/data/enr-vors.js?v=576"></script>
-  <script src="js/data/loc-stations.js?v=576"></script>
-  <script src="js/data/enr-routes.js?v=576"></script>
-  <script src="js/data/airspace.js?v=576"></script>
-  <script src="js/data/runways.js?v=576"></script>
+  <script src="js/data/terminal-fixes.js?v=577"></script>
+  <script src="js/data/ifr-fixes.js?v=577"></script>
+  <script src="js/data/ifr-procedures.js?v=577"></script>
+  <script src="js/data/airfield-info.js?v=577"></script>
+  <script src="js/data/enr-vors.js?v=577"></script>
+  <script src="js/data/loc-stations.js?v=577"></script>
+  <script src="js/data/enr-routes.js?v=577"></script>
+  <script src="js/data/airspace.js?v=577"></script>
+  <script src="js/data/runways.js?v=577"></script>
   <!-- 앱 코드 -->
-  <script src="js/00-ui.js?v=576"></script>
-  <script src="js/01-state.js?v=576"></script>
-  <script src="js/02-math.js?v=576"></script>
-  <script src="js/03-pfd.js?v=576"></script>
-  <script src="js/04-map.js?v=576"></script>
-  <script src="js/05-gps.js?v=576"></script>
-  <script src="js/06-nav.js?v=576"></script>
-  <script src="js/07-sim.js?v=576"></script>
-  <script src="js/08-ifrdb.js?v=576"></script>
-  <script src="js/09-cdu.js?v=576"></script>
-  <script src="js/10-tools.js?v=576"></script>
-  <script src="js/11-charts.js?v=576"></script>
-  <script src="js/12-joystick.js?v=576"></script>
-  <script src="js/13-joyhid.js?v=576"></script>
-  <script src="js/14-simmode.js?v=576"></script>
-  <script src="js/15-heli3d.js?v=576"></script>
-  <script src="js/16-sound.js?v=576"></script>
-  <script src="js/17-upper.js?v=576"></script>
-  <script src="js/18-system.js?v=576"></script>
-  <script src="js/19-lower.js?v=576"></script>
-  <script src="js/20-navaids.js?v=576"></script>
+  <script src="js/00-ui.js?v=577"></script>
+  <script src="js/01-state.js?v=577"></script>
+  <script src="js/02-math.js?v=577"></script>
+  <script src="js/03-pfd.js?v=577"></script>
+  <script src="js/04-map.js?v=577"></script>
+  <script src="js/05-gps.js?v=577"></script>
+  <script src="js/06-nav.js?v=577"></script>
+  <script src="js/07-sim.js?v=577"></script>
+  <script src="js/08-ifrdb.js?v=577"></script>
+  <script src="js/09-cdu.js?v=577"></script>
+  <script src="js/10-tools.js?v=577"></script>
+  <script src="js/11-charts.js?v=577"></script>
+  <script src="js/12-joystick.js?v=577"></script>
+  <script src="js/13-joyhid.js?v=577"></script>
+  <script src="js/14-simmode.js?v=577"></script>
+  <script src="js/15-heli3d.js?v=577"></script>
+  <script src="js/16-sound.js?v=577"></script>
+  <script src="js/17-upper.js?v=577"></script>
+  <script src="js/18-system.js?v=577"></script>
+  <script src="js/19-lower.js?v=577"></script>
+  <script src="js/20-navaids.js?v=577"></script>
 
 <input type="file" id="zipFileInput" accept=".zip,application/zip,application/x-zip-compressed,application/octet-stream" style="display:none" onchange="handleZipFile(this.files[0]); this.value='';"></body>
 </html>

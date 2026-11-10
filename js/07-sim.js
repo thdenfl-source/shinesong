@@ -1993,10 +1993,9 @@ const SK_MENUS = {
     { lbl: 'Traffic<br>Map', on: () => skState.tfcMap, act: _skTog('tfcMap') },
     { lbl: 'PFD<br>Settings', go: 'PFDSET' },
     // OBS — 홀딩 · 오비트 · 미스드어프로치처럼 다음 지점으로 넘어갈지 정할 자리면 SUSP 로 바뀐다(suspSoftkey)
-    //   SUSP 는 옛 FCP 의 SUSP 와 같다(toggleSusp). 손으로 켜면 녹색 바, 홀딩으로 저절로 걸리면 흰 바
+    //   SUSP 는 옛 FCP 의 SUSP 와 같다(toggleSusp). 걸려 있으면(손으로 켬 · 홀딩으로 저절로) 녹색 바
     { lbl: () => suspSoftkey() ? 'SUSP' : 'OBS',
-      on: () => suspSoftkey() ? suspOn : obsOn,
-      auto: () => suspSoftkey() && navSuspAuto() && !suspOn,
+      on: () => suspSoftkey() ? navSuspended() : obsOn,   // 보류가 걸려 있으면(손으로 · 홀딩으로 저절로) 녹색 바
       dim: () => !suspSoftkey() && _skDis('obs-btn'),
       act: () => { if (suspSoftkey()) toggleSusp(); else toggleObs(); } },
     { lbl: 'Active NAV', sub: () => ({ FMS: 'FMS', NAV1: 'VOR1', NAV2: 'VOR2' })[navSrc] || navSrc, act: () => pfdSkNavCycle() },
