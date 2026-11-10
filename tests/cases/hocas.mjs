@@ -1,4 +1,4 @@
-// HOCAS — FCP 2행 HOVER 칸 머리의 버튼. 켜면 HSI 왼쪽에 사이클릭·페달이 가운데인지·치우쳤는지 보인다.
+// HOCAS — FCP 2행 HOVER 칸 머리의 버튼. 켜면 HSI 오른쪽 아래에 사이클릭·페달이 가운데인지·치우쳤는지 보인다.
 import { SIM_SETUP_SRC } from './simmode.mjs';
 export const name = 'HOCAS';
 

@@ -56,9 +56,10 @@ function pfdLayout(W, H, ctrlH) {
     vsi:  { x: altX + tapW, y: altY, w: vsiW, h: altH },
     baro: { x: altX, y: tY + tH + 3, w: tapW, h: botH },
     eng:  { x: 0, y: aiH, w: engW, h: hsiH },
-    hsi:  { x: engW, y: aiH, w: W - engW - raW, h: hsiH },
-    crht: { x: W - raW, y: aiH, w: raW, h: Math.round(hsiH * 2 / 3) },                       // 위 2/3 — 레이더 고도계
-    navs: { x: W - raW, y: aiH + Math.round(hsiH * 2 / 3), w: raW, h: hsiH - Math.round(hsiH * 2 / 3) },   // 아래 1/3 — FMS·NAV1·NAV2
+    // 오른쪽 아래 CRHT·NAV 칸은 위의 고도계+승강계 칸과 같은 x·폭(세로로 한 줄) — 오른쪽 여백(pad)은 땅 바탕 그대로
+    hsi:  { x: engW, y: aiH, w: altX - engW, h: hsiH },
+    crht: { x: altX, y: aiH, w: raW, h: Math.round(hsiH * 2 / 3) },                       // 위 2/3 — 레이더 고도계
+    navs: { x: altX, y: aiH + Math.round(hsiH * 2 / 3), w: raW, h: hsiH - Math.round(hsiH * 2 / 3) },   // 아래 1/3 — FMS·NAV1·NAV2
   };
 }
 
@@ -328,14 +329,17 @@ function hocasAxes() {
 }
 function drawHocas(x, y, w, h, cxC) {
   if (!(w >= 40) || !(h >= 40)) return;
-  const sideW = Math.max(60, hsiGeom(x, y, w, h, cxC).leftW);
+  // HSI 오른쪽 아래 — 왼쪽은 바람·TAS/OAT 등과 겹쳐 오른쪽 아래 빈자리로 옮겼다
+  const G = hsiGeom(x, y, w, h, cxC);
+  const sideW = Math.max(60, G.rightW);
   const ax = hocasAxes();
   const clamp = v => Math.max(-1, Math.min(1, v));
   const col = v => Math.abs(v) <= HOCAS_DEAD ? '#00ff88' : '#ffb74d';
   const fs = Math.max(8, Math.min(11, sideW * 0.10));
   const colW = 8, colGap = 6;                      // 오른쪽에 컬렉티브 막대
   const box = Math.min(sideW - 8 - colW - colGap, h * 0.40);
-  const bx = x + 4 + (sideW - box - colW - colGap) / 2, by = y + h * 0.24;
+  const bx = Math.min(x + w - 8 - box - colW - colGap, G.cx + G.r + 4 + (sideW - box - colW - colGap) / 2);
+  const by = y + h - 6 - (box + fs * 3.8 + 12);   // 바탕 아래끝이 HSI 아래에서 6px
   ctx.save();
   // 바탕
   ctx.fillStyle = 'rgba(0,0,0,0.72)';
@@ -1295,21 +1299,24 @@ function drawHSI(x, y, w, h, cxC) {
   // 패널은 같은 값을 한 번 더 적는 자리였다. 나침반의 BRG1·BRG2 니들은
   // brg1Visible·brg2Visible 토글로 그대로 유지된다 — 지우는 것은 숫자판뿐이다.
 
-  // ── Wind display (HSI top-left) ──
+  // ── Wind display (HSI top-right) ── 왼쪽 위에 두면 HDG 칸과 겹쳐 오른쪽 위로 옮겼다
   {
     const wdirFmt = fmtA(toMag(windDir));   // 바람도 자북 기준으로 표기
     const wspdFmt = String(Math.round(windSpd)).padStart(2,'0');
-    const wdX = leftX + sideW / 2;
+    let wdX = rightX + sideWR / 2;
     const wdY = y + h * 0.10;
     const fs  = Math.max(9, r * 0.105);
     ctx.save();
     ctx.font = `bold ${fs}px Helvetica Neue, Arial, sans-serif`;
     ctx.fillStyle = '#ffffff';
     ctx.textAlign = 'center';
-    ctx.fillText(`${wdirFmt}°/${wspdFmt}kt`, wdX, wdY + fs * 1.1);
+    // 오른쪽 칸이 좁으면 글자가 CRHT 칸으로 넘지 않게 안쪽으로 물린다
+    const wTxt = `${wdirFmt}°/${wspdFmt}kt`;
+    wdX = Math.min(wdX, x + w - ctx.measureText(wTxt).width / 2 - 4);
+    ctx.fillText(wTxt, wdX, wdY + fs * 1.1);
 
     // Wind arrow: points in direction wind is blowing TO (windDir + 180)
-    const aLen = Math.min(sideW * 0.32, 14);
+    const aLen = Math.min(sideWR * 0.32, 14);
     const wto  = normA(windDir + 180) * D2R;
     const ax   = Math.sin(wto) * aLen;
     const ay   = -Math.cos(wto) * aLen;
