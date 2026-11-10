@@ -9,7 +9,7 @@
 const SYS_W = 1000, SYS_H = 630;
 const SYS_PAGES = {
   asys_afcs: 'AFCS', asys_status: 'Aircraft Status', asys_elec: 'Electrical', asys_eng: 'Engines',
-  asys_fuel: 'Fuel', asys_hocas: 'HOCAS', asys_tests: 'System Tests', asys_video: 'Video', asys_maint: 'Maintenance',
+  asys_fuel: 'Fuel', asys_ratest: 'RA Self Test', asys_hocas: 'HOCAS', asys_tests: 'System Tests', asys_light: 'Lighting Config', asys_video: 'Video', asys_maint: 'Maintenance',
 };
 let sysPage = 'asys_fuel';
 function sysPageSet(id) {
