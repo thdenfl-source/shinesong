@@ -2683,8 +2683,8 @@ async function part5(page, t) {
     // 오토로테이션 — 80kt 에서 두 엔진 IDLE
     hold(80); S.alt = 4000; lever(tqRequired()); fly(2);
     simEng = 0; fly(1.5); o.decay = simNr;
-    lever(AUTO_LREF); fly(14); o.auto = { nr: simNr, vs: S.vs, tq: S.tq };   // 강하율 변화가 두 배 느려져 자리 잡는 데 조금 더 걸린다
-    lever(0); fly(6); o.high = { nr: simNr, warn: simRotorHigh() };
+    lever(AUTO_LREF); fly(14); o.auto = { nr: simNr, vs: S.vs, tq: S.tq, want: autoNrChart() - NR_AUTO_K * AUTO_LREF };   // 강하율 변화가 두 배 느려져 자리 잡는 데 조금 더 걸린다
+    lever(0); fly(8); o.high = { nr: simNr, warn: simRotorHigh(), chart: autoNrChart() };
     simEng = 2; lever(tqRequired()); fly(4);
     // OEI 정격
     simEng = 1; simOeiT = 0; o.oei25 = simEngAvail() / mtaNow(); simOeiT = 200; o.oeiCont = simEngAvail() / mtaNow(); simEng = 2; simOeiT = 0;
@@ -2711,9 +2711,10 @@ async function part5(page, t) {
     `최소 동력은 제자리의 70% 아래 · 150kt 는 MCP 언저리 (${(aero.req[70] / aero.req[0]).toFixed(2)} · ${aero.req[150].toFixed(0)}%)`);
   t.ok(aero.bank45 > 18 && aero.bank45 < 30, `45° 선회는 100kt 에서 토크가 약 +20% 더 든다 (+${aero.bank45.toFixed(1)}%)`);
   t.ok(aero.decay < 88, `엔진이 멎었는데 레버를 그대로 두면 NR 이 곧 처진다 (1.5초 ${aero.decay.toFixed(0)}%)`);
-  t.ok(Math.abs(aero.auto.nr - 100) < 2 && aero.auto.vs < -1500 && aero.auto.vs > -2400 && aero.auto.tq < 1,
+  t.ok(Math.abs(aero.auto.nr - aero.auto.want) < 2 && aero.auto.vs < -1500 && aero.auto.vs > -2400 && aero.auto.tq < 1,
     `레버를 내려 오토로테이션 — NR ${aero.auto.nr.toFixed(0)}% · 강하 ${aero.auto.vs.toFixed(0)}fpm`);
-  t.ok(aero.high.nr > 105 && aero.high.warn, `레버를 다 내리면 NR 이 넘친다(NR HIGH) (${aero.high.nr.toFixed(0)}%)`);
+  t.ok(Math.abs(aero.high.nr - aero.high.chart) < 1.5 && aero.high.warn === (aero.high.nr > 110),
+    `레버를 다 내리면 NR 이 자동회전 RPM 수정표 값까지 오르고, 110% 를 넘으면 NR HIGH (${aero.high.nr.toFixed(1)} · 표 ${aero.high.chart.toFixed(1)}%)`);
   t.ok(Math.abs(aero.oei25 - 0.73) < 0.01 && Math.abs(aero.oeiCont - 0.64) < 0.01,
     `OEI — 2.5분 정격 ${Math.round(aero.oei25 * 100)}% · 그 뒤 연속 ${Math.round(aero.oeiCont * 100)}%(AEO MTA 대비)`);
   t.ok(aero.tr.d > 4 && aero.tr.d < 7 && Math.abs(aero.tr.vs) < 60,

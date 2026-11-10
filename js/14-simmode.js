@@ -475,7 +475,51 @@ function updateEngBtn() {
 // 로터가 낸다 — 강하가 붙기 전(수평)에는 NR 이 U 만큼 처지고, 오토로테이션 강하가 자리 잡을수록
 // (wA) 흘러드는 바람이 로터를 돌린다. 레버를 AUTO_LREF(12%) 에 두면 100%, 다 내리면 넘친다(ROTOR HIGH),
 // 올리면 처진다. 플레어(감속)는 NR 을 올리고, 처지는 NR 의 운동에너지는 잠깐 양력으로 쓰인다(쿠션).
-const NR_AUTO_K = 0.6, AUTO_LREF = 12, NR_FLARE_K = 1.0, NR_FLOOR = 60, NR_HIGH = 106;
+const NR_AUTO_K = 0.6, AUTO_LREF = 12, NR_FLARE_K = 1.0, NR_FLOOR = 60;
+// NR 경고 띠(NR_HIGH 등)는 01-state.js — PFD 가 이 파일보다 먼저 그려질 수 있다
+// ── 자동회전 비행 RPM 수정표(붙임 2) ── 컬렉티브 최하단 · 75KIAS 에서 자리 잡는 NR(%).
+// 총중량(1,000lb) 12~20 · 밀도고도 −6,000~16,000ft. 표 그림에서 곡선을 읽은 값(−6~8,000ft · 2,000ft 마다),
+// 그 위는 같은 그림에 맞춘 식 NR = e^3.6998 · GW^0.3311 · σ^−0.3384 (σ 밀도비 · 최대 오차 2%)를 표와 이어 쓴다.
+const AUTO_NR_DA = [-6, -4, -2, 0, 2, 4, 6, 8];
+const AUTO_NR_TBL = [            // 행: 밀도고도(1,000ft) · 열: GW 12,13,…,20
+  [88.6, 90.3, 92.1, 93.8, 95.6, 97.3, 99.1, 100.9, 102.7],
+  [89.7, 91.6, 93.4, 95.3, 97.1, 99.0, 100.8, 102.7, 104.6],
+  [91.0, 93.0, 95.0, 97.0, 98.9, 100.9, 102.8, 104.8, 106.8],
+  [92.5, 94.5, 96.6, 98.7, 100.8, 102.8, 104.9, 107.1, 109.1],
+  [94.0, 96.2, 98.4, 100.6, 102.8, 105.0, 107.2, 109.5, 111.7],
+  [95.6, 98.0, 100.3, 102.6, 105.0, 107.3, 109.7, 112.1, 114.4],
+  [97.4, 99.8, 102.3, 104.8, 107.3, 109.8, 112.3, 114.8, null],
+  [99.3, 101.9, 104.6, 107.2, 109.9, 112.5, 115.1, 117.9, null],
+];
+function _autoNrFit(gw, da) {          // gw: 1,000lb · da: 1,000ft
+  const sig = Math.pow(Math.max(0.3, 1 - 6.8756e-3 * da), 4.2559);
+  return Math.exp(3.6998) * Math.pow(gw, 0.3311) * Math.pow(sig, -0.3384);
+}
+function _autoNrTbl(gw, da) {
+  const g = Math.max(12, Math.min(20, gw)), gi = Math.min(7, Math.floor(g - 12)), gf = g - 12 - gi;
+  const di = Math.max(0, Math.min(AUTO_NR_DA.length - 2, Math.floor((da + 6) / 2))), df = Math.max(0, Math.min(1, (da - AUTO_NR_DA[di]) / 2));
+  const v = (r, c) => { const x = AUTO_NR_TBL[r][c]; return x == null ? _autoNrFit(12 + c, AUTO_NR_DA[r]) : x; };
+  const lo = v(di, gi) * (1 - gf) + v(di, gi + 1) * gf, hi = v(di + 1, gi) * (1 - gf) + v(di + 1, gi + 1) * gf;
+  return lo * (1 - df) + hi * df;
+}
+// 지금의 밀도고도(ft) — TAS 와 같은 밀도(고도 · METAR 기온)에서 거꾸로 셈한다
+function simDensityAltFt() {
+  let r = 1;
+  try { r = tasRatio(); } catch (e) { _swallow(e); }
+  const sig = 1 / (r * r);
+  return (1 - Math.pow(sig, 1 / 4.2559)) / 6.8756e-6;
+}
+// 표가 주는 자동회전 NR(%) — 컬렉티브 최하단. GW·밀도고도는 PERF 무게와 지금 공기에서
+function autoNrChart(gwLb, daFt) {
+  let w = gwLb, d = daFt;
+  if (!Number.isFinite(w)) { w = 16000; try { if (typeof perfWeightLb === 'function') w = perfWeightLb(); } catch (e) { _swallow(e); } }
+  if (!Number.isFinite(d)) d = simDensityAltFt();
+  const gw = w / 1000, da = d / 1000;
+  if (da <= 8) return _autoNrTbl(gw, Math.max(-6, da));
+  // 8,000ft 위는 식으로 — 8,000ft 에서 표와 이어지게 비율을 맞춘다
+  const k = _autoNrTbl(gw, 8) / _autoNrFit(Math.max(12, Math.min(20, gw)), 8);
+  return _autoNrFit(Math.max(12, Math.min(20, gw)), Math.min(16, da)) * k;
+}
 const AUTO_ENG_TQ = 15, AUTO_NR_OK = 90, AUTO_NR_SINK = 8000, AUTO_NR_E = 1, AUTO_NR_TAU_DN = 2.5, AUTO_CUSH_TAU = 0.4;   // 오토로테이션에서 레버를 당기면 NR 이 처지는 시간(로터 관성)   // 오토로테이션: 엔진 가용 15% 미만 · NR 90% 부터 · 양력 손실 세기
 const NR_E_K = 5;              // NR 이 1%/s 처질 때 내주는 동력(토크 %)
 let simNrRel = 0;              // 지금 NR 이 내주는(+)·받아들이는(−) 동력(토크 %)
@@ -1616,9 +1660,12 @@ function simFly(dt) {
   const preq = tqRequired();
   const wA = Math.max(0, Math.min(1, -(S.vs || 0) / (CLIMB_FPM_DN * Math.max(10, preq))));
   const flareNr = (!onGnd && (U > 0 || wA > 0.3)) ? NR_FLARE_K * Math.max(0, -simAcc) : 0;
-  const lowLev = (U === 0 && !onGnd) ? NR_AUTO_K * Math.max(0, AUTO_LREF - demand) * wA : 0;   // 엔진이 돌아도 레버를 다 내리고 내려가면 넘친다
+  // 자동회전으로 자리 잡은 정도(wA)만큼 NR 은 수정표의 값(컬렉티브 최하단)으로 가고, 레버를 올린 만큼(1% 당 NR_AUTO_K) 낮아진다.
+  // 엔진이 돌면(거버너) NR 은 100% 아래로 내려가지 않고, 그 위로만 넘친다(바늘 갈라짐 — NP 는 100% 그대로)
+  const nrAuto = autoNrChart() - NR_AUTO_K * demand;
+  const lowLev = (U === 0 && !onGnd) ? Math.max(0, wA * (nrAuto - 100)) : 0;
   const govLag = onGnd ? 0 : (tTgt > S.tq ? -NR_GOV_DROOP * (tTgt - S.tq) : NR_GOV_RISE * (S.tq - tTgt));   // 거버너 지연
-  const nrTgt = Math.max(NR_FLOOR, Math.min(115, (U > 0 ? 100 + NR_AUTO_K * (wA * AUTO_LREF - U) + flareNr : 100 + lowLev + flareNr) + govLag));
+  const nrTgt = Math.max(NR_FLOOR, Math.min(118, (U > 0 ? 100 - NR_AUTO_K * U + wA * (autoNrChart() - 100) + flareNr : 100 + lowLev + flareNr) + govLag));
   // 거버너 지연 몫은 따로 들고 있는다 — 계기 NR 에는 보이되(잠깐 처짐·넘침), 양력 손실·로터 에너지 셈에는
   // 넣지 않는다(레버를 올려 추력이 느는 동안 엔진이 따라붙는 것이라 그만큼 가라앉지 않는다)
   const gov0 = _simNrGov;
