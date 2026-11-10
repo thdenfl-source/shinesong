@@ -209,6 +209,29 @@ export async function run(page, t) {
     `겹친 배치를 되살려도 그릴 때 바로잡는다 (${dup.c})`);
   t.eq(dup.d, 'pfd·map·m3d', `2D 와 3D 지도는 나란히 둘 수 있다 (${dup.d})`);
 
+  // ── 2분할에서도 오른쪽 창 탭에 3D Only 가 보이고, 눌러서 3D 단독으로 간다 ──
+  const only = await two.evaluate(async () => {
+    const wait = ms => new Promise(r => setTimeout(r, ms));
+    const app = document.getElementById('app');
+    for (let i = 0; i < 4 && (app.classList.contains('triple') || app.classList.contains('quad')); i++) { cycleSplit(); await wait(150); }
+    const b = document.getElementById('m3d-only-btn');
+    const shown = !app.classList.contains('triple') && b.getBoundingClientRect().width > 0;
+    b.click(); await wait(300);
+    const solo = _soloActive && _soloCurrent === 'm3d';
+    exitSolo(); await wait(200);
+    return { shown, solo, back: !_soloActive };
+  });
+  t.ok(only.shown, '2분할에서도 오른쪽 창 탭에 3D Only 가 보인다');
+  t.ok(only.solo && only.back, `2분할에서 3D Only 를 누르면 3D 단독으로 갔다가 돌아온다 (단독 ${only.solo} · 복귀 ${only.back})`);
+
+  // ── PFD 배치: CRHT·NAV 칸은 고도계+승강계 칸과 같은 x·폭(세로 정렬) ──
+  const al = await two.evaluate(() => [1400, 1000, 700, 560].map(W => {
+    const L = pfdLayout(W, 900, 300);
+    return Math.abs(L.crht.x - L.alt.x) < 0.5 && Math.abs(L.crht.w - (L.alt.w + L.vsi.w)) < 0.5 &&
+           Math.abs(L.navs.x - L.alt.x) < 0.5 && Math.abs(L.hsi.x + L.hsi.w - L.crht.x) < 0.5;
+  }));
+  t.ok(al.every(Boolean), `CRHT·NAV 칸이 고도계 칸과 세로로 맞는다 (${al.join(' ')})`);
+
   await ctx1.close();
   await ctx2.close();
 }
