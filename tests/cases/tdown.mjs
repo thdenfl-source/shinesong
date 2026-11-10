@@ -20,17 +20,18 @@ export async function run(page, t) {
       return seen;
     };
     const o = {};
-    // FCP — ALT·CRHT 글자가 곧 버튼 · G/S 버튼 없음 · HHT ▲▼
-    const altB = document.getElementById('alt-hold-btn'), crB = document.getElementById('crht-btn');
-    o.lbl = { alt: altB.textContent.trim(), crht: crB.textContent.trim(), altIsLbl: altB.classList.contains('ctrl-lbl-btn'),
-              gs: !!document.getElementById('gs-btn'), td: !!document.getElementById('tdh-btn') };
-    altB.click(); o.altOn = [altHoldOn, altB.classList.contains('on')]; altB.click(); o.altOff = altHoldOn;
+    // FCP — 옛 1행은 없앴고 SIMPLE 패널(늘 보임)의 ALT 버튼 · CR.HT 노브 PUSH · G/S 버튼 없음 · H.HT
+    const altB = document.getElementById('fks-alt'), crB = document.querySelector('#fcp-simple [data-k="crht"] .fks-push');
+    const lblOf = e => e.closest('.fks-cell').querySelector('.fks-lbl').textContent.trim();
+    o.lbl = { alt: lblOf(altB), crht: lblOf(crB), altIsLbl: true,
+              gs: !!document.getElementById('gs-btn'), td: !!document.getElementById('fks-tdh') };
+    altB.click(); fcpsSync(); o.altOn = [altHoldOn, altB.classList.contains('on')]; altB.click(); o.altOff = altHoldOn;
     crB.click(); o.crOn = crhtOn; crB.click();
     selHht = 50; applyDelta('hht', 10); o.hhtUp = selHht; applyDelta('hht', -10);
     // TDOWN — 80kt · 전파고도 200ft 로 기준만 바꾼다(IAS 80 · CRHT 200)
-    { const tb = document.getElementById('tdown-btn'), hb = document.getElementById('tdh-btn');
-      o.order = tb.getBoundingClientRect().bottom <= hb.getBoundingClientRect().top + 1;
-      o.tdTxt = [tb.textContent.trim(), hb.textContent.trim()];
+    { const tb = document.getElementById('fks-tdown'), hb = document.getElementById('fks-tdh');
+      o.order = tb.getBoundingClientRect().right <= hb.getBoundingClientRect().left + 1;
+      o.tdTxt = [lblOf(tb), lblOf(hb)];
       S.alt = 1000; S.spd = 120; S.vs = 0; S.tq = tqRequired(); hdgSelOn = false;
       tb.click();
       o.set = { spd: selSpd, crht: selCrht, crhtOn, ias: simIasOn, td: tdOn, f: fma().map(x => x[0]) };
@@ -44,11 +45,11 @@ export async function run(page, t) {
     S.alt = 1000; S.spd = 100; S.hdg = 90; S.vs = 0; S.tq = tqRequired(); S.bnk = 0;
     selHdg = 90; hdgSelOn = true; rollApOn = true;
     const lat0 = S.lat, lon0 = S.lon;
-    document.getElementById('tdh-btn').click(); document.getElementById('tdh-btn').click();
+    document.getElementById('fks-tdh').click(); document.getElementById('fks-tdh').click();
     o.off = tdOn;                                  // 한 번 더 누르면 풀린다
     S.spd = 100; S.alt = 1000; S.vs = 0;
-    document.getElementById('tdh-btn').click();
-    o.on = tdOn; o.btnOn = document.getElementById('tdh-btn').classList.contains('on');
+    document.getElementById('fks-tdh').click();
+    fcpsSync(); o.on = tdOn; o.btnOn = document.getElementById('fks-tdh').classList.contains('on');
     o.fma0 = fma().map(x => x[0]);
     let amber = null, decpl = null, hdgAt50 = null, maxVs = 0, path = [];
     for (let i = 0; i < 400; i++) {
@@ -83,14 +84,14 @@ export async function run(page, t) {
     toggleSimMode(false);
     return o;
   })()`);
-  t.ok(r.lbl.alt === 'ALT' && r.lbl.crht === 'CRHT' && r.lbl.altIsLbl, 'ALT·CRHT 는 IAS·HDG 처럼 글자 버튼이다');
-  t.ok(r.altOn[0] && r.altOn[1] && !r.altOff, 'ALT 글자를 누르면 걸리고(켜진 모양) 한 번 더 누르면 풀린다');
-  t.eq(r.crOn, true, 'CRHT 글자를 누르면 CRHT 가 걸린다');
+  t.ok(r.lbl.alt === 'ALT' && r.lbl.crht === 'CR.HT', 'SIMPLE 패널의 ALT 버튼 · CR.HT 노브');
+  t.ok(r.altOn[0] && r.altOn[1] && !r.altOff, 'ALT 를 누르면 걸리고(켜진 모양) 한 번 더 누르면 풀린다');
+  t.eq(r.crOn, true, 'CR.HT 노브를 누르면 CRHT 가 걸린다');
   t.eq(r.lbl.gs, false, 'G/S 버튼은 없다(ILS 에서 스스로 잡는다)');
   t.eq(r.lbl.td, true, 'T/D to H 버튼이 있다');
   t.eq(r.hhtUp, 60, `HHT ▲ 는 10ft 씩 올린다 (${r.hhtUp})`);
-  t.ok(r.order, 'TDOWN 아래에 T/D to H 버튼이 있다');
-  t.eq(r.tdTxt.join('|'), 'TDOWN|T/D to H', '버튼 이름');
+  t.ok(r.order, 'T-DOWN 오른쪽에 T.D.HOV 버튼이 있다');
+  t.eq(r.tdTxt.join('|'), 'T-DOWN|T.D.HOV', '버튼 이름(실기 AFCS 패널)');
   t.ok(r.set.spd === 80 && r.set.crht === 200 && r.set.crhtOn && r.set.ias && !r.set.td,
     `TDOWN 은 기준만 바꾼다 — IAS ${r.set.spd} · CRHT ${r.set.crht}`);
   t.ok(r.set.f.includes('CRHT') && r.set.f.includes('IAS') && !r.set.f.includes('TDH'), `FMA 는 CRHT · IAS (${r.set.f.join(' ')})`);

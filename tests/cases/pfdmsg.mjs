@@ -49,4 +49,31 @@ export async function run(page, t) {
   t.ok(r.nlg && r.nlg[1] === GRN, 'NOSE WHEEL LOCK — NLG LOCK 녹색');
   t.ok(r.flt && r.flt[1] === GRN, 'EMER FLOATS ARMED — 녹색');
   t.eq(r.lowNg, '1 ENG A/I ON,2 ENG A/I ON', 'NgR 87.5 % 이하면 스위치가 OFF 여도 ENG A/I ON 이 늘 보인다');
+
+  // ── 스톱워치 — HSI 오른쪽 아래(메시지 시현창 · HOCAS 아래, HOCAS 와 같은 폭). FCP 의 STOP WATCH 는 없앴다 ──
+  const sw = await page.evaluate(() => {
+    const o = { fcpGone: !document.getElementById('sw-display') };
+    const shot = () => { const proto = CanvasRenderingContext2D.prototype, orig = proto.fillText, seen = [];
+      proto.fillText = function (tx, ...a) { seen.push(String(tx)); return orig.call(this, tx, ...a); };
+      try { drawPFD(); } finally { proto.fillText = orig; } return seen; };
+    hocasOn = true; swSetMode('clock'); const s0 = shot();
+    o.clock = s0.includes('TIME') && s0.some(x => /^\d\d:\d\d:\d\d$/.test(x)) && s0.includes('STOP WATCH');
+    // HOCAS 창 아래 · 같은 폭 — HOCAS 바탕과 왼쪽 끝이 같고 스톱워치가 그 아래
+    const W = cvs.width, H = cvs.height, ctrl = document.querySelector('.ctrl-bar');
+    const L = pfdLayout(W, H, ctrl ? ctrl.offsetHeight : 80), RC = hsiRightCol(L.hsi.x, L.hsi.y, L.hsi.w, L.hsi.h, W / 2);
+    const hit = _swHit[0];
+    o.align = Math.abs(hit.x - (RC.left + 4)) < 1 && hit.y > RC.swY && hit.y + hit.h <= L.hsi.y + L.hsi.h;
+    // STOP WATCH 칸을 누르면(PFD 를 누른 자리) 스톱워치 — GO · RST · TIME
+    swHitTest(hit.x + 2, hit.y + 2); const s1 = shot();
+    o.sw = _swMode === 'sw' && ['GO', 'RST', 'TIME'].every(x => s1.includes(x)) && s1.includes('00:00.0');
+    const go = _swHit.find(h => h.act === 'swToggle'); swHitTest(go.x + 2, go.y + 2); o.run = SW.running && shot().includes('STP');
+    swHitTest(go.x + 2, go.y + 2); const rst = _swHit.find(h => h.act === 'swReset'); SW.accMs = 5000; swHitTest(rst.x + 2, rst.y + 2); o.rst = SW.accMs === 0 && !SW.running;
+    const tm = _swHit.find(h => h.act === 'swSetMode:clock'); swHitTest(tm.x + 2, tm.y + 2); o.back = _swMode === 'clock';
+    hocasOn = false;
+    return o;
+  });
+  t.ok(sw.fcpGone, 'FCP 의 STOP WATCH 는 없앴다');
+  t.ok(sw.clock, 'PFD 에 현재 시각(TIME)과 STOP WATCH 칸');
+  t.ok(sw.align, 'HOCAS 창 아래 · 같은 왼쪽 끝(같은 폭)');
+  t.ok(sw.sw && sw.run && sw.rst && sw.back, 'STOP WATCH → GO/STP · RST · TIME 이 PFD 를 눌러 동작한다');
 }

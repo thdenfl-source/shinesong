@@ -857,6 +857,7 @@ function updateCrsButtons() {
   const enabled = obsOn || navSrc !== 'FMS';
   ['crs-dn', 'crs-up'].forEach(id => {
     const el = document.getElementById(id);
+    if (!el) return;   // FCP 1행의 CRS ▲▼ 는 없앴다(SIMPLE 패널 CRS 노브)
     el.disabled = !enabled;
     el.style.opacity = enabled ? '1' : '0.3';
   });
@@ -1671,23 +1672,10 @@ function swElapsedMs() {
 function swAddMs(ms) {
   if (SW.running && ms > 0) SW.accMs += ms;
 }
-function swToggle() {
-  if (SW.running) {
-    SW.running = false;
-    document.getElementById('sw-toggle').textContent = 'GO';
-    document.getElementById('sw-toggle').classList.remove('run');
-  } else {
-    SW.running = true;
-    document.getElementById('sw-toggle').textContent = 'STP';
-    document.getElementById('sw-toggle').classList.add('run');
-  }
-}
-function swReset() {
-  SW.running = false; SW.accMs = 0;
-  document.getElementById('sw-toggle').textContent = 'GO';
-  document.getElementById('sw-toggle').classList.remove('run');
-  document.getElementById('sw-display').textContent = '00:00.0';
-}
+// 스톱워치는 PFD 안(HSI 오른쪽 아래 — 메시지 시현창 · HOCAS 아래)에 그린다(03-pfd.js drawStopwatch). FCP 칸은 없앴다.
+function _swRedraw() { try { if (typeof drawPFD === 'function') drawPFD(); } catch (e) { _swallow(e); } }
+function swToggle() { SW.running = !SW.running; _swRedraw(); }
+function swReset() { SW.running = false; SW.accMs = 0; _swRedraw(); }
 
 // ── NAV source / ICAO / RNP ──
 function setNavSrc(src) {
@@ -1715,29 +1703,18 @@ function setRnp(val) {
 }
 // 스톱워치 ↔ 현재 시각 통합 위젯 (TIME/STOP WATCH 버튼으로 전환)
 let _swMode = 'clock';   // 'sw' | 'clock' — 기본은 현재 시각 표시
-function swSetMode(m) {
-  _swMode = m;
-  document.getElementById('sw-btns-sw').style.display    = m === 'sw' ? 'flex' : 'none';
-  document.getElementById('sw-btns-clock').style.display = m === 'clock' ? 'flex' : 'none';
-  document.getElementById('sw-display').classList.toggle('clock-mode', m === 'clock');
-  m === 'clock' ? clockRender() : swRender();
-}
-function swRender() {
-  if (_swMode !== 'sw') return;   // 시계 모드에서는 스톱워치 표시 생략(카운트는 내부 유지)
-  const ms  = swElapsedMs();
-  const m   = Math.floor(ms / 60000);
-  const s   = Math.floor((ms % 60000) / 1000);
-  const t   = Math.floor((ms % 1000) / 100);
-  document.getElementById('sw-display').textContent =
-    String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0') + '.' + t;
-}
-// 현재 시각(로컬) — 1초 주기 갱신(시계 모드일 때만 표시)
-function clockRender() {
-  if (_swMode !== 'clock') return;
+function swSetMode(m) { _swMode = m; _swRedraw(); }
+// 지금 보일 글자 — 스톱워치 mm:ss.t · 시계 hh:mm:ss(로컬)
+function swText() {
+  if (_swMode === 'sw') {
+    const ms = swElapsedMs(), m = Math.floor(ms / 60000), s = Math.floor((ms % 60000) / 1000), t = Math.floor((ms % 1000) / 100);
+    return String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0') + '.' + t;
+  }
   const d = new Date(), p2 = n => String(n).padStart(2, '0');
-  document.getElementById('sw-display').textContent =
-    `${p2(d.getHours())}:${p2(d.getMinutes())}:${p2(d.getSeconds())}`;
+  return `${p2(d.getHours())}:${p2(d.getMinutes())}:${p2(d.getSeconds())}`;
 }
+function swRender() { /* 프레임마다 drawPFD 가 swText() 를 그린다 */ }
+// 시계는 1초마다 — 시뮬이 멈춰 있어도 PFD 의 시각이 흐르게
+function clockRender() { if (_swMode === 'clock' && !S.running) _swRedraw(); }
 setInterval(clockRender, 1000);
-clockRender();   // 기본 모드가 시계이므로 즉시 1회 표시
 

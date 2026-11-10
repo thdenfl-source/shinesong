@@ -139,7 +139,7 @@ export async function run(page, t) {
   // ── 3D 화면의 FCP L · R — 3D 단독에서만, 연 쪽 CHIN 창은 닫힌다 ──
   const fcp = await page.evaluate(async () => {
     const wait = ms => new Promise(r => setTimeout(r, ms));
-    const total = document.querySelectorAll('#pfd-wrap .ctrl-bar > .ctrl-sub-row > :not(.ctrl-div)').length;
+    const total = document.querySelectorAll('#pfd-wrap .ctrl-bar > .ctrl-sub-row > :not(.ctrl-div)').length + 1;   // + SIMPLE 패널(옛 1행)
     if (!simModeOn) toggleSimMode(true);
     chinL = chinR = true; chinViewOn = true;
     const o = { split: fcp3dAvail() };
@@ -151,18 +151,18 @@ export async function run(page, t) {
     document.getElementById('fcp-l-btn').click(); await wait(150);   // 화면 버튼 그대로 눌러 본다
     const box = document.getElementById('fcp3d-l'), rc = box.getBoundingClientRect(), r3 = document.getElementById('map3d').getBoundingClientRect();
     o.on = { show: box.classList.contains('show'), chinL, chinR, btn: document.getElementById('fcp-l-btn').textContent,
-             all: box.querySelectorAll('.ctrl-sub-row > :not(.ctrl-div)').length, total,
-             ias: !!box.querySelector('#ias-lbl-btn'), sim: !!box.querySelector('.sim-mode-group'),
+             all: box.querySelectorAll('.ctrl-sub-row > :not(.ctrl-div)').length, total,   // SIMPLE 패널도 첫 줄의 한 칸
+             ias: !!box.querySelector('#fcp-simple [data-k="ias"]'), sim: !!box.querySelector('#fcp-simple [data-k="hdg"]'),
              left: Math.round(rc.left - r3.left), bottom: Math.round(r3.bottom - rc.bottom),
              w: rc.width / r3.width, h: rc.height / r3.height,
              fit: [...box.querySelectorAll('.ctrl-sub-row > *')].every(e => { const q = e.getBoundingClientRect(); return q.right <= rc.right + 1 && q.bottom <= rc.bottom + 1; }) };
     toggleChinView('L'); o.chinRefused = !chinL;
     document.getElementById('fcp-l-btn').click(); await wait(100);
     toggleChinView('L'); o.chinBack = chinL;
-    o.offHome = document.querySelectorAll('#pfd-wrap .ctrl-bar > .ctrl-sub-row > :not(.ctrl-div)').length;
+    o.offHome = document.querySelectorAll('#pfd-wrap .ctrl-bar > .ctrl-sub-row > :not(.ctrl-div)').length + (document.querySelector('#pfd-wrap .ctrl-bar > #fcp-simple') ? 1 : 0);
     document.getElementById('fcp-l-btn').click(); await wait(100);
     exitSolo(); await wait(400);
-    o.back = { home: document.querySelectorAll('#pfd-wrap .ctrl-bar > .ctrl-sub-row > :not(.ctrl-div)').length, total, show: box.classList.contains('show') };
+    o.back = { home: document.querySelectorAll('#pfd-wrap .ctrl-bar > .ctrl-sub-row > :not(.ctrl-div)').length + (document.querySelector('#pfd-wrap .ctrl-bar > #fcp-simple') ? 1 : 0), total, show: box.classList.contains('show') };
     toggleSimMode(false);
     return o;
   });
