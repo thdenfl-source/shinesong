@@ -988,9 +988,9 @@ function applyPanels() {
   if (btn) btn.textContent = quadMode ? '⿰ 2분할' : tripleMode ? '▦ 4분할' : '⿲ 3분할';
 
   const wrapIds = { pfd: 'pfd-wrap', map: 'map-wrap', cdu: 'cdu-wrap', m3d: 'map3d-wrap',
-                    plan: 'fp-wrap', ovhd: 'ovhd-wrap', sysp: 'sysp-wrap' };
+                    plan: 'fp-wrap', ovhd: 'ovhd-wrap', sysp: 'sysp-wrap', lcon: 'lcon-wrap' };
   const hostOf = k => (leftSel === k ? L : (tripleMode && midSel === k ? M : (rightSel === k ? R : (quadMode && botSel === k ? B : null))));
-  ['pfd', 'map', 'cdu', 'm3d', 'plan', 'ovhd', 'sysp'].forEach(k => {
+  ['pfd', 'map', 'cdu', 'm3d', 'plan', 'ovhd', 'sysp', 'lcon'].forEach(k => {
     const el = document.getElementById(wrapIds[k]);
     if (!el) return;
     const host = hostOf(k);
@@ -1001,6 +1001,7 @@ function applyPanels() {
   syncMap3dHost(!!hostOf('m3d'));
   // 상부 콘솔은 처음 보일 때 만들고, 창 크기에 맞춘다(17-upper.js)
   if (hostOf('ovhd')) { try { if (typeof ovhdShow === 'function') ovhdShow(); } catch (e) { _swallow(e); } }
+  if (hostOf('lcon')) { try { if (typeof lconShow === 'function') lconShow(); } catch (e) { _swallow(e); } }
   if (hostOf('sysp')) { try { if (typeof sysShow === 'function') requestAnimationFrame(sysShow); } catch (e) { _swallow(e); } }
   try { syncChinView(); } catch (e) { _swallow(e); }   // CHIN 창도 3D 지도를 따라간다
 

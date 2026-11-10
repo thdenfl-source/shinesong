@@ -116,34 +116,37 @@ const OVHD_PLATES = [
   ]},
 ];
 
-// ── 상태 ──
+// ── 상태 ── 콘솔(UPPER · LOWER)이 여럿이어도 스위치 id 는 서로 달라 한 저장소를 함께 쓴다
 const _ovhdDefs = {};
-OVHD_PLATES.forEach(p => p.items.forEach(it => { if (it.id) _ovhdDefs[it.id] = it; }));
 const ovhdState = {};     // id → 값
 const _ovhdGuard = {};    // 덮개 열림(id → true)
 const _ovhdFns = [];
-(function ovhdLoad() {
-  Object.values(_ovhdDefs).forEach(d => {
-    if (d.t === 'pb') ovhdState[d.id] = 0;
-    else if (d.t === 'th') ovhdState[d.id] = 'IN';
-    else ovhdState[d.id] = d.def;
-  });
-  try {
-    const s = JSON.parse(localStorage.getItem(OVHD_KEY) || '{}');
-    Object.keys(s).forEach(k => {
-      const d = _ovhdDefs[k];
-      if (!d || d.t === 'pb' || d.t === 'mom') return;             // 누름 버튼·스프링 스위치는 되살리지 않는다
-      if (d.t === 'dim' ? (Number.isFinite(s[k]) && s[k] >= 0 && s[k] <= 10)
-                        : d.t === 'th' ? ['IN', 'PULLED'].includes(s[k]) : d.pos.includes(s[k])) ovhdState[k] = s[k];
-    });
-  } catch (e) { _swallow(e); }
-  // 덮개 스위치가 올라간 채 저장돼 있으면 덮개는 열려 있다(닫힌 덮개는 스위치를 내려 둔다)
-  Object.values(_ovhdDefs).forEach(d => { if (d.t === 'guard' && ovhdState[d.id] !== d.pos[0]) _ovhdGuard[d.id] = true; });
-})();
+const _ovhdLamps = [];    // 표시등(lamp) — 스위치가 바뀔 때마다 다시 칠한다(lit 함수)
+// 손을 떼면 돌아오는 것(누름 버튼 · 스프링 스위치 · 키) — 저장하지 않는다
+const _ovhdMomentary = t => t === 'pb' || t === 'mom' || t === 'key';
+function _ovhdDefault(d) { return (d.t === 'pb' || d.t === 'key') ? 0 : d.t === 'th' ? 'IN' : d.def; }
+function _ovhdAddPlates(plates) {
+  let saved = {};
+  try { saved = JSON.parse(localStorage.getItem(OVHD_KEY) || '{}') || {}; } catch (e) { _swallow(e); }
+  plates.forEach(p => p.items.forEach(it => {
+    if (it.t === 'lamp') { it._lamp = _ovhdLamps.length; _ovhdLamps.push(it); return; }
+    if (!it.id) return;
+    if (it.t === 'lpb') { it.pos = ['OUT', 'IN']; if (!it.def) it.def = 'OUT'; }   // 눌러 두는 버튼 — 들어가 있으면 IN
+    _ovhdDefs[it.id] = it;
+    ovhdState[it.id] = _ovhdDefault(it);
+    const v = saved[it.id];
+    if (v !== undefined && !_ovhdMomentary(it.t) &&
+        (it.t === 'dim' ? (Number.isFinite(v) && v >= 0 && v <= 10)
+                        : it.t === 'th' ? ['IN', 'PULLED'].includes(v) : (it.pos || []).includes(v))) ovhdState[it.id] = v;
+    // 덮개 스위치가 올라간 채 저장돼 있으면 덮개는 열려 있다(닫힌 덮개는 스위치를 내려 둔다)
+    if (it.t === 'guard' && ovhdState[it.id] !== it.pos[0]) _ovhdGuard[it.id] = true;
+  }));
+}
+_ovhdAddPlates(OVHD_PLATES);
 function _ovhdSave() {
   try {
     const o = {};
-    Object.keys(ovhdState).forEach(k => { const d = _ovhdDefs[k]; if (d.t !== 'pb' && d.t !== 'mom') o[k] = ovhdState[k]; });
+    Object.keys(ovhdState).forEach(k => { const d = _ovhdDefs[k]; if (!_ovhdMomentary(d.t)) o[k] = ovhdState[k]; });
     localStorage.setItem(OVHD_KEY, JSON.stringify(o));
   } catch (e) { _swallow(e); }
 }
@@ -158,14 +161,24 @@ function ovhdSet(id, v) {
   _ovhdSave();
   _ovhdPaint(id);
   _ovhdFns.forEach(fn => { try { fn(id, v, prev); } catch (e) { _swallow(e); } });
+  _ovhdLampsPaint();
   try { window.dispatchEvent(new CustomEvent('ovhd', { detail: { id, value: v, prev } })); } catch (e) { _swallow(e); }
 }
-// 모두 처음 값으로(덮개도 닫는다)
-function ovhdReset() {
-  Object.keys(_ovhdGuard).forEach(k => delete _ovhdGuard[k]);
-  Object.values(_ovhdDefs).forEach(d => {
-    ovhdSet(d.id, d.t === 'pb' ? 0 : d.t === 'th' ? 'IN' : d.def);
-    _ovhdPaint(d.id);
+// 모두 처음 값으로(덮개도 닫는다) — 콘솔 이름을 주면 그 콘솔의 스위치만
+function ovhdReset(key) {
+  const ids = key && OVHD_CONSOLES[key]
+    ? OVHD_CONSOLES[key].plates.flatMap(p => p.items.filter(it => it.id && _ovhdDefs[it.id]).map(it => it.id))
+    : Object.keys(_ovhdDefs);
+  ids.forEach(id => { delete _ovhdGuard[id]; const d = _ovhdDefs[id]; ovhdSet(id, _ovhdDefault(d)); _ovhdPaint(id); });
+}
+// 표시등 — 칸마다 lit() 이 참이면 켠다
+function _ovhdLampsPaint() {
+  _ovhdLamps.forEach(l => {
+    const el = document.querySelector(`[data-lamp="${l._lamp}"]`);
+    if (!el) return;
+    let on = false;
+    try { on = typeof l.lit === 'function' ? !!l.lit() : false; } catch (e) { _swallow(e); }
+    el.classList.toggle('on', on);
   });
 }
 
@@ -211,6 +224,18 @@ function _ovhdItemHtml(it) {
         it.ys.map((y, i) => `<div class="ov-hit" data-hz="p${i}" style="left:-34px;top:${y - 27}px;width:68px;height:54px"></div>`).join('') +
         `</div>`;
     }
+    case 'lpb': case 'key': {                          // 눌러 두는 사각 버튼(글씨가 켜진다) · 누르는 동안만 들어가는 키
+      const w = it.w || 52, h = it.h || 34;
+      return `<div class="ov-${it.t}" data-ov="${it.id}" style="${at}">${title ? title.replace('class="ov-title"', `class="ov-title" style="bottom:${h / 2 + 4}px"`) : ''}` +
+        `<div class="ov-sq" style="left:${-w / 2}px;top:${-h / 2}px;width:${w}px;height:${h}px">${_nl(it.legend || it.label || '')}</div>` +
+        `<div class="ov-hit" style="left:${-w / 2 - 4}px;top:${-h / 2 - 4}px;width:${w + 8}px;height:${h + 8}px"></div></div>`;
+    }
+    case 'lamp': {                                     // 표시등(누르지 않는다)
+      const w = it.w || 26, h = it.h || 20;
+      return `<div class="ov-lamp" data-lamp="${it._lamp}" style="${at}"><div class="ov-sq" style="left:${-w / 2}px;top:${-h / 2}px;width:${w}px;height:${h}px">${_nl(it.label || '')}</div></div>`;
+    }
+    case 'disp':                                       // 표시창(글자만)
+      return `<div class="ov-disp" style="left:${it.x}px;top:${it.y}px;width:${it.w}px;height:${it.h}px">${_nl(it.text || '')}</div>`;
     case 'pb':
       return `<div class="ov-pb" data-ov="${it.id}" style="${at}">${title}<div class="ov-btn"></div>` +
         `<div class="ov-hit" style="left:-36px;top:-40px;width:72px;height:62px"></div></div>`;
@@ -235,40 +260,48 @@ function _ovhdZones(it) {
          `<div class="ov-hit" data-hz="mid" style="left:${side ? -64 : -30}px;top:-7px;width:${side ? 94 : 60}px;height:14px"></div>` +
          `<div class="ov-hit" data-hz="bot" style="left:-30px;top:7px;width:60px;height:36px"></div>`;
 }
-function ovhdBuild() {
-  const wrap = document.getElementById('ovhd-wrap');
+// ── 콘솔 창 ── 같은 엔진으로 여러 창(UPPER · LOWER)을 그린다. 설계 크기를 창에 맞춰 통째로 줄이고 키운다.
+const OVHD_CONSOLES = { ovhd: { wrap: 'ovhd-wrap', plates: OVHD_PLATES, W: OVHD_W, H: OVHD_H } };
+function consoleRegister(key, cfg) { OVHD_CONSOLES[key] = cfg; _ovhdAddPlates(cfg.plates); }
+function consoleBuild(key) {
+  const C = OVHD_CONSOLES[key];
+  const wrap = C && document.getElementById(C.wrap);
   if (!wrap || wrap.dataset.built) return;
   wrap.dataset.built = '1';
-  wrap.innerHTML = `<div id="ovhd-stage" style="width:${OVHD_W}px;height:${OVHD_H}px">` +
-    OVHD_PLATES.map(p => `<div class="ov-plate" style="left:${p.x}px;top:${p.y}px;width:${p.w}px;height:${p.h}px">` +
+  wrap.innerHTML = `<div id="${key}-stage" class="ov-stage" style="width:${C.W}px;height:${C.H}px">` +
+    C.plates.map(p => `<div class="ov-plate" style="left:${p.x}px;top:${p.y}px;width:${p.w}px;height:${p.h}px">` +
       '<i class="ov-screw a"></i><i class="ov-screw b"></i><i class="ov-screw c"></i><i class="ov-screw d"></i>' +
       p.items.map(_ovhdItemHtml).join('') + '</div>').join('') +
-    `</div><button id="ovhd-reset" type="button" title="모든 스위치를 처음 위치로">RESET</button>` +
-    `<button id="ovhd-zones" type="button" title="터치 영역을 테두리로 보이기/감추기">ZONES</button>`;
-  Object.keys(_ovhdDefs).forEach(_ovhdPaint);
+    `</div><button id="${key}-reset" class="ov-reset-btn" type="button" title="이 콘솔의 스위치를 처음 위치로">RESET</button>` +
+    `<button id="${key}-zones" class="ov-zones-btn" type="button" title="터치 영역을 테두리로 보이기/감추기">ZONES</button>`;
+  C.plates.forEach(p => p.items.forEach(it => { if (it.id) _ovhdPaint(it.id); }));
+  _ovhdLampsPaint();
   wrap.addEventListener('pointerdown', _ovhdDown);
   wrap.addEventListener('pointerup', _ovhdUp);
   wrap.addEventListener('pointercancel', _ovhdUp);
   wrap.addEventListener('pointerleave', _ovhdUp);
   wrap.addEventListener('wheel', _ovhdWheel, { passive: false });
-  wrap.querySelector('#ovhd-reset').addEventListener('click', ovhdReset);
-  wrap.querySelector('#ovhd-zones').addEventListener('click', () => {
+  wrap.querySelector('.ov-reset-btn').addEventListener('click', () => ovhdReset(key));
+  wrap.querySelector('.ov-zones-btn').addEventListener('click', () => {
     const on = wrap.classList.toggle('ov-zones');
-    wrap.querySelector('#ovhd-zones').classList.toggle('on', on);
+    wrap.querySelector('.ov-zones-btn').classList.toggle('on', on);
   });
-  try { new ResizeObserver(ovhdFit).observe(wrap); } catch (e) { window.addEventListener('resize', ovhdFit); }
-  ovhdFit();
+  const fit = () => consoleFit(key);
+  try { new ResizeObserver(fit).observe(wrap); } catch (e) { window.addEventListener('resize', fit); }
+  fit();
 }
-// 창에 맞춰 설계 크기를 통째로 줄이고 키운다(가운데 정렬)
-function ovhdFit() {
-  const wrap = document.getElementById('ovhd-wrap'), st = document.getElementById('ovhd-stage');
+function consoleFit(key) {
+  const C = OVHD_CONSOLES[key];
+  const wrap = C && document.getElementById(C.wrap), st = document.getElementById(`${key}-stage`);
   if (!wrap || !st) return;
   const W = wrap.clientWidth, H = wrap.clientHeight;
   if (!(W > 0 && H > 0)) return;
-  const k = Math.min(W / OVHD_W, H / OVHD_H);
-  st.style.transform = `translate(${((W - OVHD_W * k) / 2).toFixed(1)}px, ${((H - OVHD_H * k) / 2).toFixed(1)}px) scale(${k.toFixed(4)})`;
+  const k = Math.min(W / C.W, H / C.H);
+  st.style.transform = `translate(${((W - C.W * k) / 2).toFixed(1)}px, ${((H - C.H * k) / 2).toFixed(1)}px) scale(${k.toFixed(4)})`;
 }
-function _ovhdEl(id) { return document.querySelector(`#ovhd-wrap [data-ov="${id}"]`); }
+function ovhdBuild() { consoleBuild('ovhd'); }
+function ovhdFit() { consoleFit('ovhd'); }
+function _ovhdEl(id) { return document.querySelector(`.ov-stage [data-ov="${id}"]`); }
 function _ovhdPaint(id) {
   const el = _ovhdEl(id), d = _ovhdDefs[id];
   if (!el || !d) return;
@@ -284,7 +317,9 @@ function _ovhdPaint(id) {
   } else if (d.t === 'lv') {
     el.querySelector('.ov-lvh').style.top = `${d.ys[Math.max(0, d.pos.indexOf(v))] - 18}px`;
     el.dataset.p = v;
-  } else if (d.t === 'pb') {
+  } else if (d.t === 'lpb') {
+    el.classList.toggle('in', v === 'IN');
+  } else if (d.t === 'pb' || d.t === 'key') {
     el.classList.toggle('pressed', !!v);
   } else if (d.t === 'th') {
     el.classList.toggle('pulled', v === 'PULLED');
@@ -329,7 +364,7 @@ function _ovhdDown(e) {
     if (!m) return;
     let j = Number(m[1]);
     const i = d.pos.indexOf(v);
-    if (i === d.pos.length - 1 && j === 0) j = 1;       // 누름쇠 — FLY 에서 한 번에 OFF 로 가지 않고 IDLE 에서 멈춘다
+    if (d.pos.length > 2 && i === d.pos.length - 1 && j === 0) j = 1;   // 누름쇠 — FLY 에서 한 번에 OFF 로 가지 않고 IDLE 에서 멈춘다
     ovhdSet(id, d.pos[j]);
   } else if ((d.t === 'rot' || d.t === 'dim') && e.target.closest('[data-ov-pos]')) {
     const pv = e.target.closest('[data-ov-pos]').dataset.ovPos;   // 위치 글자를 누르면 그 위치로 바로
@@ -337,7 +372,9 @@ function _ovhdDown(e) {
   } else if (d.t === 'rot' || d.t === 'dim') {
     const kb = el.querySelector('.ov-knob').getBoundingClientRect();
     _ovhdTurn(id, e.clientX < kb.left + kb.width / 2 ? -1 : 1);
-  } else if (d.t === 'pb') {
+  } else if (d.t === 'lpb') {
+    ovhdSet(id, v === 'IN' ? 'OUT' : 'IN');
+  } else if (d.t === 'pb' || d.t === 'key') {
     ovhdSet(id, 1); _ovhdMom = id;
   } else if (d.t === 'th') {
     ovhdSet(id, v === 'PULLED' ? 'IN' : 'PULLED');
@@ -347,7 +384,7 @@ function _ovhdUp() {
   if (!_ovhdMom) return;
   const id = _ovhdMom, d = _ovhdDefs[id];
   _ovhdMom = null;
-  ovhdSet(id, d.t === 'pb' ? 0 : d.def);               // 손을 떼면 스프링으로 돌아온다
+  ovhdSet(id, (d.t === 'pb' || d.t === 'key') ? 0 : d.def);   // 손을 떼면 스프링으로 돌아온다
 }
 function _ovhdTurn(id, dir) {
   const d = _ovhdDefs[id], v = ovhdState[id];
