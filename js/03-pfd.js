@@ -29,6 +29,38 @@ function resizePFD() {
   cvs.height = el.clientHeight;
 }
 
+// ── PFD 배치 ── (실기 PFD 처럼) 자세계 하늘·땅이 위쪽 전체를 덮고, 그 위에 속도계(왼쪽)·고도계+승강계(오른쪽)가
+// 반투명으로 얹힌다. 속도계 아래 GS 칸, 고도계 위 RA 칸·아래 QNH 칸. 아래쪽은 왼쪽 엔진 파라미터 · 가운데 HSI ·
+// 오른쪽 레이더 고도계(CRHT) 테이프. drawPFD 와 PFD 탭(09-cdu.js onPfdTap)이 이 한 곳의 셈을 같이 쓴다.
+function pfdLayout(W, H, ctrlH) {
+  const usableH = H - ctrlH;
+  const tapW = Math.max(56, Math.min(80, W * 0.075));
+  const vsiW = Math.max(26, Math.min(36, W * 0.04));
+  const aiH  = Math.floor(usableH * 0.55);
+  const hsiH = usableH - aiH;
+  const FMA_H = FMA_MARGIN + FMA_BOX_H;
+  const pad  = Math.round(4 + Math.max(0, W - 700) * 0.12);   // 넓은 화면에서는 테이프를 안쪽으로
+  const raBoxH = 16, botH = 20;
+  const tY = FMA_H + 4, tH = aiH - tY - botH - 6;
+  const altX = W - pad - vsiW - tapW;
+  const altY = tY + raBoxH + 2, altH = tH - raBoxH - 2;
+  const engW = Math.round(Math.max(140, Math.min(300, W * 0.27)));
+  const raW  = tapW + vsiW;
+  return {
+    usableH, tapW, vsiW, aiH, hsiH, pad,
+    ai:   { x: 0, y: 0, w: W, h: aiH },
+    spd:  { x: pad, y: tY, w: tapW, h: tH },
+    gs:   { x: pad, y: tY + tH + 3, w: tapW, h: botH },
+    ra:   { x: altX, y: tY, w: tapW + vsiW, h: raBoxH },
+    alt:  { x: altX, y: altY, w: tapW, h: altH },
+    vsi:  { x: altX + tapW, y: altY, w: vsiW, h: altH },
+    baro: { x: altX, y: tY + tH + 3, w: tapW, h: botH },
+    eng:  { x: 0, y: aiH, w: engW, h: hsiH },
+    hsi:  { x: engW, y: aiH, w: W - engW - raW, h: hsiH },
+    crht: { x: W - raW, y: aiH, w: raW, h: hsiH },
+  };
+}
+
 function drawPFD() {
   const W = cvs.width, H = cvs.height;
   // 패널이 접혀 있거나(전체화면 MAP·분할 전환 직후) 아직 레이아웃 전이면 W·H 가
@@ -39,46 +71,166 @@ function drawPFD() {
   const ctrlEl = document.querySelector('.ctrl-bar');
   // 3D 화면에 겹친 계기(drawPfdTo)는 FCP 가 없다 — 칸을 다 계기에 쓴다
   const CTRL_H = cvs.dataset.noFcp ? 0 : (ctrlEl ? ctrlEl.offsetHeight : 80);
-  const usableH = H - CTRL_H;
-  const tapW = Math.max(56, Math.min(76, W * 0.082));
-  const vsiW = Math.max(28, Math.min(38, W * 0.046));
-  const aiX  = tapW, aiW = W - tapW * 2 - vsiW;
-  const aiH  = Math.floor(usableH * 0.52);
-  const hsiH = usableH - aiH;
+  const L = pfdLayout(W, H, CTRL_H);
 
   ctx.fillStyle = '#000';
   ctx.fillRect(0, 0, W, H);
 
-  // 왼쪽 줄: 위는 속도계, 아래는 TQ(토크) 막대 — 오른쪽 줄(ALT·CRHT)과 짝이 맞는다
-  drawSpeedTape(0, 0, tapW, aiH);
-  drawTqGauge(0, aiH, tapW, hsiH);
-  // Right column:
-  //   Top half (aiH):  ALT tape + VSI (only beside ALT)
-  //   Bottom half (hsiH): CRHT display takes the full right-column width (tapW + vsiW)
-  _pfdAltFs = { tick: Math.max(9, tapW * 0.16), box: Math.max(12, tapW * 0.17) };   // 승강계 숫자를 고도계와 같은 크기로
-  drawAltTape(W - tapW - vsiW, 0, tapW, aiH);
-  drawVSI(W - vsiW, 0, vsiW, aiH);
-  drawCrhtDisplay(W - tapW - vsiW, aiH, tapW + vsiW, hsiH);
+  // 위: 자세계가 바탕 전체 — 그 위에 속도계·고도계·승강계를 반투명으로 얹는다
+  drawAI(L.ai.x, L.ai.y, L.ai.w, L.ai.h);
+  drawSpeedTape(L.spd.x, L.spd.y, L.spd.w, L.spd.h);
+  drawGsBox(L.gs.x, L.gs.y, L.gs.w, L.gs.h);
+  _pfdAltFs = { tick: Math.max(9, L.tapW * 0.16), box: Math.max(12, L.tapW * 0.17) };   // 승강계 숫자를 고도계와 같은 크기로
+  drawRaBox(L.ra.x, L.ra.y, L.ra.w, L.ra.h);
+  drawAltTape(L.alt.x, L.alt.y, L.alt.w, L.alt.h);
+  drawVSI(L.vsi.x, L.vsi.y, L.vsi.w, L.vsi.h);
+  drawBaroBox(L.baro.x, L.baro.y, L.baro.w, L.baro.h);
 
-  // Dividers
+  // 아래: 엔진 파라미터 · HSI · 레이더 고도계(CRHT)
+  drawEnginePanel(L.eng.x, L.eng.y, L.eng.w, L.eng.h);
+  drawHSI(L.hsi.x, L.hsi.y, L.hsi.w, L.hsi.h);
+  drawCrhtDisplay(L.crht.x, L.crht.y, L.crht.w, L.crht.h);
   ctx.strokeStyle = '#1e1e1e'; ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.moveTo(tapW, 0);             ctx.lineTo(tapW, usableH);          ctx.stroke();
-  // 속도계와 TQ 사이
-  ctx.beginPath(); ctx.moveTo(0, aiH);              ctx.lineTo(tapW, aiH);              ctx.stroke();
-  // Left edge of ALT tape (only top half — bottom half belongs to CRHT)
-  ctx.beginPath(); ctx.moveTo(W-tapW-vsiW, 0);      ctx.lineTo(W-tapW-vsiW, aiH);       ctx.stroke();
-  // Left edge of CRHT display in bottom half = same x as alt tape edge
-  ctx.beginPath(); ctx.moveTo(W-tapW-vsiW, aiH);    ctx.lineTo(W-tapW-vsiW, usableH);   ctx.stroke();
-  // Right edge of VSI (top half only)
-  ctx.beginPath(); ctx.moveTo(W-vsiW, 0);           ctx.lineTo(W-vsiW, aiH);            ctx.stroke();
-  // Horizontal divider between centre AI and HSI
-  ctx.beginPath(); ctx.moveTo(tapW, aiH);           ctx.lineTo(W-tapW-vsiW, aiH);       ctx.stroke();
-  // Horizontal divider: between ALT/VSI (top) and CRHT (bottom) in right column
-  ctx.beginPath(); ctx.moveTo(W-tapW-vsiW, aiH);    ctx.lineTo(W, aiH);                 ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(0, L.aiH); ctx.lineTo(W, L.aiH); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(L.hsi.x + 0.5, L.aiH); ctx.lineTo(L.hsi.x + 0.5, L.usableH); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(L.crht.x + 0.5, L.aiH); ctx.lineTo(L.crht.x + 0.5, L.usableH); ctx.stroke();
+  if (hocasOn) drawHocas(L.hsi.x, L.hsi.y, L.hsi.w, L.hsi.h);
+}
 
-  drawAI(aiX, 0, aiW, aiH);
-  drawHSI(aiX, aiH, aiW, hsiH);
-  if (hocasOn) drawHocas(aiX, aiH, aiW, hsiH);
+// ── 속도계 아래 GS 칸 · 고도계 위 RA 칸 · 아래 QNH 칸 ──
+function _pfdSmallBox(x, y, w, h) {
+  ctx.fillStyle = 'rgba(8,14,24,0.78)'; ctx.fillRect(x, y, w, h);
+  ctx.strokeStyle = '#3a4653'; ctx.lineWidth = 1; ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+}
+function drawGsBox(x, y, w, h) {
+  if (!(w > 10) || !(h > 8)) return;
+  let gs = S.spd;
+  try { gs = gspdOn || gspdCoasting ? Math.hypot(gspdActFwd, gspdActLat) : groundSpdKt(); } catch (e) { _swallow(e); }
+  ctx.save(); _pfdSmallBox(x, y, w, h);
+  ctx.textBaseline = 'middle';
+  ctx.font = `bold ${Math.max(8, h * 0.42)}px Helvetica Neue, Arial, sans-serif`;
+  ctx.fillStyle = '#aab4bf'; ctx.textAlign = 'left'; ctx.fillText('GS', x + 3, y + h / 2 + 1);
+  ctx.font = `bold ${Math.max(10, h * 0.6)}px Helvetica Neue, Arial, sans-serif`;
+  ctx.fillStyle = '#ffffff'; ctx.textAlign = 'right'; ctx.fillText(String(Math.round(gs * S_CV())), x + w - 3, y + h / 2 + 1);
+  ctx.restore();
+}
+// 레이더 고도 — 2,500ft 위면 'RA UP'(전파고도계 측정 범위 밖)
+const RA_MAX_FT = 2500;
+function drawRaBox(x, y, w, h) {
+  if (!(w > 10) || !(h > 8)) return;
+  let ra = null;
+  try { ra = radarAltFt(); } catch (e) { _swallow(e); }
+  ctx.save(); _pfdSmallBox(x, y, w, h);
+  ctx.textBaseline = 'middle';
+  ctx.font = `bold ${Math.max(8, h * 0.6)}px Helvetica Neue, Arial, sans-serif`;
+  ctx.fillStyle = '#ffffff'; ctx.textAlign = 'left'; ctx.fillText('RA', x + 3, y + h / 2 + 1);
+  ctx.textAlign = 'right';
+  if (ra == null || ra > RA_MAX_FT) { ctx.fillStyle = '#ffffff'; ctx.fillText('UP', x + w - 3, y + h / 2 + 1); }
+  else { ctx.fillStyle = '#7fd4ff'; ctx.fillText(String(Math.round(ra * A_CV())) + (unitAlt === 'm' ? 'M' : 'FT'), x + w - 3, y + h / 2 + 1); }
+  ctx.restore();
+}
+// 기압 설정 — METAR 의 QNH(없으면 표준 1013)
+function drawBaroBox(x, y, w, h) {
+  if (!(w > 10) || !(h > 8)) return;
+  const q = (typeof window._qnhHpa === 'number' && Number.isFinite(window._qnhHpa)) ? window._qnhHpa : 1013;
+  ctx.save(); _pfdSmallBox(x, y, w, h);
+  ctx.textBaseline = 'middle';
+  ctx.font = `bold ${Math.max(10, h * 0.55)}px Helvetica Neue, Arial, sans-serif`;
+  ctx.fillStyle = '#7fd4ff'; ctx.textAlign = 'center';
+  ctx.fillText(String(Math.round(q)) + ' HPA', x + w / 2, y + h / 2 + 1);
+  ctx.restore();
+}
+
+// ── 엔진 파라미터 (TGT · NG · TQ · NP/NR) ──
+// 값의 셈(엔진 모델)은 차차 갖춘다 — 지금은 토크·NR·엔진 상태(AEO/OEI/IDLE)에서 그럴듯하게 이어 둔다.
+//   TQ  : 엔진마다(AEO 는 둘 다 지금 토크 · OEI 는 살아 있는 1번이 다 · IDLE 은 0)
+//   NR  : 로터 회전(SIM 의 simNr) · NP : 엔진이 로터를 돌리면 NR 과 같고, IDLE 이면 아래로 갈라진다(needle split)
+//   NG·TGT : 토크를 따라 오르는 자리 표시값
+function engParams() {
+  let tq = 0, nr = 100, eng = 2;
+  try { tq = tqShown(); } catch (e) { _swallow(e); }
+  if (simModeOn) { try { nr = simNr; eng = simEng; } catch (e) { _swallow(e); } }
+  const run = [eng >= 1, eng >= 2];          // OEI 는 2번이 멎었다
+  const idle = eng === 0;
+  const one = (on) => {
+    const t = on ? tq : 0;
+    if (on) return { tq: t, ng: Math.min(105, 62 + 0.33 * t), tgt: Math.round(420 + 3.4 * t), np: nr };
+    if (idle) return { tq: 0, ng: 62, tgt: 450, np: Math.min(nr, 70) };
+    return { tq: 0, ng: 0, tgt: 0, np: 0 };
+  };
+  const e1 = one(run[0]), e2 = one(run[1]);
+  return { e1, e2, nr };
+}
+function _engBox(x, y, w, h, title) {
+  ctx.strokeStyle = '#5a6672'; ctx.lineWidth = 1;
+  const r = 5;
+  ctx.beginPath();
+  ctx.moveTo(x + r, y); ctx.lineTo(x + w - r, y); ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r); ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h); ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.stroke();
+  if (title) {
+    ctx.font = 'bold 9px Helvetica Neue, Arial, sans-serif';
+    const tw = ctx.measureText(title).width + 6;
+    ctx.fillStyle = '#16191d'; ctx.fillRect(x + w / 2 - tw / 2, y - 6, tw, 11);
+    ctx.fillStyle = '#e8edf2'; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+    ctx.fillText(title, x + w / 2, y + 3);
+  }
+}
+function drawEnginePanel(x, y, w, h) {
+  if (!(w > 60) || !(h > 80)) return;
+  const P = engParams();
+  ctx.save(); ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
+  ctx.fillStyle = '#16191d'; ctx.fillRect(x, y, w, h);
+  const m = 4, half = (w - m * 3) / 2;
+  // 위: TGT · NG 숫자
+  const th = Math.max(36, Math.min(50, h * 0.2));
+  const num = (bx, title, l1, l2, v1, v2, dec) => {
+    _engBox(bx, y + 9, half, th, title);
+    ctx.font = 'bold 8px Helvetica Neue, Arial, sans-serif'; ctx.fillStyle = '#c6ced6';
+    ctx.textAlign = 'left'; ctx.fillText(l1, bx + 3, y + 22);
+    ctx.textAlign = 'right'; ctx.fillText(l2, bx + half - 3, y + 22);
+    ctx.font = `bold ${Math.max(10, Math.min(14, half * 0.17))}px Helvetica Neue, Arial, sans-serif`; ctx.fillStyle = '#ffffff';
+    ctx.textAlign = 'left'; ctx.fillText(v1.toFixed(dec), bx + 3, y + 9 + th - 6);
+    ctx.textAlign = 'right'; ctx.fillText(v2.toFixed(dec), bx + half - 3, y + 9 + th - 6);
+  };
+  num(x + m, 'TGT °C', 'TGT1', 'TGT2', P.e1.tgt, P.e2.tgt, 0);
+  num(x + m * 2 + half, 'NG %', 'NG1', 'NG2', P.e1.ng, P.e2.ng, 1);
+  // 아래: TQ(엔진마다) · NP1/NR/NP2 막대
+  const by = y + 9 + th + 12, bh = h - (by - y) - 4;
+  drawTqGauge(x + m, by, half, bh, [P.e1.tq, P.e2.tq]);
+  drawNpNr(x + m * 2 + half, by, half, bh, P);
+  ctx.restore();
+}
+// NP1 · NR · NP2 막대 — 0~120%. 빨간 선 106%(넘침) · NR 은 90%(처짐)에도 빨간 선
+const NPNR_MAX = 120;
+function drawNpNr(x, y, w, h, P) {
+  _engBox(x, y, w, h, 'NP/NR %');
+  const vals = [['NP1', P.e1.np], ['NR', P.nr], ['NP2', P.e2.np]];
+  const n = vals.length, colW = (w - 8) / n, barW = Math.max(6, Math.min(14, colW * 0.45));
+  const top = y + 30, bot = y + h - 6, bh = bot - top;
+  const vToY = v => bot - bh * Math.max(0, Math.min(NPNR_MAX, v)) / NPNR_MAX;
+  vals.forEach(([lbl, v], i) => {
+    const cx = x + 4 + colW * (i + 0.5);
+    ctx.font = 'bold 8px Helvetica Neue, Arial, sans-serif'; ctx.fillStyle = '#c6ced6'; ctx.textAlign = 'center';
+    ctx.fillText(lbl, cx, y + 13);
+    ctx.font = `bold ${Math.max(9, Math.min(13, colW * 0.38))}px Helvetica Neue, Arial, sans-serif`;
+    const warn = lbl === 'NR' ? (v > 106 || v < 90) : v > 106;
+    ctx.fillStyle = warn ? '#ff5555' : '#ffffff';
+    ctx.fillText(Math.round(v), cx, y + 26);
+    if (bh > 10) {
+      const bx = cx - barW / 2;
+      ctx.fillStyle = '#0b0d10'; ctx.fillRect(bx, top, barW, bh);
+      ctx.strokeStyle = '#3a4653'; ctx.strokeRect(bx + 0.5, top + 0.5, barW - 1, bh - 1);
+      ctx.fillStyle = warn ? '#ff4444' : '#22dd55';
+      ctx.fillRect(bx + 1, vToY(v), barW - 2, bot - vToY(v));
+      const line = (lv, c) => { const ly = Math.round(vToY(lv)) + 0.5; ctx.strokeStyle = c; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(bx - 2, ly); ctx.lineTo(bx + barW + 2, ly); ctx.stroke(); ctx.lineWidth = 1; };
+      line(106, '#ff4444');
+      if (lbl === 'NR') line(90, '#ff4444');
+      line(100, '#ffcc00');
+    }
+  });
 }
 
 // ── HOCAS 표시 ── FCP 의 HOCAS 버튼으로 켠다. HSI 왼쪽(바람 표시와 TAS 줄 사이)에
@@ -457,6 +609,8 @@ function drawSlipBall(cx, top, half) {
   return bx;
 }
 function drawAI(x, y, w, h) {
+  // 하늘·땅은 넓게(w) 칠하되, 피치 사다리·심볼·글자 크기는 화면이 넓어도 커지지 않게(wS — 높이에 맞춘 폭)
+  const wS = Math.min(w, (h - FMA_MARGIN - FMA_BOX_H) * 1.6);
   const FMA_H = FMA_MARGIN + FMA_BOX_H;  // AFCS strip height
   const aiY   = y + FMA_H;               // AI content starts below AFCS strip
   const aiH   = h - FMA_H;
@@ -486,14 +640,14 @@ function drawAI(x, y, w, h) {
   ctx.strokeStyle='#fff'; ctx.lineWidth=2;
   ctx.beginPath(); ctx.moveTo(-w*2,skyY); ctx.lineTo(w*2,skyY); ctx.stroke();
 
-  ctx.font=`${Math.max(8,w*0.022)}px Helvetica Neue, Arial, sans-serif`;
+  ctx.font=`${Math.max(8,wS*0.022)}px Helvetica Neue, Arial, sans-serif`;
   ctx.textAlign='center'; ctx.fillStyle='#fff';
   // 2.5° minor ticks (drawn first, thinner)
   for (let p=-25;p<=25;p+=2.5) {
     if (Math.round(p*10)%50===0) continue; // skip multiples of 5°
     const py=skyY-p*ppd;
     if (Math.abs(py)>h*1.1) continue;
-    const lw=w*0.05;
+    const lw=wS*0.05;
     ctx.strokeStyle='#aaa'; ctx.lineWidth=0.8;
     ctx.beginPath(); ctx.moveTo(-lw/2,py); ctx.lineTo(lw/2,py); ctx.stroke();
   }
@@ -501,7 +655,7 @@ function drawAI(x, y, w, h) {
     if (p===0) continue;
     const py=skyY-p*ppd;
     if (Math.abs(py)>h*1.1) continue;
-    const lw=(p%10===0)?w*0.17:w*0.09;
+    const lw=(p%10===0)?wS*0.17:wS*0.09;
     ctx.strokeStyle='#fff'; ctx.lineWidth=p%10===0?1.5:1;
     ctx.beginPath(); ctx.moveTo(-lw/2,py); ctx.lineTo(lw/2,py); ctx.stroke();
     if (p%10===0) {
@@ -540,7 +694,7 @@ function drawAI(x, y, w, h) {
   drawSlipBall(cx, aiY + 3, Math.max(26, arcR * 0.3));
 
   ctx.save(); ctx.translate(cx,cy);
-  const ws=w*0.14;
+  const ws=wS*0.14;
   ctx.strokeStyle='#fff'; ctx.lineWidth=2.5;
   ctx.beginPath(); ctx.moveTo(-ws,0); ctx.lineTo(-ws*0.35,0); ctx.lineTo(-ws*0.12,ws*0.22); ctx.stroke();
   ctx.beginPath(); ctx.moveTo( ws,0); ctx.lineTo( ws*0.35,0); ctx.lineTo( ws*0.12,ws*0.22); ctx.stroke();
@@ -554,7 +708,7 @@ function drawAI(x, y, w, h) {
     const fpaDeg = Math.atan2(-S.vs / 60, Math.max(5, S.spd) * 1.6878) / D2R;
     const fpvX = cx + driftDeg * ppd;
     const fpvY = cy - fpaDeg * ppd;
-    const fr = Math.max(7, w * 0.038);
+    const fr = Math.max(7, wS * 0.038);
     if (fpvX > x + fr + 2 && fpvX < x + w - fr - 2 &&
         fpvY > aiY + fr && fpvY < aiY + aiH - fr - 10) {
       ctx.save();
@@ -569,8 +723,8 @@ function drawAI(x, y, w, h) {
   // LIGHT ON WHEELS — 땅에 붙은 채 바퀴가 떨어지기 직전(SIM · 14-simmode.js simLightOnWheels)
   if (typeof simLightOnWheels === 'function' && simLightOnWheels()) {
     const txt = 'LIGHT ON WHEELS';
-    ctx.font = `bold ${Math.max(10, w * 0.032)}px Helvetica Neue, Arial, sans-serif`;
-    const tw = ctx.measureText(txt).width + 14, th = Math.max(16, w * 0.045);
+    ctx.font = `bold ${Math.max(10, wS * 0.032)}px Helvetica Neue, Arial, sans-serif`;
+    const tw = ctx.measureText(txt).width + 14, th = Math.max(16, wS * 0.045);
     const ty = aiY + aiH - th - 14;
     ctx.fillStyle = 'rgba(0,0,0,0.75)'; ctx.fillRect(cx - tw / 2, ty, tw, th);
     ctx.strokeStyle = '#ffb000'; ctx.lineWidth = 1.5; ctx.strokeRect(cx - tw / 2, ty, tw, th);
@@ -582,8 +736,8 @@ function drawAI(x, y, w, h) {
     const warn = simParkWarnOn();
     const txt = warn ? 'PARKING BRAKE SET' : 'PARKING BRAKE';
     const col = warn ? '#ff3030' : '#ffb000';
-    ctx.font = `bold ${Math.max(10, w * 0.032)}px Helvetica Neue, Arial, sans-serif`;
-    const tw = ctx.measureText(txt).width + 14, th = Math.max(16, w * 0.045);
+    ctx.font = `bold ${Math.max(10, wS * 0.032)}px Helvetica Neue, Arial, sans-serif`;
+    const tw = ctx.measureText(txt).width + 14, th = Math.max(16, wS * 0.045);
     const ty = aiY + aiH - 2 * th - 22;
     ctx.fillStyle = 'rgba(0,0,0,0.75)'; ctx.fillRect(cx - tw / 2, ty, tw, th);
     ctx.strokeStyle = col; ctx.lineWidth = 1.5; ctx.strokeRect(cx - tw / 2, ty, tw, th);
@@ -603,8 +757,8 @@ function drawAI(x, y, w, h) {
         if (simOverVne()) warns.push(['VNE', '#ff3030']);
       }
     } catch (e) { _swallow(e); }
-    ctx.font = `bold ${Math.max(10, w * 0.032)}px Helvetica Neue, Arial, sans-serif`;
-    const th = Math.max(16, w * 0.045);
+    ctx.font = `bold ${Math.max(10, wS * 0.032)}px Helvetica Neue, Arial, sans-serif`;
+    const th = Math.max(16, wS * 0.045);
     warns.forEach(([txt, col], i) => {
       const tw = ctx.measureText(txt).width + 14, ty = aiY + 8 + i * (th + 4);
       const blink = col === '#ff3030' && Math.floor(performance.now() / 400) % 2 === 0;
@@ -635,70 +789,68 @@ const TQ_COLORS = {
   yellow: { fill: '#ffcc00', edge: '#ffe36a', text: '#ffcc00', tint: 'rgba(255,204,0,0.22)' },
   red:    { fill: '#ff4444', edge: '#ff8888', text: '#ff5555', tint: 'rgba(255,60,60,0.25)' },
 };
-function drawTqGauge(x, y, w, h) {
-  ctx.save(); ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
-  ctx.fillStyle = '#0d0d0d'; ctx.fillRect(x, y, w, h);
+// TQ % — 엔진마다 막대 하나(TQ1·TQ2). 구간 색(0~100 녹 · 100~113 노 · 113~ 빨)과 기준선(HOV·Vy·MTA)은 두 막대에 같이.
+function drawTqGauge(x, y, w, h, vals) {
+  ctx.save(); ctx.beginPath(); ctx.rect(x - 1, y - 8, w + 2, h + 9); ctx.clip();
+  _engBox(x, y, w, h, 'TQ %');
 
   let tq = 0, need = 60, over = false;
   try { tq = tqShown(); need = tqRequired(); over = tqOver(); } catch (e) { _swallow(e); }
-  const col = TQ_COLORS[tqBand(tq)];
-
-  const HEAD = 16;                       // 머리글 'TQ %'
-  const barX = x + Math.round(w * 0.22), barW = Math.round(w * 0.40);
-  const barY = y + HEAD + 6, barH = h - HEAD - 26;
+  vals = Array.isArray(vals) && vals.length ? vals : [tq];
+  const n = vals.length;
+  const labW = 18;                                     // 오른쪽 이름표(HOV·Vy·MTA) 자리
+  const colW = (w - 8 - labW) / n, barW = Math.max(6, Math.min(14, colW * 0.5));
+  const barY = y + 30, barH = h - 36;
   const vToY = v => barY + barH * (1 - Math.max(0, Math.min(TQ_MAX, v)) / TQ_MAX);
+  const cxs = vals.map((_, i) => x + 4 + colW * (i + 0.5));
 
-  ctx.textAlign = 'left';
-  ctx.font = 'bold 9px Helvetica, Arial';
-  ctx.fillStyle = '#8a97a5';
-  ctx.fillText('TQ %', x + 3, y + 11);
+  // 엔진 이름 · 숫자(든 구간의 색 — 녹색 구간이면 흰 글자)
+  vals.forEach((v, i) => {
+    const c = TQ_COLORS[tqBand(v)];
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 8px Helvetica, Arial'; ctx.fillStyle = '#c6ced6';
+    ctx.fillText(n > 1 ? 'TQ' + (i + 1) : 'TQ', cxs[i], y + 13);
+    ctx.font = `bold ${Math.max(10, Math.min(13, colW * 0.42))}px Helvetica, Arial`; ctx.fillStyle = c.text;
+    ctx.fillText(v.toFixed(0), cxs[i], y + 26);
+  });
 
   if (barH > 10) {
-    // 바탕 + 구간 — 0~100 녹색 · 100~113 노랑 · 113~125 빨강
-    ctx.fillStyle = '#161a1e'; ctx.fillRect(barX, barY, barW, barH);
-    [[0, TQ_LIMIT, 'green'], [TQ_LIMIT, TQ_RED, 'yellow'], [TQ_RED, TQ_MAX, 'red']].forEach(([lo, hi, k]) => {
-      ctx.fillStyle = TQ_COLORS[k].tint;
-      ctx.fillRect(barX, vToY(hi), barW, vToY(lo) - vToY(hi));
+    const x0 = cxs[0] - barW / 2, x1 = cxs[n - 1] + barW / 2;
+    vals.forEach((v, i) => {
+      const bx = cxs[i] - barW / 2, c = TQ_COLORS[tqBand(v)];
+      // 바탕 + 구간 — 0~100 녹색 · 100~113 노랑 · 113~ 빨강
+      ctx.fillStyle = '#0b0d10'; ctx.fillRect(bx, barY, barW, barH);
+      [[0, TQ_LIMIT, 'green'], [TQ_LIMIT, TQ_RED, 'yellow'], [TQ_RED, TQ_MAX, 'red']].forEach(([lo, hi, k]) => {
+        ctx.fillStyle = TQ_COLORS[k].tint;
+        ctx.fillRect(bx, vToY(hi), barW, vToY(lo) - vToY(hi));
+      });
+      // 지금 토크 — 아래에서 채운다. 든 구간의 색으로 칠한다
+      const topY = vToY(v);
+      ctx.fillStyle = c.fill; ctx.fillRect(bx, topY, barW, barY + barH - topY);
+      ctx.strokeStyle = c.edge; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(bx, topY + 0.5); ctx.lineTo(bx + barW, topY + 0.5); ctx.stroke();
     });
 
-    // 눈금 — 0·20·…·120
-    ctx.strokeStyle = '#3a4653'; ctx.lineWidth = 1;
-    ctx.font = '7px Helvetica, Arial'; ctx.fillStyle = '#6a7784';
-    for (let v = 0; v <= TQ_MAX; v += 20) {
-      const ty = Math.round(vToY(v)) + 0.5;
-      ctx.beginPath(); ctx.moveTo(barX - 3, ty); ctx.lineTo(barX, ty); ctx.stroke();
-      ctx.textAlign = 'right';
-      ctx.fillText(String(v), barX - 4, ty + 2.5);
-    }
-
-    // 지금 토크 — 아래에서 채운다. 든 구간의 색으로 칠한다
-    const topY = vToY(tq);
-    ctx.fillStyle = col.fill;
-    ctx.fillRect(barX, topY, barW, barY + barH - topY);
-    ctx.strokeStyle = col.edge; ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(barX, topY + 0.5); ctx.lineTo(barX + barW, topY + 0.5); ctx.stroke();
-
-    // 기준선 세 개 — 이름표는 막대 오른쪽에 적고, 겹치면 아래로 비켜 적는다
+    // 기준선 세 개 — 두 막대를 가로질러 긋고 이름표는 오른쪽에(겹치면 아래로 비켜 적는다)
     //   HOV(노랑) : 지금 수평 비행에 필요한 토크 — 여기에 맞추면 고도가 유지된다
     //   Vy (흰색) : PERF 의 Vy 로 수평 비행할 때 필요한 토크 — 가장 적게 드는 토크
     //   MTA(청록) : 그날 엔진이 낼 수 있는 최대 토크(PERF 의 MTA(30)) — 넘겨 당기면 RPM LOW
-    // Vy 선과 MTA 선 사이가 그날 오를 수 있는 여유다.
     let vyTq = null, mta = null;
     try { vyTq = tqAtVy(); mta = mtaNow(); } catch (e) { _swallow(e); }
     const marks = [{ v: need, txt: 'HOV', col: '#ffcc44', w: 1.5 }];
     if (Number.isFinite(vyTq)) marks.push({ v: vyTq, txt: 'Vy', col: '#ffffff', w: 1.2 });
     if (Number.isFinite(mta) && mta < TQ_MAX) marks.push({ v: mta, txt: 'MTA', col: '#00e5ff', w: 2 });
-    marks.forEach(m => {
-      m.y = Math.round(vToY(m.v)) + 0.5;
-      ctx.strokeStyle = m.col; ctx.lineWidth = m.w;
-      ctx.beginPath(); ctx.moveTo(barX - 2, m.y); ctx.lineTo(barX + barW + 4, m.y); ctx.stroke();
+    marks.forEach(mk => {
+      mk.y = Math.round(vToY(mk.v)) + 0.5;
+      ctx.strokeStyle = mk.col; ctx.lineWidth = mk.w;
+      ctx.beginPath(); ctx.moveTo(x0 - 2, mk.y); ctx.lineTo(x1 + 3, mk.y); ctx.stroke();
     });
     ctx.textAlign = 'left';
     ctx.font = 'bold 7px Helvetica, Arial';
-    marks.slice().sort((a, b) => a.y - b.y).forEach((m, i, arr) => {
-      m.ly = i ? Math.max(m.y, arr[i - 1].ly + 8) : m.y;
-      ctx.fillStyle = m.col;
-      ctx.fillText(m.txt, barX + barW + 6, m.ly + 2.5);
+    marks.slice().sort((a, b) => a.y - b.y).forEach((mk, i, arr) => {
+      mk.ly = i ? Math.max(mk.y, arr[i - 1].ly + 8) : mk.y;
+      ctx.fillStyle = mk.col;
+      ctx.fillText(mk.txt, x1 + 4, mk.ly + 2.5);
     });
 
     // 레버 표식(SIM) — 레버가 MTA 를 넘겨 토크보다 위에 있으면 그 자리를 흰 삼각형으로
@@ -706,7 +858,7 @@ function drawTqGauge(x, y, w, h) {
     if (cmd != null && cmd > tq + 1) {
       const cy = Math.round(vToY(cmd)) + 0.5;
       ctx.fillStyle = '#ffffff';
-      ctx.beginPath(); ctx.moveTo(barX - 1, cy); ctx.lineTo(barX - 7, cy - 4); ctx.lineTo(barX - 7, cy + 4);
+      ctx.beginPath(); ctx.moveTo(x0 - 1, cy); ctx.lineTo(x0 - 7, cy - 4); ctx.lineTo(x0 - 7, cy + 4);
       ctx.closePath(); ctx.fill();
     }
 
@@ -714,34 +866,28 @@ function drawTqGauge(x, y, w, h) {
     [[TQ_LIMIT, '#ffcc00'], [TQ_RED, '#ff4444']].forEach(([v, c]) => {
       const ly = Math.round(vToY(v)) + 0.5;
       ctx.strokeStyle = c; ctx.lineWidth = 1.5;
-      ctx.beginPath(); ctx.moveTo(barX - 2, ly); ctx.lineTo(barX + barW + 4, ly); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x0 - 2, ly); ctx.lineTo(x1 + 3, ly); ctx.stroke();
     });
   }
 
-  // 숫자 — 막대 아래(녹색 구간은 흰 글자, 노랑·빨강 구간은 그 색)
   ctx.textAlign = 'center';
-  ctx.font = 'bold 13px Helvetica, Arial';
-  ctx.fillStyle = col.text;
-  ctx.fillText(tq.toFixed(0), x + w / 2, y + h - 6);
   if (over) {
     ctx.font = 'bold 8px Helvetica, Arial';
     ctx.fillStyle = '#ff5555';
-    ctx.fillText('OVER TQ', x + w / 2, y + h - 18);
+    ctx.fillText('OVER TQ', x + w / 2, y + h - 8);
   }
-  // RPM LOW(SIM) — 레버를 MTA 넘게 당겨 로터 회전이 처졌다. 막대 가운데에 띄우고
-  // 바탕을 붉게 깜박인다(글자는 늘 보인다)
-  let rpmLow = false;
-  let rotorHigh = false;
+  // RPM LOW(SIM) — 레버를 MTA 넘게 당겨 로터 회전이 처졌다. 칸 가운데에 띄우고 바탕을 붉게 깜박인다(글자는 늘 보인다)
+  let rpmLow = false, rotorHigh = false;
   try { rpmLow = (typeof simRpmLow === 'function') && simRpmLow(); rotorHigh = !rpmLow && (typeof simRotorHigh === 'function') && simRotorHigh(); } catch (e) { _swallow(e); }
   if (rotorHigh) {                       // 오토로테이션에서 레버를 너무 내려 NR 이 넘쳤다 — 노랑
-    const cy = y + h * 0.5;
+    const cy = y + h * 0.55;
     ctx.fillStyle = 'rgba(0,0,0,0.85)'; ctx.fillRect(x + 2, cy - 15, w - 4, 26);
     ctx.font = 'bold 8px Helvetica, Arial'; ctx.fillStyle = '#ffb000';
     ctx.fillText('NR HIGH', x + w / 2, cy - 4);
     ctx.fillStyle = '#ffffff'; ctx.fillText('NR ' + simNr.toFixed(0) + '%', x + w / 2, cy + 7);
   }
   if (rpmLow) {
-    const cy = y + h * 0.5, blink = Math.floor(performance.now() / 400) % 2 === 0;
+    const cy = y + h * 0.55, blink = Math.floor(performance.now() / 400) % 2 === 0;
     ctx.fillStyle = blink ? 'rgba(220,30,30,0.9)' : 'rgba(0,0,0,0.85)';
     ctx.fillRect(x + 2, cy - 15, w - 4, 26);
     ctx.font = 'bold 8px Helvetica, Arial';
@@ -755,7 +901,7 @@ function drawTqGauge(x, y, w, h) {
 
 function drawSpeedTape(x, y, w, h) {
   ctx.save(); ctx.beginPath(); ctx.rect(x,y,w,h); ctx.clip();
-  ctx.fillStyle='#0d0d0d'; ctx.fillRect(x,y,w,h);
+  ctx.fillStyle='rgba(18,30,48,0.55)'; ctx.fillRect(x,y,w,h);   // 자세계 위에 반투명으로 얹는다
   const cy=y+h/2, ppk=h/80;
   // Existing V-speed bands (right edge) — structural airspeed limits.
   const bands=[[0,65,'rgba(255,255,255,0.1)'],[65,125,'rgba(0,180,0,0.18)'],
@@ -842,7 +988,7 @@ function drawSpeedTape(x, y, w, h) {
 // ────────────────────────────────────────
 function drawAltTape(x, y, w, h) {
   ctx.save(); ctx.beginPath(); ctx.rect(x,y,w,h); ctx.clip();
-  ctx.fillStyle='#0d0d0d'; ctx.fillRect(x,y,w,h);
+  ctx.fillStyle='rgba(18,30,48,0.55)'; ctx.fillRect(x,y,w,h);   // 자세계 위에 반투명으로 얹는다
 
   // ── Target/VS box at the top — shows the AFCS ALT setting + change rate ──
   // Height is reserved at the top of the tape so the moving scale starts below it.
@@ -959,7 +1105,7 @@ function vsiFrac(fpm) {
 let _pfdAltFs = null;   // 고도계 숫자 크기(눈금 · 값 칸) — drawPFD 가 채운다
 function drawVSI(x, y, w, h) {
   ctx.save(); ctx.beginPath(); ctx.rect(x,y,w,h); ctx.clip();
-  ctx.fillStyle='#0d0d0d'; ctx.fillRect(x,y,w,h);
+  ctx.fillStyle='rgba(10,18,30,0.6)'; ctx.fillRect(x,y,w,h);   // 고도계 오른쪽에 붙은 반투명 승강계
   // 고도 단위가 m이면 수직속도는 m/s로 표시(눈금도 라운드 m/s 기준)
   // 위로 3,000fpm · 아래로 4,000fpm 까지 읽는다(VSI_UP · VSI_DN). 눈금은 1,000fpm 까지를
   // 반 칸에 넓게 두고 그 위는 좁힌다 — 자주 쓰는 작은 상승률을 잘 읽고, 큰 강하도 담는다.
@@ -1062,7 +1208,7 @@ function drawHSI(x, y, w, h) {
   ctx.fillRect(x,y,w,h);
 
   const cx   = x + w / 2;
-  const r    = Math.min(w * 0.38, h * 0.46);  // leave room for side panels
+  const r    = Math.min(w * (w < 420 ? 0.31 : 0.38), h * 0.46);  // leave room for side panels(좁으면 옆 글자 칸을 더 남긴다)
   const cy   = y + h * 0.50;
   const arrowR = r * 0.84;
 
