@@ -479,15 +479,12 @@ function updateHoverBtns() {
   const gb  = document.getElementById('gspd-btn');
   const cb  = document.getElementById('crht-btn');
   const ahb = document.getElementById('alt-hold-btn');
-  if (!hb || !gb) return;
   // ALT hold button
   if (ahb) ahb.classList.toggle('on', altHoldOn);
-  // HOVER PAGE: pressable when below 80kt OR already on (so user can turn off)
-  hb.disabled = !(hoverEligible() || hoverPageOn);
-  hb.classList.toggle('on', hoverPageOn);
+  // HOVER PAGE: pressable when below 80kt OR already on (so user can turn off) — FCP 버튼은 없앴고 소프트키 Hover Display 가 따른다
+  if (hb) { hb.disabled = !(hoverEligible() || hoverPageOn); hb.classList.toggle('on', hoverPageOn); }
   // GSPD: always enabled (mode-independent of HOVER PAGE)
-  gb.disabled = false;
-  gb.classList.toggle('on', gspdOn);
+  if (gb) { gb.disabled = false; gb.classList.toggle('on', gspdOn); }
   updateApInhibit();
   // CRHT: always enabled
   if (cb) cb.classList.toggle('on', crhtOn);

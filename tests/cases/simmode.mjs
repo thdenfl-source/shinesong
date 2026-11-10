@@ -72,36 +72,31 @@ const CAM = `() => {
 }`;
 
 async function part1(page, t) {
-  // ── 버튼이 1행 ALT 유지 버튼 무리(ALT·CRHT·G/S) 오른쪽에 있다 ──
-  // 스톱워치는 2행으로 내려갔다(ALT 무리와 자리를 맞바꿨다).
+  // ── SIM 버튼은 PFD 소프트키 맨 오른쪽 칸(CAS 옆)에 있다 — FCP 의 SIM 버튼은 없앴다 ──
   const btn = await page.evaluate(async () => {
     selectPanel('left', 'pfd', true);
-    const b = document.getElementById('sim-mode-btn');
-    const grp = document.querySelector('.alt-hold-group');
-    const sw = document.getElementById('sw-display');
-    const lbl = b.closest('.ctrl-group').querySelector('.ctrl-lbl');
-    const bb = b.getBoundingClientRect(), gb = grp.getBoundingClientRect(), sb = sw.getBoundingClientRect();
+    pfdSkGo('TOP');
+    const b = document.getElementById('sk-11');
     const was = simModeOn;
     if (simModeOn) toggleSimMode();
+    pfdSkRender();
     const off = b.className;
     S.alt = 2500;
     b.click();
     await new Promise(r => setTimeout(r, 40));   // 물음이 있었다면 한 박자 뒤에 뜬다
-    const res = { txt: b.textContent.trim(), lbl: lbl.textContent.trim(),
-             right: bb.left >= gb.right - 1, sameRow: Math.abs(bb.top - gb.top) < 60,
-             swBelow: sb.top > gb.bottom - 4,
-             off, was, dlg: !!document.querySelector('.ui-dlg'), on: simModeOn };
+    const res = { txt: b.firstElementChild.textContent.trim(), cas: document.getElementById('sk-10').firstElementChild.textContent.trim(),
+             fcpGone: !document.getElementById('sim-mode-btn'),
+             off, was, dlg: !!document.querySelector('.ui-dlg'), on: simModeOn, onCls: b.className };
     const cancel = document.querySelector('.ui-dlg-btns button');
     if (cancel) cancel.click();
     await new Promise(r => setTimeout(r, 40));
     if (simModeOn) toggleSimMode(false);
     return res;
   });
-  t.eq(btn.lbl, 'SIM', `버튼 위에 SIM 이름표가 있다 (${btn.lbl})`);
-  t.eq(btn.right, true, 'ALT·CRHT·G/S 버튼 오른쪽에 있다');
-  t.eq(btn.sameRow, true, '같은 줄이다');
-  t.eq(btn.swBelow, true, '스톱워치는 아래 줄(2행)로 내려갔다');
+  t.ok(btn.txt === 'SIM' && btn.cas === 'CAS', `소프트키 맨 오른쪽(CAS 옆) 칸이 SIM 이다 (${btn.cas} · ${btn.txt})`);
+  t.ok(btn.fcpGone, 'FCP 의 SIM 버튼은 없앴다');
   t.ok(!/\bon\b/.test(btn.off), `평소에는 꺼져 있다 (${btn.off})`);
+  t.ok(/\bon\b/.test(btn.onCls), '켜지면 칸 아래 녹색 바(on)');
   // 시작 고도는 묻지 않는다 — 누르면 바로 켜진다
   t.eq(btn.dlg, false, '누르면 시작 지점을 묻지 않는다');
   t.eq(btn.on, true, '누르면 바로 켜진다');
@@ -112,11 +107,11 @@ async function part1(page, t) {
       if (simModeOn) toggleSimMode(false);
       const g = simTerrainFt();
       S.alt = g + agl; S.spd = 90; S.vs = 300; S.tq = 70;
-      document.getElementById('sim-mode-btn').click();
+      pfdSkGo('TOP'); document.getElementById('sk-11').click();
       await new Promise(r => setTimeout(r, 60));
       return { agl: S.alt - simTerrainFt(), alt: S.alt, spd: S.spd, vs: S.vs, tq: S.tq, on: simModeOn,
                dlg: !!document.querySelector('.ui-dlg'),
-               cls: document.getElementById('sim-mode-btn').className };
+               cls: (pfdSkRender(), document.getElementById('sk-11').className) };
     };
     const ground = await press(10);
     const air = await press(2500);
@@ -2018,7 +2013,8 @@ async function part4(page, t) {
     toggleSimMode(false);
     _ax(0, 1);                      // 조종간을 밀어 둔 채로 꺼 본다
     fly(4);
-    return { bnk: S.bnk, target: bankTarget, cls: document.getElementById('sim-mode-btn').className };
+    pfdSkGo('TOP');
+    return { bnk: S.bnk, target: bankTarget, cls: document.getElementById('sk-11').className };
   })()`);
   t.ok(Math.abs(off.bnk) < 2, `끄면 수평으로 돌아온다 (${off.bnk.toFixed(1)}°)`);
   t.eq(off.target, 0, '뱅크 목표도 풀린다 — 조종간을 밀어 둬도 듣지 않는다');
