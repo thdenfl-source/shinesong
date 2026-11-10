@@ -301,19 +301,27 @@ function drawNpNr(x, y, w, h, P) {
 // 사이클릭은 위가 앞(밀기)·오른쪽이 오른쪽, 페달은 오른쪽이 오른 페달이다.
 let hocasOn = false;
 const HOCAS_DEAD = 0.05;          // 이 안이면 가운데(중립)로 본다
+// (켜기 · CTR · DEFAULT 는 CDU 의 Aircraft Systems → HOCAS 칸 — 18-system.js)
 function toggleHocas() {
   hocasOn = !hocasOn;
-  const b = document.getElementById('hocas-btn');
-  if (b) b.classList.toggle('on', hocasOn);
   try { drawPFD(); } catch (e) { _swallow(e); }
+  try { if (typeof _hocasCduRefresh === 'function') _hocasCduRefresh(); } catch (e) { _swallow(e); }
 }
 // CTR — 손을 뗀 지금 자리를 조종간·페달의 가운데로(12-joystick.js joyRecenter)
 function hocasCenter() {
   let ok = false;
   try { ok = typeof joyRecenter === 'function' && joyRecenter(); } catch (e) { _swallow(e); }
-  const b = document.getElementById('hocas-ctr-btn');
-  if (b && ok) { b.classList.add('flash'); setTimeout(() => b.classList.remove('flash'), 600); }
   try { drawPFD(); } catch (e) { _swallow(e); }
+  try { if (typeof _hocasCduRefresh === 'function') _hocasCduRefresh(); } catch (e) { _swallow(e); }
+  return ok;
+}
+// DEFAULT — 저장한 가운데를 지우고 기본값으로(12-joystick.js joyNeutralDefault)
+function hocasDefault() {
+  let ok = false;
+  try { ok = typeof joyNeutralDefault === 'function' && joyNeutralDefault(); } catch (e) { _swallow(e); }
+  try { drawPFD(); } catch (e) { _swallow(e); }
+  try { if (typeof _hocasCduRefresh === 'function') _hocasCduRefresh(); } catch (e) { _swallow(e); }
+  return ok;
 }
 function hocasAxes() {
   let a = { roll: 0, pitch: 0, yaw: 0 };

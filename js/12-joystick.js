@@ -460,6 +460,17 @@ function joyNeutralSave(p) {
   st[p.id] = Array.prototype.slice.call(_joyNeutral[p.index] || p.axes || []).map(v => +(+v).toFixed(4));
   try { localStorage.setItem(JOY_NEU_KEY, JSON.stringify(st)); } catch (e) { _swallow(e); }
 }
+// DEFAULT — 저장해 둔 가운데를 지우고, 장치가 처음 읽은(손을 뗀 지금) 자리를 가운데로 쓴다
+function joyNeutralDefault() {
+  const pads = joyPads();
+  const p = pads.find(q => q.index === joyActiveIdx) || pads[0];
+  const st = _joyNeuStore();
+  if (p && p.id) delete st[p.id];
+  try { localStorage.setItem(JOY_NEU_KEY, JSON.stringify(st)); } catch (e) { _swallow(e); }
+  if (p) _joyNeutral[p.index] = Array.prototype.slice.call(p.axes || []);
+  try { uiToast(p ? '저장한 가운데를 지웠습니다(기본값 — 지금 자리를 가운데로)' : '조종 장치가 없습니다', p ? '' : 'err', 2000); } catch (e) { _swallow(e); }
+  return !!p;
+}
 // 저장해 둔 가운데(축 수가 같을 때만) — 없으면 null
 function joyNeutralSaved(p) {
   if (!p || !p.id) return null;
