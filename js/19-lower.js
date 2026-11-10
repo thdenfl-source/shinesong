@@ -35,9 +35,9 @@ const LCON_PLATES = [
     { t: 'lpb', id: 'tfCyc', x: 432, y: 80, w: 64, h: 40, title: 'CYC', legend: 'REL' },
     { t: 'lpb', id: 'ap1', x: 60, y: 156, w: 64, h: 40, title: 'AP1', legend: 'OFF' },
     { t: 'lpb', id: 'ap2', x: 150, y: 156, w: 64, h: 40, title: 'AP2', legend: 'OFF' },
-    { t: 'lpb', id: 'rotAp1', x: 240, y: 156, w: 64, h: 40, title: 'ROT AP1', legend: 'ROT' },
-    { t: 'lpb', id: 'rotAp2', x: 345, y: 156, w: 64, h: 40, title: 'ROT AP2', legend: 'ROT' },
-    { t: 'lpb', id: 'bFltTst', x: 432, y: 156, w: 64, h: 40, title: 'B FLT TST', legend: 'OFF' },
+    { t: 'lpb', id: 'rotAp1', x: 240, y: 156, w: 64, h: 40, title: 'RST AP1', legend: 'RST' },
+    { t: 'lpb', id: 'rotAp2', x: 345, y: 156, w: 64, h: 40, title: 'RST AP2', legend: 'RST' },
+    { t: 'lpb', id: 'bFltTst', x: 432, y: 156, w: 64, h: 40, title: 'P FLT TST', legend: 'TEST' },
   ]},
   // ⑮ 비디오 컨버터 제어패널
   { x: 10, y: 480, w: 490, h: 140, items: [
@@ -160,8 +160,10 @@ function lconSyncPark() {
     if (typeof simEmerBrake !== 'undefined') simEmerBrake = v === 'EMER';
   } catch (e) { _swallow(e); }
 }
-ovhdOn(id => {
+ovhdOn((id, v) => {
   if (id === 'parkBrake') lconSyncPark();
+  // AFCAU P FLT TST — 누르면 AFCS 시험(18-system.js afcsTestStart). 시험이 끝나면 버튼이 다시 나온다
+  if (id === 'bFltTst' && v === 'IN' && !_lconQuiet) { try { afcsTestStart(); } catch (e) { _swallow(e); } }
   // FUEL 패널 · AFCAU AP1/AP2 → SYSTEM 창(Fuel · Aircraft Status · AFCS) 다시 그리기
   try { if (typeof sysDraw === 'function') sysDraw(); } catch (e) { _swallow(e); }
 });

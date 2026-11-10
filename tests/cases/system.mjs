@@ -118,14 +118,17 @@ export async function run(page, t) {
     const o = {};
     sysPageSet('asys_afcs'); const a0 = texts();
     o.afcsIdle = ['SEMA1 OK', 'SEMA2 OK', 'TRIM OK', 'AFCS MAINTENANCE MODE', 'NOM DEF'].every(x => a0.includes(x)) && a0.filter(x => x === 'OFF').length === 6;
-    // 시험 — 시간을 앞당겨 단계를 본다
-    afcsTestStart();
+    // 시험 — 하부 콘솔 AFCAU 의 P FLT TST 를 누르면 시작한다. 시간을 앞당겨 단계를 본다
+    afcsLast = ''; ovhdSet('bFltTst', 'IN'); o.pflt = !!afcsTest;
     const at = sec => { afcsTest.t0 = performance.now() - sec * 1000; return texts(); };
     const t1 = at(1), t4 = at(4), t8 = at(8);
     o.run = t1.includes('AP1 TEST RUNNING') && t1.includes('AP2 TEST RUNNING') && t1.includes('C') && t1.includes('YR') && t1.includes('P');
     o.ap2 = t4.includes('AP1 TEST RUNNING') && t4.includes('AP2 TEST OK');
     o.both = t8.includes('AP1 TEST OK') && t8.includes('AP2 TEST OK');
-    at(11); o.after = afcsTest === null && afcsLast === 'AFCS TEST OK';
+    const t11 = at(11); o.after = afcsTest === null && afcsLast === 'AFCS TEST OK';
+    const t12 = texts();
+    o.pfltOut = ovhdGet('bFltTst') === 'OUT';
+    o.noMaint = !t12.includes('AFCS MAINTENANCE MODE') && !t12.includes('NOM DEF') && t12.includes('AFCS TEST OK');
     sysPageSet('asys_eng'); const e0 = texts();
     o.eng = ['Engine 1', 'Engine 2', 'MGB', 'IGB', 'TGB', 'Anti-Ice', 'EHC LCF 1', 'T45 Margin', 'PCD Position', 'Power Check', 'Incomplete', 'ALT UNS'].filter(x => !e0.includes(x));
     o.pcdFly = e0.filter(x => x === 'Fly').length === 2;
@@ -144,6 +147,8 @@ export async function run(page, t) {
     selectPanel('right', 'map', true);
     return o;
   });
+  t.ok(q.pflt && q.pfltOut, 'LOWER AFCAU 의 P FLT TST 를 누르면 AFCS 시험이 시작되고, 끝나면 버튼이 다시 나온다');
+  t.ok(q.noMaint, '시험을 마친 화면에는 AFCS MAINTENANCE MODE · NOM DEF 가 #1 · #2 모두 없다');
   t.ok(q.afcsIdle, 'AFCS — 두 레인에 OFF · SEMA1/SEMA2/TRIM OK · AFCS MAINTENANCE MODE · NOM DEF');
   t.ok(q.run && q.ap2 && q.both && q.after,
     `AFCS TEST — 두 AP 시험 시작(C · YR · P) → AP2 TEST OK → AP1 TEST OK → 처음 화면(AFCS TEST OK) (${[q.run, q.ap2, q.both, q.after].join(' · ')})`);
