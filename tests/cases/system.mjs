@@ -16,7 +16,7 @@ export async function run(page, t) {
     const w = document.getElementById('sysp-wrap'), c = w.querySelector('canvas');
     const o = { shown: !w.classList.contains('page-hidden') && !!c && c.width > 100 };
     const t0 = texts().map(s => s.trim());
-    o.fuel = ['Fuel', 'Left', 'Total', 'Right', '956 LBS', '1914 LBS', '958 LBS', 'FWD', 'FT 1', 'FT 2', 'AFT', 'F5',
+    o.fuel = ['Fuel', 'Left', 'Total', 'Right', '956 LBS', '2964 LBS', '958 LBS', '1050 LBS', 'EXT AUX1', 'EXT AUX2', 'FWD', 'FT 1', 'FT 2', 'AFT', 'F5',
               'MFSOV 1', 'PRESS 1', 'FLTR 1', 'FUEL 1', 'FUEL IMBALANCE', 'APU', 'Refuel Port', 'TGT', 'NG', 'Fuel QTY', 'Battery', 'ACCP']
       .filter(s => !t0.includes(s));
     // CDU 의 계통 버튼이 SYSTEM 화면을 고른다
@@ -30,7 +30,7 @@ export async function run(page, t) {
     // CDU Fuel 칸 — 넣고 빼고 정하기
     const click = (act, arg) => document.querySelector(`#mainContentArea [data-act="${act}"][data-arg='${arg}']`).click();
     o.cduT0 = document.getElementById('fuelc-t').textContent;
-    click('fuelAdjust', '[100]'); await wait(30); o.plus = Math.round(fuelTotal());
+    click('fuelAdjust', '[100]'); await wait(30); o.plus = Math.round(fuelLeft() + fuelRight());
     click('fuelSetTotal', '[1000]'); await wait(30); o.set1000 = [Math.round(fuelLeft()), Math.round(fuelRight())];
     o.cduT1 = document.getElementById('fuelc-t').textContent;
     click('fuelReset', '[]'); await wait(30); o.reset = Math.round(fuelTotal());
@@ -39,7 +39,7 @@ export async function run(page, t) {
     const f = fuelFlow(); o.ff = [Math.round(f.f1), Math.round(f.f2)];
     S.running = false; _sysT = 0; sysTick(); await wait(300); sysTick(); o.stopped = fuelTotal();
     S.running = true; simSpeed = 8; _sysT = 0; sysTick(); await wait(500); sysTick();
-    o.burn = 1914 - fuelTotal(); o.expect = (f.f1 + f.f2) * 8 * 0.5 / 3600;
+    o.burn = 2964 - fuelTotal(); o.expect = (f.f1 + f.f2) * 8 * 0.5 / 3600;
     o.ft1 = fuel.ft1;
     S.running = keep.run; simSpeed = keep.sp;
     // FUEL LOW — 집합 탱크가 낮으면 호박색 칸
@@ -55,10 +55,10 @@ export async function run(page, t) {
   t.ok(r.shown, 'SYSTEM 탭으로 창이 열리고 캔버스에 그린다');
   t.eq(r.fuel.length, 0, `Fuel 화면의 글자가 다 있다${r.fuel.length ? ' (없음: ' + r.fuel.join(', ') + ')' : ''}`);
   t.ok(r.elecPage === 'asys_elec' && r.elecTxt && r.fuelPage === 'asys_fuel', 'CDU 의 계통 버튼이 SYSTEM 창의 화면을 고른다');
-  t.ok(r.cduT0 === '1914 LBS' && r.plus === 2014 && r.set1000.join() === '500,500' && r.cduT1 === '1000 LBS' && r.reset === 1914,
-    `CDU Fuel 칸 — +100 · 1000 으로 정하기(양쪽 반씩) · RESET (${r.cduT0} → ${r.plus} → ${r.set1000.join('/')} → ${r.reset})`);
+  t.ok(r.cduT0 === '2964 LBS' && r.plus === 2014 && r.set1000.join() === '500,500' && r.cduT1 === '2050 LBS' && r.reset === 2964,
+    `CDU Fuel 칸 — +100 · 기내 1000 으로 정하기(양쪽 반씩 · AUX 1050 그대로) · RESET (${r.cduT0} → ${r.plus} → ${r.set1000.join('/')} → ${r.reset})`);
   t.ok(r.ff[0] > 200 && r.ff[1] > 200, `엔진마다 연료 흐름(pph): ${r.ff.join(' · ')}`);
-  t.ok(r.stopped === 1914, '시뮬 시계가 멈춰 있으면 연료가 줄지 않는다');
+  t.ok(r.stopped === 2964, '시뮬 시계가 멈춰 있으면 연료가 줄지 않는다(기내 1914 + AUX 1050)');
   t.ok(r.burn > r.expect * 0.6 && r.burn < r.expect * 1.6 && Math.abs(r.ft1 - 266) < 0.5,
     `돌면 흐름 × 배속만큼 준다(${r.burn.toFixed(2)} lbs · 예상 ${r.expect.toFixed(2)}) · 집합 탱크는 가득 유지(FT1 ${r.ft1.toFixed(1)})`);
   t.ok(r.lowAmber, '집합 탱크가 낮으면 FUEL 1 LOW 칸이 호박색');
@@ -152,4 +152,40 @@ export async function run(page, t) {
   t.eq(q.status.length, 0, `Aircraft Status 화면의 글자가 다 있다${q.status.length ? ' (없음: ' + q.status.join(', ') + ')' : ''}`);
   t.ok(q.fireOk && q.fireTest, 'Fire Detection — FIRE DETECTOR 노브를 시험 자리로 돌리면 그 항목이 FIRE');
   t.ok(q.disch && q.pitotOff, 'Fire Extinguishing 의 ENG CMD 는 TQS T HANDLE(ARM)을, ADS Heat 는 PITOT HEAT 스위치를 따른다');
+
+  // ── AUX 탱크 — 525 lbs 씩 · XFER AUTO/ON/OFF 로 주 탱크에 보낸다 · MTA 블리드 감소 ──
+  const x = await page.evaluate(async () => {
+    localStorage.removeItem('ovhdState'); ovhdReset(); fuelReset();
+    const o = { aux: [fuel.auxL, fuel.auxR] };
+    const keep = { run: S.running, sp: simSpeed };
+    const tick = async n => { S.running = true; simSpeed = 8; _sysT = 0; sysTick(); for (let i = 0; i < n; i++) { await new Promise(r => setTimeout(r, 120)); sysTick(); } S.running = keep.run; simSpeed = keep.sp; };
+    // AUTO — 주 탱크가 가득이면 쉬고, 100 넘게 비면 돈다
+    sysTick(); o.autoFull = [auxPump[1], auxPump[2]];
+    fuel.mainL -= 150; sysTick(); o.autoLow = auxPump[1] && !auxPump[2];
+    const a0 = fuel.auxL, m0 = fuel.mainL; await tick(4); o.moved = [a0 - fuel.auxL, fuel.mainL - m0];
+    // ON — 주 탱크가 찰 때까지 늘 · OFF — 안 보낸다
+    fuelReset(); fuel.mainR -= 30; sysTick(); o.autoSmall = auxPump[2];          // 30 비었을 때 AUTO 는 아직 쉰다
+    ovhdSet('aux2Xfer', 'ON'); sysTick(); o.on = auxPump[2];
+    fuel.mainR -= 200; ovhdSet('aux2Xfer', 'OFF'); sysTick(); o.off = auxPump[2];
+    // 화면 — 펌프가 돌 때만 TP 심벌
+    selectPanel('right', 'sysp', true); await new Promise(r => setTimeout(r, 150)); sysPageSet('asys_fuel');
+    const texts = () => { const proto = CanvasRenderingContext2D.prototype, orig = proto.fillText, seen = [];
+      proto.fillText = function (t, ...a) { seen.push(String(t)); return orig.call(this, t, ...a); };
+      try { sysDraw(); } finally { proto.fillText = orig; } return seen; };
+    o.tpOff = !texts().includes('TP1');
+    ovhdSet('aux2Xfer', 'ON'); sysTick(); o.tpOn = texts().includes('TP1') && texts().includes('TP2');
+    // MTA — HEATER −4 · ENG ANTI ICE 하나 −7 · 둘 −14
+    ovhdReset(); const m = mtaNow();
+    ovhdSet('ecsMode', 'HEAT'); o.heat = +(m - mtaNow()).toFixed(1);
+    ovhdSet('engAi1', 'ON'); o.ai1 = +(m - mtaNow()).toFixed(1);
+    ovhdSet('engAi2', 'ON'); o.ai2 = +(m - mtaNow()).toFixed(1);
+    ovhdReset(); fuelReset(); localStorage.removeItem('ovhdState'); selectPanel('right', 'map', true);
+    return o;
+  });
+  t.ok(x.aux.join() === '525,525', `AUX 탱크 좌우 525 lbs 씩 (${x.aux.join(' · ')})`);
+  t.ok(!x.autoFull[0] && !x.autoFull[1] && x.autoLow && x.moved[0] > 0.3,   // (주 탱크는 그동안 집합 탱크도 채우므로 AUX 쪽만 본다)
+    `AUX XFER AUTO — 주 탱크가 차 있으면 쉬고 100 넘게 비면 이송(${x.moved[0].toFixed(1)} lbs AUX → 주 탱크)`);
+  t.ok(x.on && !x.autoSmall && !x.off, 'AUX XFER ON 은 조금만 비어도 늘 보내고, AUTO 는 쉬며, OFF 는 안 보낸다');
+  t.ok(x.tpOff && x.tpOn, 'Fuel 화면 — 이송 펌프가 돌 때만 TP 심벌이 나온다');
+  t.ok(x.heat === 4 && x.ai1 === 11 && x.ai2 === 18, `MTA — HEATER −4% · ENG ANTI ICE 하나 −7% · 둘 −14% (${x.heat} · ${x.ai1} · ${x.ai2})`);
 }

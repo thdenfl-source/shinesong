@@ -252,10 +252,25 @@ function tqRequiredAt(spd, bnk) {
 }
 // 그날의 MTA(최대 가용 토크, %) — CDU PERF 의 MTA(30)(09-cdu.js perfMta).
 // PERF 의 고도·온도를 기준으로 지금 고도에서 셈한다. PERF 를 못 읽으면 계기 끝.
+// 블리드 공기를 쓰는 장치가 켜지면 가용 토크(MTA)가 준다 — 상부 콘솔(17-upper.js)
+//   ECS HEATER(모드 노브 HEAT) — #1 · #2 엔진 모두 4% 씩 → 계기 MTA −4%
+//   ENG ANTI ICE NO1/NO2 — 켠 엔진마다 그 엔진에서 14% → 둘 다 켜면 −14%, 하나면 −7%(두 엔진 평균)
+const MTA_HEAT_PCT = 4, MTA_ENG_AI_PCT = 14;
+function mtaBleedPenalty() {
+  let p = 0;
+  try {
+    if (typeof ovhdGet !== 'function') return 0;
+    if (ovhdGet('ecsMode') === 'HEAT') p += MTA_HEAT_PCT;
+    const ai = (ovhdGet('engAi1') === 'ON' ? 1 : 0) + (ovhdGet('engAi2') === 'ON' ? 1 : 0);
+    p += MTA_ENG_AI_PCT * ai / 2;
+  } catch (e) { _swallow(e); }
+  return p;
+}
 function mtaNow(altFt = S.alt) {
   let v = null;
   try { v = (typeof perfMta === 'function') ? perfMta(altFt) : null; } catch (e) { _swallow(e); }
-  return Number.isFinite(v) ? Math.min(TQ_MAX, v) : TQ_MAX;
+  const base = Number.isFinite(v) ? Math.min(TQ_MAX, v) : TQ_MAX;
+  return Math.max(0, base - mtaBleedPenalty());
 }
 // Vy 로 수평 비행할 때 필요한 토크(%) — 이 선과 MTA 선 사이가 그날 오를 수 있는 여유다
 function tqAtVy() {
