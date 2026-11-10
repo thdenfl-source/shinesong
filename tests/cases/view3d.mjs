@@ -22,11 +22,17 @@ export async function run(page, t) {
       return { pitch: _ml3d.getPitch(), n: ids.length, z17: ids.filter(i => i.overscaledZ >= 17).length,
                top: Math.max(...ids.map(i => i.overscaledZ)) };
     };
-    // 기본 시선이 자세보다 5° 아래(SIM_VIEW_DOWN)라, 카메라가 꼭 수평(90°)인 것은 기수 5° 들었을 때다
-    const o = { level: tiles(SIM_VIEW_DOWN), up: tiles(SIM_VIEW_DOWN + 1), down: tiles(SIM_VIEW_DOWN - 1), guard: !!_ml3d.style.tileManagers['satellite'].getSource().calculateTileZoom._lodGuard };
+    // 기본 시선이 자세보다 simViewDown()(저속 5° → 120kt 0°) 아래라, 카메라가 꼭 수평(90°)인 것은 기수를 그만큼 들었을 때다
+    S.spd = 120; const vd = simViewDown();
+    const o = { level: tiles(vd), up: tiles(vd + 1), down: tiles(vd - 1), guard: !!_ml3d.style.tileManagers['satellite'].getSource().calculateTileZoom._lodGuard };
+    // 시선 숙임은 속도에 따라 — 120kt 수평 자세면 지평선이 한가운데(외부 시점 자세와 같은 목측), 저속은 5° 아래
+    const camAt = kt => { S.spd = kt; S.pit = 0; S.bnk = 0; _ml3dSimCamera(); return _ml3d.getPitch(); };
+    o.cruise = camAt(120); o.mid = camAt(80); o.slow = camAt(30);
     toggleSimMode(false);
     return o;
   });
+  t.ok(Math.abs(lod.cruise - 90) < 0.2 && Math.abs(lod.mid - 87.5) < 0.3 && Math.abs(lod.slow - 85) < 0.2,
+    `1인칭 시선: 120kt 수평이면 지평선이 한가운데, 저속은 5° 숙여 본다 (120kt ${lod.cruise.toFixed(1)}° · 80kt ${lod.mid.toFixed(1)}° · 30kt ${lod.slow.toFixed(1)}°)`);
   t.ok(lod.guard, '3D 지도에 수평 시선 화질 보정이 걸려 있다');
   t.ok(Math.abs(lod.level.pitch - 90) < 1e-6 && lod.level.n >= lod.up.n && lod.level.z17 >= lod.up.z17 && lod.level.top === lod.up.top,
     `수평 자세(카메라 90°)에서도 1° 들었을 때만큼 고운 타일을 고른다 ` +

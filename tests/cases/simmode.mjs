@@ -914,7 +914,7 @@ async function part2(page, t) {
     const c1 = cam();
     return { bnk: S.bnk, drawn, three: midSel, c1,
              hdg: Math.round(S.hdg) % 360,
-             camYaw: Math.round(normA(_ml3dCamRot(S.hdg, S.pit, S.bnk, 0, -SIM_VIEW_DOWN).yaw)) % 360,
+             camYaw: Math.round(normA(_ml3dCamRot(S.hdg, S.pit, S.bnk, 0, -simViewDown()).yaw)) % 360,
              moved: distance(c0.lat, c0.lon, c1.lat, c1.lon),
              offAc: distance(c1.lat, c1.lon, S.lat, S.lon) * 1852 };
   })()`);
@@ -944,18 +944,20 @@ async function part2(page, t) {
     _simGndFt = 0; _simGndFresh = false;     // 지형을 모르는 바다 위로 둔다
     const realQ = _ml3d.queryTerrainElevation;
     _ml3d.queryTerrainElevation = () => null; _visOff = null;   // 지도도 아직 지형을 그리지 않았다
-    const at = (alt, pit, hdg, bnk) => {
-      S.alt = alt; S.pit = pit; S.hdg = hdg; S.bnk = bnk; _applyFollow(); return cam();
+    // 기본 시선 5° 숙임은 저속(40kt 이하)에서 다 준다 — 120kt 로 갈수록 0° 로 준다(simViewDown)
+    const at = (alt, pit, hdg, bnk, kt = 30) => {
+      S.spd = kt; S.alt = alt; S.pit = pit; S.hdg = hdg; S.bnk = bnk; _applyFollow(); return cam();
     };
     const low = at(1000, 0, 90, 0), high = at(9000, 0, 90, 0);
     const down = at(1000, -10, 90, 0), up = at(1000, 10, 90, 0);
     const turn = at(1000, 0, 250, 0), rolled = at(1000, 0, 250, -30);
     const level = at(1000, 0, 250, 0);
+    const cruise = at(1000, 0, 90, 0, 120);
     _ml3d.queryTerrainElevation = realQ;
     toggleSimMode(false);
     const after = { sel: midSel, roll: _ml3d.getRoll(), pitch: _ml3d.getPitch(),
                     clamp: _ml3d.getCenterClampedToGround(), tf: document.getElementById('map3d').style.transform };
-    return { before, low, high, down, up, turn, rolled, level, after };
+    return { before, low, high, down, up, turn, rolled, level, cruise, after };
   })()`);
   t.eq(view.before, 'map', '켜기 전에는 2D 지도였다');
   t.ok(Math.abs(view.low.alt - 1000 * 0.3048 - 3) < 1.5 && Math.abs(view.high.alt - 9000 * 0.3048 - 3) < 1.5, // 눈높이 3m
@@ -963,6 +965,8 @@ async function part2(page, t) {
     `9,000ft → ${(view.high.alt / 0.3048).toFixed(0)}ft)`);
   t.ok(Math.abs(view.low.pitch - 85) < 0.5,
     `수평 자세에서는 지평선보다 5° 아래를 본다(기본 시선 — 발밑 갑판이 보이게) (${view.low.pitch.toFixed(1)}°)`);
+  t.ok(Math.abs(view.cruise.pitch - 90) < 0.5,
+    `120kt 수평 자세에서는 지평선을 정면으로 본다(외부 시점의 기체 자세와 같은 목측) (${view.cruise.pitch.toFixed(1)}°)`);
   t.ok(Math.abs(view.down.pitch - 75) < 0.5,
     `기수를 10° 숙이면 그만큼 아래를 본다 (${view.down.pitch.toFixed(1)}°)`);
   t.ok(Math.abs(view.up.pitch - 95) < 0.5,
@@ -990,7 +994,7 @@ async function part2(page, t) {
     selectPanel('right', 'cdu', true);
     toggleSimMode(true);
     _simGndFt = 0; _simGndFresh = false;
-    S.alt = 2000; S.bnk = 0; S.hdg = 90;
+    S.spd = 30; S.alt = 2000; S.bnk = 0; S.hdg = 90;   // 저속 — 기본 시선 5° 아래(simViewDown)
     const H = _ml3d.getContainer().clientHeight;
     const read = (pit, bnk) => {
       S.pit = pit; S.bnk = bnk || 0; _applyFollow();
@@ -1960,7 +1964,7 @@ async function part4(page, t) {
     selectPanel('left', 'pfd', true); selectPanel('mid', 'map', true);
     selectPanel('right', 'cdu', true);
     toggleSimMode(true);
-    S.running = false; S.alt = 2000; S.pit = 0; S.bnk = 0; S.hdg = 90; _simGndFt = 0; _simGndFresh = false;
+    S.running = false; S.spd = 30; S.alt = 2000; S.pit = 0; S.bnk = 0; S.hdg = 90; _simGndFt = 0; _simGndFresh = false;
     // 시선은 실시간으로 돈다. 검사 브라우저는 3D 를 소프트웨어로 그려 한 프레임이
     // 느리므로, 시간을 0.05초씩 정확히 밀어 본다(앱은 실제 경과시간을 쓴다).
     const hold = async (ms) => { for (let i = 0; i < ms / 50; i++) simLookStep(0.05); _applyFollow(); };
