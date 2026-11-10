@@ -202,21 +202,23 @@ function simAfcsAny() {
     (typeof holdOn !== 'undefined' && holdOn));
 }
 function simAfcsVert() { return simModeOn && (altHoldOn || crhtOn || (gsOn && !!_simGs()) || gaOn || vsModeOn || tdOn); }
-// ── G/A(복행) ── FCP 의 G/A 버튼. 누르면 컬렉티브·피치 축이 GA 가 되어
-//   · 피치: 지금 속도에서 목표 속도까지 GA_DUR(25초 · 전진 20kt 넘으면 17초)에 걸쳐 점점 가속
-//           목표 = Vy(지금이 Vy 보다 느리면) · 지금 속도(Vy~VNE) · VNE(VNE 를 넘으면) — IAS 기준
-//   · 컬렉티브: 선택 상승률(selVS, 기본 1,000fpm · VS ▲▼ 로 300fpm 까지)로 오른다 — 지금 고도 아래로는 가지 않는다
-// 시간이 다 되면 컬렉티브는 VS(그 상승률로 계속 상승), 피치는 IAS(목표 속도)로 넘어간다.
+// ── G/A(복행) ── FCP 의 G/A 버튼. 누르면 컬렉티브·피치 축이 GA 가 되어 두 단계로 간다.
+//   ① 가속(40kt 미만에서 눌렀을 때): 기수를 지금 자세에서 7.5° 숙여 증속하고, 컬렉티브는 고도가 떨어지지 않게 쓴다
+//      (누른 고도 아래로 내려가지 않는다 · 아직 오르지는 않는다)
+//   ② 상승(40kt 를 넘으면 · 40kt 넘어서 눌렀으면 곧바로): 선택 상승률(selVS, 기본 1,000fpm · VS ▲▼ 로 300fpm 까지)로
+//      오르고(처음 GA_VS_RAMP 초에 걸쳐 · 속도가 붙을수록 몫을 늘린다), 속도는 Vy 로 수렴한다
+//      목표 = Vy(지금이 Vy 보다 느리면) · 지금 속도(Vy~VNE) · VNE(VNE 를 넘으면) — IAS 기준
+// 목표 속도에 닿고 상승률이 다 붙으면 컬렉티브는 VS(그 상승률로 계속 상승), 피치는 IAS(목표 속도)로 넘어간다.
 // 롤 축은 붙이지 않는다 — 뱅크가 있었으면 그대로 간다(HDG 는 조종사가 건다).
-const GA_DUR = 25, GA_DUR_FWD = 17, GA_FWD_KT = 20, GA_VS_DEF = 1000, GA_VS_MIN = 300, GA_VS_RAMP = 8;
-let gaOn = false, vsModeOn = false, _gaT = 0, _gaDur = GA_DUR, _gaSpd0 = 0, _gaSpdTgt = 0;
+const GA_DUR_FWD = 17, GA_P2_KT = 40, GA_PITCH_DN = 7.5, GA_VS_DEF = 1000, GA_VS_MIN = 300, GA_VS_RAMP = 8;
+let gaOn = false, vsModeOn = false, _gaT = 0, _gaDur = GA_DUR_FWD, _gaSpd0 = 0, _gaSpdTgt = 0;
+let _gaPhase = 2, _gaPitchTgt = 0, _gaAlt0 = 0, _gaRamp = true;
 function gaTarget(spd = S.spd) {
   const vy = simVyKt(), vne = simVne();
   return spd < vy ? vy : spd <= vne ? spd : vne;
 }
 // 속도 우선 — 목표 속도에 얼마나 다가갔는가(0→1)에 따라 상승률 몫을 준다.
 // 처음에는 출력을 가속에 먼저 쓰고(상승은 GA_VS_SHARE0 만큼), 속도가 붙을수록 상승을 늘린다.
-// 고도는 지금보다 내려가지 않는다(상승률 0 아래로는 가지 않는다).
 const GA_VS_SHARE0 = 0.15;
 function gaSpdShare() {
   const span = _gaSpdTgt - _gaSpd0;
@@ -224,15 +226,27 @@ function gaSpdShare() {
   const p = Math.max(0, Math.min(1, (S.spd - _gaSpd0) / span));
   return GA_VS_SHARE0 + (1 - GA_VS_SHARE0) * p * p * (3 - 2 * p);
 }
+// ② 상승 단계로 — fromAccel 이면 ① 에서 넘어온 것(기수가 이미 숙여져 있어 속도 기준을 목표로 곧바로 둔다)
+function _gaClimb(fromAccel) {
+  _gaPhase = 2; _gaT = 0;
+  _gaSpd0 = Math.max(0, S.spd); _gaSpdTgt = gaTarget(_gaSpd0);
+  _gaRamp = !fromAccel; _gaDur = GA_DUR_FWD;
+  selSpd = fromAccel ? _gaSpdTgt : _gaSpd0;
+}
 function gaEngage() {
   if (!simModeOn) { try { uiToast('G/A 는 SIM 모드에서 씁니다', '', 2000); } catch (e) { _swallow(e); } return; }
   try { if (gspdOn) toggleGspd(); } catch (e) { _swallow(e); }
   try { if (gsOn || gsArmed) toggleGs(); } catch (e) { _swallow(e); }
   altHoldOn = false; crhtOn = false;
   selVS = GA_VS_DEF;
-  _gaSpd0 = Math.max(0, S.spd); _gaSpdTgt = gaTarget(_gaSpd0);
-  _gaDur = _gaSpd0 >= GA_FWD_KT ? GA_DUR_FWD : GA_DUR; _gaT = 0;
-  simIasOn = true; selSpd = _gaSpd0;
+  _gaAlt0 = S.alt; _gaT = 0;
+  simIasOn = true;
+  if (S.spd < GA_P2_KT) {
+    // ① 기수를 7.5° 숙인 자세 — IAS 가 그 자세를 내는 속도를 기준으로 삼아 그 자세로 간다
+    _gaPhase = 1; _gaPitchTgt = S.pit - GA_PITCH_DN;
+    _gaSpd0 = Math.max(0, S.spd); _gaSpdTgt = gaTarget(GA_P2_KT);
+    selSpd = Math.max(_gaSpd0, spdFromPitch(_gaPitchTgt));
+  } else _gaClimb(false);
   gaOn = true; vsModeOn = false; tdOn = false;
   updateGaBtn();
   try { updateHoverBtns(); updateApInhibit(); } catch (e) { _swallow(e); }
@@ -242,14 +256,31 @@ function updateGaBtn() {
   const b = document.getElementById('ga-btn'); if (b) b.classList.toggle('on', gaOn);
   const t = document.getElementById('tdh-btn'); if (t) t.classList.toggle('on', typeof tdOn !== 'undefined' && tdOn);
 }
-// simFly 가 구간마다 부른다 — 속도 기준을 목표 쪽으로 옮기고, 다 되면 VS · IAS 로 넘긴다
+// simFly 가 구간마다 부른다 — ① 가속 자세를 지키다 40kt 를 넘으면 ② 로, ② 는 속도 기준을 목표로 옮기고 다 되면 VS · IAS 로 넘긴다
 function gaStep(dt) {
   if (!gaOn) return;
   if (!simIasOn || altHoldOn || crhtOn) { gaOn = false; if (!altHoldOn && !crhtOn) vsModeOn = true; updateGaBtn(); return; }  // 조종사가 축을 가져갔다
+  if (_gaPhase === 1) {
+    selSpd = Math.max(selSpd, spdFromPitch(_gaPitchTgt));
+    if (S.spd >= GA_P2_KT) _gaClimb(true);
+    return;
+  }
   _gaT += dt;
-  const x = Math.min(1, _gaT / _gaDur), k = x * x * (3 - 2 * x);   // 점점 붙고 점점 풀린다
-  selSpd = _gaSpd0 + (_gaSpdTgt - _gaSpd0) * k;
-  if (x >= 1) { gaOn = false; vsModeOn = true; selSpd = _gaSpdTgt; updateGaBtn(); }
+  if (_gaRamp) {
+    const x = Math.min(1, _gaT / _gaDur), k = x * x * (3 - 2 * x);   // 점점 붙고 점점 풀린다
+    selSpd = _gaSpd0 + (_gaSpdTgt - _gaSpd0) * k;
+  } else selSpd = _gaSpdTgt;
+  const spdOk = _gaRamp ? _gaT >= _gaDur : Math.abs(S.spd - _gaSpdTgt) < 3;
+  if (spdOk && _gaT >= GA_VS_RAMP) { gaOn = false; vsModeOn = true; selSpd = _gaSpdTgt; updateGaBtn(); }
+}
+// G/A 가 원하는 상승률(fpm) — ① 은 누른 고도 아래로 가지 않게만(오르지 않는다), ② 는 선택 상승률(점점 · 속도 우선).
+// 어느 단계든 누른 고도 아래로는 내려가지 않는다
+function gaVsCmd() {
+  const ahead = S.alt + (S.vs || 0) / 60 * SIM_AFCS_LEAD;
+  const floor = Math.max(0, Math.min(500, (_gaAlt0 - ahead) * SIM_AFCS_ALT_K));
+  if (_gaPhase === 1) return floor;
+  const r = Math.max(GA_VS_MIN, selVS);
+  return Math.max(floor, r * Math.min(1, _gaT / GA_VS_RAMP) * gaSpdShare());
 }
 // ── TDOWN(제원 변경) ── FCP 의 TDOWN 버튼. 누르면 속도 80kt · 전파고도 200ft 로 기준만 바꾼다
 //   (IAS 80 · CRHT 200 을 건다 — FMA 는 CRHT · IAS). SIM 밖에서도 같은 기준으로 간다.
@@ -351,8 +382,7 @@ function simAfcsVsCmd() {
   // G/A · VS — 선택 상승률로 오른다(G/A 처음 몇 초는 점점 붙인다 · 내려가지는 않는다)
   if (tdOn) return _tdVsCmd();
   if ((gaOn || vsModeOn) && !altHoldOn && !crhtOn && !(gsOn && _simGs())) {
-    const r = Math.max(GA_VS_MIN, selVS);
-    return gaOn ? r * Math.min(1, _gaT / GA_VS_RAMP) * gaSpdShare() : r;
+    return gaOn ? gaVsCmd() : Math.max(GA_VS_MIN, selVS);
   }
   // CRHT 는 전파고도(AGL)를 지킨다 — 기압고도로 바꾸면 '발밑 땅 + 선택 높이'
   const g = _simGs();

@@ -1,7 +1,7 @@
-// G/A(복행) — FCP FORCE TRIM 아래 버튼.
-// 누르면 컬렉티브·피치 축이 GA 가 되고, 25초(전진 20kt 이상이면 17초)에 걸쳐 Vy 까지
-// (Vy~VNE 면 지금 속도, VNE 넘으면 VNE) 속도 기준을 옮기며 선택 상승률(기본 1000fpm)로 오른다.
-// 시간이 다 되면 컬렉티브 VS · 피치 IAS 로 넘어간다. 롤 축은 손대지 않는다.
+// G/A(복행) — FCP FORCE TRIM 아래 버튼. 누르면 컬렉티브·피치 축이 GA 가 된다.
+//   ① 40kt 미만: 기수를 지금 자세에서 7.5° 숙여 증속 · 컬렉티브는 고도가 떨어지지 않게만
+//   ② 40kt 넘으면: 선택 상승률(기본 1000fpm · 최저 300)로 오르며 속도는 Vy(Vy~VNE 면 지금 속도 · VNE 넘으면 VNE)로
+// 목표 속도에 닿고 상승률이 다 붙으면 컬렉티브 VS · 피치 IAS 로 넘어간다. 롤 축은 손대지 않는다.
 import { SIM_SETUP_SRC, SIM_FLY_SRC } from './simmode.mjs';
 export const name = 'G/A';
 
@@ -19,28 +19,29 @@ export async function run(page, t) {
     // 제자리(0kt) 1000ft · 오른쪽으로 10° 기운 채 누른다
     S.spd = 0; S.alt = 1000; S.vs = 0; S.bnk = 10; simTrim.roll = 10; S.tq = tqRequired();   // 트림으로 10° 기울여 둔 상태
     hdgSelOn = false;
+    const pit0 = S.pit;
     document.getElementById('ga-btn').click();
     o.on = gaOn; o.btnOn = document.getElementById('ga-btn').classList.contains('on');
-    o.dur = _gaDur; o.tgt = _gaSpdTgt; o.vy = simVyKt();
+    o.phase0 = _gaPhase; o.vy = simVyKt();
     o.fma0 = fma();
-    let minAlt = S.alt, maxVs = 0;
-    for (let i = 0; i < 24; i++) {
-      fly(1); minAlt = Math.min(minAlt, S.alt); maxVs = Math.max(maxVs, S.vs);
-      if (i === 3) o.at4 = { vs: S.vs, cmd: simAfcsVsCmd(), spd: S.spd };
-      if (i === 7) o.at8 = { vs: S.vs, cmd: simAfcsVsCmd(), spd: S.spd };
-      if (i === 19) o.at20 = { vs: S.vs, cmd: simAfcsVsCmd(), spd: S.spd };
+    // ① 가속 — 기수를 7.5° 숙이고 고도를 지킨다 · 40kt 를 넘으면 ② 로
+    let minAlt = S.alt, maxVs = 0, p1 = null, p2 = null, t2 = null;
+    for (let i = 0; i < 40 && gaOn; i++) {
+      fly(1); minAlt = Math.min(minAlt, S.alt); if (_gaPhase === 1) maxVs = Math.max(maxVs, S.vs);
+      if (i === 3) p1 = { pit: S.pit, dp: pit0 - S.pit, vs: S.vs, cmd: simAfcsVsCmd(), spd: S.spd, ph: _gaPhase };
+      if (_gaPhase === 2 && t2 === null) { t2 = i + 1; p2 = { spd: S.spd }; }
+      if (t2 !== null && i === t2 + 3) o.c4 = { cmd: simAfcsVsCmd(), spd: S.spd };
     }
-    o.mid = { ga: gaOn, spd: S.spd };
-    fly(2);
-    o.end = { ga: gaOn, vsm: vsModeOn, sel: selSpd, iasOn: simIasOn, hdg: hdgSelOn, bnk: S.bnk };
+    o.p1 = p1; o.p2 = p2; o.p1MaxVs = maxVs;
+    o.end = { ga: gaOn, vsm: vsModeOn, sel: selSpd, spd: S.spd, iasOn: simIasOn, hdg: hdgSelOn, bnk: S.bnk };
     o.fma1 = fma();
     fly(15);
     o.vsSteady = S.vs; o.minAlt = minAlt - 1000; o.maxVs = maxVs;
     // VS ▼ 로 내려도 300fpm 아래로는 가지 않는다
     for (let i = 0; i < 20; i++) applyDelta('vs', -100);
     o.vsMin = selVS;
-    // 전진 중(60kt)이면 17초 · 목표 Vy
-    gaRelease(); S.spd = 60; S.bnk = 0; simTrim.roll = 0; gaEngage(); o.fwd = { dur: _gaDur, tgt: _gaSpdTgt };
+    // 전진 중(60kt · 40kt 넘음)이면 곧바로 ② 상승 · 목표 Vy
+    gaRelease(); S.spd = 60; S.bnk = 0; simTrim.roll = 0; gaEngage(); o.fwd = { ph: _gaPhase, tgt: _gaSpdTgt };
     // Vy~VNE 사이(100kt) 면 지금 속도 그대로
     gaRelease(); S.spd = 100; gaEngage(); o.keep = _gaSpdTgt;
     // VNE 넘으면 VNE
@@ -56,17 +57,16 @@ export async function run(page, t) {
   })()`);
   t.eq(r.on, true, 'G/A 버튼을 누르면 GA 가 걸린다');
   t.eq(r.btnOn, true, '버튼이 켜진 모양이 된다');
-  t.eq(r.dur, 25, `제자리에서는 25초에 걸쳐 진행한다 (${r.dur})`);
-  t.eq(r.tgt, r.vy, `제자리에서는 목표 속도가 Vy 다 (${r.tgt} / Vy ${r.vy})`);
+  t.eq(r.phase0, 1, '40kt 미만에서 누르면 ① 가속 단계다');
   const n0 = r.fma0.filter(s => s === 'GA').length;
   t.ok(n0 >= 2, `FMA 컬렉티브·피치 축이 GA 로 보인다 (GA ${n0}개)`);
-  t.ok(r.at4.cmd < 100, `상승률은 천천히 붙는다(8초 램프) — 4초 째 명령 ${r.at4.cmd.toFixed(0)}fpm`);
-  t.ok(r.at8.cmd < 400 && r.at8.spd > 5, `속도 우선 — 8초 째 속도 ${r.at8.spd.toFixed(0)}kt 가 붙는 동안 상승은 ${r.at8.cmd.toFixed(0)}fpm 에 머문다`);
-  t.ok(r.at20.cmd > r.at8.cmd + 300, `속도가 붙을수록 상승을 늘린다 (8초 ${r.at8.cmd.toFixed(0)} → 20초 ${r.at20.cmd.toFixed(0)}fpm · ${r.at20.spd.toFixed(0)}kt)`);
+  t.ok(r.p1.ph === 1 && Math.abs(r.p1.dp - 7.5) < 0.5, `기수를 7.5° 숙여 증속한다 (${r.p1.dp.toFixed(1)}° · 4초 ${r.p1.spd.toFixed(0)}kt)`);
+  t.ok(r.p1.cmd < 120 && r.p1MaxVs < 300, `가속 중에는 고도만 지키고 오르지 않는다 (명령 ${r.p1.cmd.toFixed(0)}fpm · 최대 ${r.p1MaxVs.toFixed(0)}fpm)`);
+  t.ok(r.p2 && r.p2.spd >= 40 && r.p2.spd < 48, `40kt 를 넘으면 ② 상승으로 (${r.p2 && r.p2.spd.toFixed(0)}kt)`);
+  t.ok(r.c4 && r.c4.cmd > 200, `② 에서는 상승률이 붙는다 (4초 뒤 ${r.c4 && r.c4.cmd.toFixed(0)}fpm · ${r.c4 && r.c4.spd.toFixed(0)}kt)`);
   t.eq(r.joy.gs, false, '조이스틱 배정 목록에 ILS 강하선 G/S 는 없다(자동)');
   t.ok(/G\/S/.test(r.joy.gspdLbl) && /GSPD/.test(r.joy.gspdLbl), `조이스틱 G/S 는 지상속도(GSPD) 동작이다 (${r.joy.gspdLbl})`);
-  t.eq(r.mid.ga, true, `24초 째에는 아직 GA 다 (${r.mid.spd.toFixed(0)}kt)`);
-  t.eq(r.end.ga, false, '25초가 지나면 GA 가 끝난다');
+  t.eq(r.end.ga, false, `Vy 에 닿고 상승률이 다 붙으면 GA 가 끝난다 (${r.end.spd.toFixed(0)}kt)`);
   t.eq(r.end.vsm, true, '컬렉티브는 VS 모드로 넘어간다');
   t.eq(r.end.sel, r.vy, `피치는 IAS(Vy) 로 넘어간다 (${r.end.sel})`);
   t.eq(r.end.iasOn, true, 'IAS 가 걸려 있다');
@@ -77,7 +77,7 @@ export async function run(page, t) {
   t.ok(r.minAlt > -30, `고도가 시작 고도 아래로 빠지지 않는다 (최저 ${r.minAlt.toFixed(0)}ft)`);
   t.ok(r.vsSteady > 700 && r.vsSteady < 1300, `VS 모드에서 약 1000fpm 으로 계속 오른다 (${r.vsSteady.toFixed(0)}fpm)`);
   t.eq(r.vsMin, 300, `VS 는 최저 300fpm 까지만 내려간다 (${r.vsMin})`);
-  t.eq(r.fwd.dur, 17, `전진 20kt 이상이면 17초 (${r.fwd.dur})`);
+  t.eq(r.fwd.ph, 2, `40kt 넘어서 누르면 곧바로 ② 상승 (${r.fwd.ph})`);
   t.eq(r.fwd.tgt, r.vy, '60kt 면 목표는 Vy');
   t.eq(r.keep, 100, `Vy~VNE 사이면 지금 속도를 지킨다 (${r.keep})`);
   t.eq(r.over.tgt, r.over.vne, `VNE 를 넘으면 VNE 가 기준 (${r.over.tgt})`);

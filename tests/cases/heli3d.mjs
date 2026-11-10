@@ -169,6 +169,7 @@ export async function run(page, t) {
     const el = document.getElementById('sim-nose');
     const out = { off: getComputedStyle(el).display };
     S.alt = 1000; S.spd = 80; S.hdg = 40;
+    chinL = true; chinR = true; chinViewOn = true;     // CHIN 창은 처음에 꺼져 있다 — 조종사가 켜 둔 상태로 본다
     toggleSimMode(true); S.alt = 1000;
     await w(300);
     const box = () => {
@@ -267,6 +268,7 @@ export async function run(page, t) {
   const tx = await page.evaluate(async () => {
     const wait = ms => new Promise(r => setTimeout(r, ms));
     if (!simModeOn) toggleSimMode(true);
+    if (!chinViewOn) { chinL = true; chinR = true; chinViewOn = true; try { syncChinView(); } catch (e) {} }   // 켜 둔 CHIN 창이 돌아오는지 본다
     if (simExtView) { toggleExtView(false); await wait(1300); }
     const camD = () => { const ll = _ml3d.transform.getCameraLngLat(); return distance(ll.lat, ll.lng, S.lat, S.lon) * 1852; };
     const run = async (to) => {
