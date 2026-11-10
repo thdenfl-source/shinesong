@@ -192,7 +192,9 @@ function drawBaroBox(x, y, w, h) {
   ctx.textBaseline = 'middle';
   ctx.font = `bold ${Math.max(10, h * 0.55)}px Helvetica Neue, Arial, sans-serif`;
   ctx.fillStyle = '#7fd4ff'; ctx.textAlign = 'center';
-  ctx.fillText(String(Math.round(q)) + ' HPA', x + w / 2, y + h / 2 + 1);
+  // UNITS 소프트키 — IN(inHg) · HPA
+  const inHg = typeof pfdBaroUnit !== 'undefined' && pfdBaroUnit === 'IN';
+  ctx.fillText(inHg ? (q / 33.8639).toFixed(2) + ' IN' : String(Math.round(q)) + ' HPA', x + w / 2, y + h / 2 + 1);
   ctx.restore();
 }
 
@@ -1576,7 +1578,7 @@ function drawHSI(x, y, w, h, cxC) {
   ctx.restore();
 
   // ── BRG1 needle (VOR/ILS → 파란 단선, 머리 화살촉·꼬리 선) ──
-  const _b1st = brg1Visible ? brg1Station() : null;
+  const _b1st = brgTarget(1);   // 소프트키 Bearing1 이 고른 국(처음은 튜닝된 VOR/ILS)
   if (_b1st) {
     const brg1 = bearing(S.lat, S.lon, _b1st.lat, _b1st.lon);
     ctx.save(); ctx.rotate((brg1 - Hi) * D2R);
@@ -1589,8 +1591,9 @@ function drawHSI(x, y, w, h, cxC) {
   }
 
   // ── BRG2 needle (FMS active WP → 녹색 복선, 머리 화살촉·꼬리 선) ──
-  if (brg2Visible && S.awp >= 0 && S.awp < S.wps.length) {
-    const brg2fms = bearing(S.lat, S.lon, S.wps[S.awp].lat, S.wps[S.awp].lon);
+  const _b2st = brgTarget(2);   // 소프트키 Bearing2 가 고른 국(처음은 FMS 활성 지점)
+  if (_b2st) {
+    const brg2fms = bearing(S.lat, S.lon, _b2st.lat, _b2st.lon);
     ctx.save(); ctx.rotate((brg2fms - Hi) * D2R);
     const C2 = '#00cc44', g = 5.5;
     ctx.strokeStyle = C2; ctx.lineWidth = 2;

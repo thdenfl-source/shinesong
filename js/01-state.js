@@ -379,6 +379,36 @@ function toggleSusp() {
   try { updateNav(); } catch(e) { _swallow(e); }
 }
 
+// ── BRG 바늘의 국(소프트키 PFD Settings → Bearing1 · Bearing2) ── OFF → NAV1 → NAV2 → FMS
+// null 이면 처음 그대로(BRG1 은 튜닝된 VOR/ILS 를 스스로, BRG2 는 FMS 활성 지점)
+let brg1Src = null, brg2Src = null;
+function brgTarget(n) {
+  if (!(n === 1 ? brg1Visible : brg2Visible)) return null;
+  const src = (n === 1 ? brg1Src : brg2Src) || (n === 1 ? 'AUTO' : 'FMS');
+  if (src === 'AUTO') return brg1Station();
+  if (src === 'FMS') {
+    const wp = (S.awp >= 0 && S.awp < S.wps.length) ? S.wps[S.awp] : null;
+    return wp ? { lat: wp.lat, lon: wp.lon, id: wp.ident, src: 'FMS', elev: 0 } : null;
+  }
+  const r = navRadios[src];
+  return (r && r.lat != null && r.lon != null) ? { lat: r.lat, lon: r.lon, id: r.id, src, elev: r.elev || 0 } : null;
+}
+function brgSrcLabel(n) {
+  if (!(n === 1 ? brg1Visible : brg2Visible)) return 'OFF';
+  const src = n === 1 ? brg1Src : brg2Src;
+  if (src) return src;
+  if (n === 2) return 'FMS';
+  const st = brg1Station(); return st ? st.src : 'NAV1';
+}
+function brgSrcCycle(n) {
+  const order = ['OFF', 'NAV1', 'NAV2', 'FMS'];
+  const next = order[(order.indexOf(brgSrcLabel(n)) + 1) % order.length];
+  const vis = next !== 'OFF';
+  if (n === 1) { brg1Src = vis ? next : brg1Src; if (brg1Visible !== vis) toggleBrg1(); }
+  else { brg2Src = vis ? next : brg2Src; if (brg2Visible !== vis) toggleBrg2(); }
+  if (typeof updateBrgLines === 'function') updateBrgLines();
+  try { drawPFD(); } catch (e) { _swallow(e); }
+}
 function toggleBrg1() {
   brg1Visible = !brg1Visible;
   const btn = document.getElementById('brg1-tog');
