@@ -1836,6 +1836,7 @@ function simFly(dt) {
     if (!mode) { try { mode = window.vfrStartMode || sessionStorage.getItem('vfrStartMode'); } catch (e) { _swallow(e); } }
     clearInterval(t);
     if (mode === 'sim') { setTimeout(() => { try { simLayoutStart(); } catch (e) { _swallow(e); } }, 400); return; }   // SIM Mode — 창 배치판
+    if (mode === 'simple') { setTimeout(() => { try { simpleModeStart('pfd'); } catch (e) { _swallow(e); } }, 300); return; }   // Simple mode — 창 하나씩
     if (mode !== '3d') return;
     setTimeout(() => {
       try { if (!(_soloActive && _soloCurrent === 'm3d')) panelSolo('m3d'); } catch (e) { _swallow(e); }

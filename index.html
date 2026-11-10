@@ -17,7 +17,7 @@
      CDN 을 쓰면 한 번이라도 못 받는 순간 앱이 통째로 죽는다 — 비행 중에는
      그럴 여지를 두지 않는다. -->
 <!-- 패널 새 창(다중 모니터) — 라이브러리가 거는 이벤트까지 받아 적어야 하므로 맨 먼저 -->
-<script src="js/00-popout.js?v=549"></script>
+<script src="js/00-popout.js?v=550"></script>
 <link rel="stylesheet" href="vendor/leaflet.css"/>
 <script src="vendor/leaflet.js"></script>
 <link rel="stylesheet" href="vendor/leaflet-velocity.min.css"/>
@@ -2089,6 +2089,21 @@ body.gate-open #gate-overlay { display: none; }
 .simlay-btn.on span { color: #3ad13a; }
 .simlay-foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
 .simlay-sm { background: #22262b; color: #9ab; border: 1px solid #3a4250; border-radius: 5px; padding: 6px 12px; cursor: pointer; font-size: 12px; }
+
+/* Simple mode(07-sim.js) — 위 막대에서 고른 창 하나만 화면 가득 */
+#simple-bar, #simple-view { display: none; }
+body.simple-mode #app, body.simple-mode #solo-bar, body.simple-mode #solo-half-btn { display: none !important; }
+body.simple-mode #simple-bar { display: flex; position: fixed; left: 0; right: 0; top: 0; height: 34px; z-index: 20000;
+  background: #0b0e12; border-bottom: 1px solid #263240; }
+#simple-bar button { flex: 1 1 0; min-width: 0; background: transparent; border: none; border-right: 1px solid #1e2732; color: #9fb4c6;
+  font: bold 12px 'Helvetica Neue', Arial, sans-serif; letter-spacing: 0.5px; cursor: pointer; }
+#simple-bar button.on { color: #00e5ff; background: rgba(0,229,255,0.10); box-shadow: inset 0 -3px 0 #00e5ff; }
+#simple-bar button.simple-exit { flex: 0 0 auto; padding: 0 12px; color: #ffb000; border-right: none; }
+body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 0; top: 34px; bottom: 0; background: #000; }
+#simple-host { flex: 1 1 0; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+#simple-host > .page-content, #simple-host > #pfd-wrap { flex: 1 1 0; }
+#pfdov-size { position: static; align-items: center; }
+#pfdov-size span { flex: 0 0 auto; min-width: 34px; text-align: center; color: #9fb4c6; font: bold 10px 'Helvetica Neue', Arial, sans-serif; }
 </style>
 </head>
 <body>
@@ -2106,11 +2121,12 @@ body.gate-open #gate-overlay { display: none; }
       <div class="gate-sub">화면을 고르세요</div>
       <button type="button" class="gate-mode-btn" id="gate-mode-pc" data-mode="pc"><b>PC 모드</b><span>PFD · 지도 · CDU 를 나눠 봅니다</span></button>
       <button type="button" class="gate-mode-btn" id="gate-mode-3d" data-mode="3d"><b>3D 단독 모드</b><span>3D Only — 태블릿·휴대폰에 알맞습니다</span></button>
+      <button type="button" class="gate-mode-btn" id="gate-mode-simple" data-mode="simple"><b>Simple Mode</b><span>창 하나씩 화면 가득 — 위 막대에서 PFD · 3D · MAP · CDU · UPPER · LOWER · SYSTEM 을 고른다</span></button>
       <button type="button" class="gate-mode-btn" id="gate-mode-sim" data-mode="sim"><b>SIM Mode</b><span>SIM 조종 · 화면마다 새 창으로 따로 배치(다중 모니터)</span></button>
     </div>
   </form>
 </div>
-<script src="js/00-gate.js?v=549"></script>
+<script src="js/00-gate.js?v=550"></script>
 <!-- ── 단일화면 선택 바 (기본 숨김) ── -->
 <!-- ── 시작 안내(사용법/키보드) 오버레이 ── -->
 <div id="help-overlay" style="display:none;">
@@ -2163,6 +2179,7 @@ body.gate-open #gate-overlay { display: none; }
             버튼을 <b>한 번 더 누르면</b>(또는 떠 있는 <b>✥ HALF</b> · 상단 막대의 <b>✕</b>)
             <b>들어가기 전 배치 그대로</b> 돌아옵니다. 단독 중에는 <b>상단 막대</b>에서 다른 창으로 바로 넘어갈 수 있습니다.<br>
             <b>⛶ 3D Only</b>(오른쪽 창 탭 줄 — 2분할·3분할 모두) — 3D 지도를 화면 가득 띄웁니다. 빠져나갈 때는 위 가운데의 <b>✥ HALF</b>.<br>
+            <b>계기 크기 − / +</b>(3D 단독 화면, 계기 버튼 아래) — 왼쪽 위 PFD 계기를 60 % ~ 160 % 사이로 10 % 씩 줄이고 키웁니다(크기는 기억됩니다).<br>
             <b>LOWER</b>(UPPER 옆 탭) — 실기 <b>하부 콘솔</b>: 왼쪽 열 ⑰ AHRS · ⑯ AFCAU(AUTO TRIM · TRIM FEEL · AP1/AP2) · ⑮ 비디오 컨버터 · ⑭ 비상부주(EMERG FLOATS) ·
             ⑬ 호이스트 · ⑫ CPI CONTROLLER · ⑪ PA, 오른쪽 열 ⑥ FUEL(X-FEED · FT1/BP1 · XFER · FT2/BP2 · AUX1/F5/AUX2 XFER) · ⑦ U/VHF-AM/FM · ⑧ VHF-FM · ⑨ AVCS · ⑩ MPP ·
             NOSE WHEEL LOCK · PARKING BRAKE. 사각 버튼은 누르면 들어가 글씨가 켜지고(한 번 더 누르면 나옴), 흰 키는 누르는 동안만 들어갑니다(FLOATS TEST 는 BTL 표시등).
@@ -2191,7 +2208,7 @@ body.gate-open #gate-overlay { display: none; }
             활주로 좌표 자료가 없는 속초·울진은 공항 기준점 둘레(반지름 400m)를 폅니다.</li>
         <li><b>시작 비밀번호</b>: 앱을 열면 먼저 비밀번호를 묻습니다. 맞게 넣으면 그 탭에서는 다시 묻지 않고
             (새로고침해도 그대로), 앱을 새로 열면 다시 묻습니다. 화면 앞에서 막는 잠금이며 보안 장치는 아닙니다.</li>
-        <li><b>시작 화면</b>: 비밀번호를 넣으면 화면을 고릅니다 — <b>PC 모드</b>(지금처럼 PFD·지도·CDU 분할) · <b>3D 단독 모드</b>(3D Only 로 바로 — 태블릿·휴대폰) · <b>SIM Mode</b>(SIM 조종을 켜고 <b>창 배치판</b>을 띄웁니다 — PFD·FCP · 3D · MAP · CDU · UPPER · LOWER · SYSTEM 을
+        <li><b>시작 화면</b>: 비밀번호를 넣으면 화면을 고릅니다 — <b>PC 모드</b>(지금처럼 PFD·지도·CDU 분할) · <b>3D 단독 모드</b>(3D Only 로 바로 — 태블릿·휴대폰) · <b>Simple Mode</b>(창을 하나씩만 — 위쪽 줄의 PFD · 3D · MAP · CDU · UPPER · LOWER · SYSTEM 버튼으로 골라 보고, <b>PC 모드</b> 버튼으로 돌아갑니다) · <b>SIM Mode</b>(SIM 조종을 켜고 <b>창 배치판</b>을 띄웁니다 — PFD·FCP · 3D · MAP · CDU · UPPER · LOWER · SYSTEM 을
             하나씩 눌러 화면마다 새 창으로 띄워 모니터마다 따로 놓습니다. 브라우저가 한 번 누를 때 창 하나만 열어 주므로 하나씩 누르고, 떠 있는 화면은 녹색으로 표시되며
             한 번 더 누르면 본 창으로 돌아옵니다. 본 창은 시뮬을 돌리는 바탕이니 닫거나 최소화하지 마십시오. PFD 창 탭의 <b>⧉ 창 배치</b> 로 언제든 다시 엽니다).
             같은 탭에서 새로고침하면 고른 화면으로 다시 열립니다.</li>
@@ -3196,6 +3213,12 @@ body.gate-open #gate-overlay { display: none; }
           <!-- 계기 ON/OFF — 3D 화면 왼쪽 위에 겹친 계기(PFD 일부)를 보이고 감춘다(07-sim.js) -->
           <button class="sim-btn on" id="fpv-btn" data-act="toggleFpv" title="ADI 의 예상 항적(초록 원 · FPV) 보이기/감추기">FPV ON</button>
             <button class="sim-btn on" id="pfdov-btn" data-act="togglePfdOverlay" title="계기 — 3D 화면 왼쪽 위에 PFD 계기(FCP 없이)를 겹쳐 보이기/감추기">계기 ON</button>
+            <!-- 겹친 계기 크기 — 60~160%(07-sim.js pfdOvSize) -->
+            <div class="hdgref-adj" id="pfdov-size" title="겹친 계기 크기 — − 줄이기 · + 키우기(60~160%)">
+              <button class="sim-btn" data-act="pfdOvSize" data-arg='[-1]' title="계기 줄이기">−</button>
+              <span id="pfdov-pct">100%</span>
+              <button class="sim-btn" data-act="pfdOvSize" data-arg='[1]' title="계기 키우기">+</button>
+            </div>
           <!-- CDU ON/OFF — 3D 단독 화면에서 3D 버튼 줄 바로 왼쪽에 CDU 를 계기 칸 크기로 겹쳐 띄운다(07-sim.js) -->
           <button class="sim-btn" id="cduov-btn" data-act="toggleCduOverlay" title="CDU — 3D 단독(3D Only) 화면에서 3D 버튼 줄 바로 왼쪽에 CDU 를 계기 칸 높이(3/5)로 보이기/감추기">CDU OFF</button>
           <!-- MAP ON/OFF — 3D 단독 화면에서 2D 지도를 계기 칸 크기로 겹쳐 띄운다(CDU 칸 왼쪽 · 07-sim.js) -->
@@ -3537,36 +3560,36 @@ body.gate-open #gate-overlay { display: none; }
 <!-- 앱 코드 — 클래식 스크립트(모듈 아님)라 전역 스코프를 공유한다.
      순서가 곧 실행 순서이므로 임의로 바꾸지 말 것. -->
   <!-- AIP 데이터 — 코드보다 먼저 로드한다 -->
-  <script src="js/data/terminal-fixes.js?v=549"></script>
-  <script src="js/data/ifr-fixes.js?v=549"></script>
-  <script src="js/data/ifr-procedures.js?v=549"></script>
-  <script src="js/data/airfield-info.js?v=549"></script>
-  <script src="js/data/enr-vors.js?v=549"></script>
-  <script src="js/data/loc-stations.js?v=549"></script>
-  <script src="js/data/enr-routes.js?v=549"></script>
-  <script src="js/data/airspace.js?v=549"></script>
-  <script src="js/data/runways.js?v=549"></script>
+  <script src="js/data/terminal-fixes.js?v=550"></script>
+  <script src="js/data/ifr-fixes.js?v=550"></script>
+  <script src="js/data/ifr-procedures.js?v=550"></script>
+  <script src="js/data/airfield-info.js?v=550"></script>
+  <script src="js/data/enr-vors.js?v=550"></script>
+  <script src="js/data/loc-stations.js?v=550"></script>
+  <script src="js/data/enr-routes.js?v=550"></script>
+  <script src="js/data/airspace.js?v=550"></script>
+  <script src="js/data/runways.js?v=550"></script>
   <!-- 앱 코드 -->
-  <script src="js/00-ui.js?v=549"></script>
-  <script src="js/01-state.js?v=549"></script>
-  <script src="js/02-math.js?v=549"></script>
-  <script src="js/03-pfd.js?v=549"></script>
-  <script src="js/04-map.js?v=549"></script>
-  <script src="js/05-gps.js?v=549"></script>
-  <script src="js/06-nav.js?v=549"></script>
-  <script src="js/07-sim.js?v=549"></script>
-  <script src="js/08-ifrdb.js?v=549"></script>
-  <script src="js/09-cdu.js?v=549"></script>
-  <script src="js/10-tools.js?v=549"></script>
-  <script src="js/11-charts.js?v=549"></script>
-  <script src="js/12-joystick.js?v=549"></script>
-  <script src="js/13-joyhid.js?v=549"></script>
-  <script src="js/14-simmode.js?v=549"></script>
-  <script src="js/15-heli3d.js?v=549"></script>
-  <script src="js/16-sound.js?v=549"></script>
-  <script src="js/17-upper.js?v=549"></script>
-  <script src="js/18-system.js?v=549"></script>
-  <script src="js/19-lower.js?v=549"></script>
+  <script src="js/00-ui.js?v=550"></script>
+  <script src="js/01-state.js?v=550"></script>
+  <script src="js/02-math.js?v=550"></script>
+  <script src="js/03-pfd.js?v=550"></script>
+  <script src="js/04-map.js?v=550"></script>
+  <script src="js/05-gps.js?v=550"></script>
+  <script src="js/06-nav.js?v=550"></script>
+  <script src="js/07-sim.js?v=550"></script>
+  <script src="js/08-ifrdb.js?v=550"></script>
+  <script src="js/09-cdu.js?v=550"></script>
+  <script src="js/10-tools.js?v=550"></script>
+  <script src="js/11-charts.js?v=550"></script>
+  <script src="js/12-joystick.js?v=550"></script>
+  <script src="js/13-joyhid.js?v=550"></script>
+  <script src="js/14-simmode.js?v=550"></script>
+  <script src="js/15-heli3d.js?v=550"></script>
+  <script src="js/16-sound.js?v=550"></script>
+  <script src="js/17-upper.js?v=550"></script>
+  <script src="js/18-system.js?v=550"></script>
+  <script src="js/19-lower.js?v=550"></script>
 
 <input type="file" id="zipFileInput" accept=".zip,application/zip,application/x-zip-compressed,application/octet-stream" style="display:none" onchange="handleZipFile(this.files[0]); this.value='';"></body>
 </html>

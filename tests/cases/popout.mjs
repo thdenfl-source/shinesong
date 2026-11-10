@@ -168,4 +168,30 @@ export async function run(page, t) {
   const all = await page.evaluate(() => ({ open: popoutScreens().length, pfdHome: document.getElementById('pfd-wrap').parentElement.id }));
   t.ok(back.open === 'pfd' && back.ovhdHere, '한 번 더 누르면 그 화면만 본 창으로 돌아온다');
   t.ok(all.open === 0 && all.pfdHome === 'left-panel', `'모두 본 창으로' 는 모든 화면을 분할 패널로 되돌린다 (PFD → ${all.pfdHome})`);
+
+  // ── Simple mode — 창 하나씩 화면 가득 ──
+  const simp = await page.evaluate(async () => {
+    const wait = ms => new Promise(r => setTimeout(r, ms));
+    const host = id => document.getElementById(id).parentElement.id;
+    const o = {};
+    simpleModeStart('pfd'); await wait(200);
+    o.pfd = host('pfd-wrap'); o.appHidden = getComputedStyle(document.getElementById('app')).display === 'none';
+    document.querySelector('#simple-bar [data-scr="lcon"]').click(); await wait(200);
+    const lw = document.getElementById('lcon-wrap'); o.lcon = host('lcon-wrap'); o.lconW = lw.getBoundingClientRect().width;
+    o.pfdBack = host('pfd-wrap'); o.on = [...document.querySelectorAll('#simple-bar .on')].map(b => b.dataset.scr).join();
+    document.querySelector('#simple-bar [data-scr="sysp"]').click(); await wait(200); o.sysp = host('sysp-wrap'); o.lconBack = document.getElementById('lcon-wrap').classList.contains('page-hidden');   // 고르지 않은 창은 숨는다
+    document.querySelector('#simple-bar .simple-exit').click(); await wait(300);
+    o.exit = { simple: document.body.classList.contains('simple-mode'), pfd: host('pfd-wrap'), app: getComputedStyle(document.getElementById('app')).display !== 'none' };
+    // 3D 단독 계기 크기
+    const k0 = pfdOvScale; pfdOvSize(2); const ov = document.getElementById('pfd-ov');
+    o.ov = [pfdOvScale, parseFloat(ov.style.width), parseFloat(ov.style.height)]; pfdOvSize(-9); o.min = pfdOvScale; pfdOvSize(20); o.max = pfdOvScale;
+    pfdOvScale = k0; pfdOvSize(0); localStorage.removeItem('pfdOvScale');
+    return o;
+  });
+  t.ok(simp.pfd === 'simple-host' && simp.appHidden, `Simple mode — 분할 화면을 감추고 고른 창(PFD) 하나만 화면 가득`);
+  t.ok(simp.lcon === 'simple-host' && simp.lconW > 500 && simp.pfdBack !== 'simple-host' && simp.on === 'lcon' && simp.sysp === 'simple-host' && simp.lconBack,
+    `위 막대에서 다른 창(LOWER · SYSTEM)을 누르면 그 창 하나로 바뀐다 (LOWER 폭 ${Math.round(simp.lconW)}px)`);
+  t.ok(!simp.exit.simple && simp.exit.pfd === 'left-panel' && simp.exit.app, "'PC 모드' 를 누르면 분할 화면으로 돌아온다");
+  t.ok(simp.ov[0] === 1.2 && simp.ov[1] === 30 && simp.ov[2] === 72 && simp.min === 0.6 && simp.max === 1.6,
+    `3D 화면 계기 크기 −/+ — 60~160% (120% → 폭 ${simp.ov[1]}% · 높이 ${simp.ov[2]}%)`);
 }
