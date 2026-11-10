@@ -478,7 +478,7 @@ function hoverEligible() { return S.spd < 80; }
 // 두되(GSPD 를 끄면 그대로 이어서 동작) 조향 불가 상태임을 눈에 보이게 한다.
 function updateApInhibit() {
   const inh = !!(typeof gspdOn !== 'undefined' && (gspdOn || gspdCoasting));
-  [['nav-ap-btn', 'NAV'], ['obs-btn', 'OBS'], ['icpt-btn', '인터셉트 각도']].forEach(([id, nm]) => {
+  [['nav-ap-btn', 'NAV'], ['obs-btn', 'OBS'], ['fks-navd', 'NAVD CPL'], ['icpt-btn', '인터셉트 각도']].forEach(([id, nm]) => {
     const el = document.getElementById(id);
     if (!el) return;
     el.classList.toggle('ap-inh', inh);
@@ -865,7 +865,7 @@ function updateCrsButtons() {
 
 function toggleObs() {
   obsOn = !obsOn;
-  document.getElementById('obs-btn').classList.toggle('on', obsOn);
+  { const b = document.getElementById('obs-btn'); if (b) b.classList.toggle('on', obsOn); }   // FCP OBS 는 없앴다(소프트키 OBS)
   updateCrsButtons();
   try { updateApInhibit(); } catch(e) { _swallow(e); }
 }
@@ -873,7 +873,7 @@ function toggleObs() {
 function toggleNavAp() {
   navApOn = !navApOn;
   _shipNavPhase = null;              // 함정 접근 차례는 걸 때마다 처음부터 고른다
-  document.getElementById('nav-ap-btn').classList.toggle('on', navApOn);
+  { const b = document.getElementById('nav-ap-btn'); if (b) b.classList.toggle('on', navApOn); }   // FCP NAV 는 없앴다(SIMPLE 패널 NAVD CPL)
   if (!navApOn) {
     if (holdOn) holdExit();          // NAV 해제 시 홀딩도 해제
     bankTarget = 0;

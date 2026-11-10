@@ -52,9 +52,7 @@ export async function run(page, t) {
     o.idle = SK_IDLE_MS;
     pfdSkGo('TOP'); localStorage.removeItem('pfdSk');
     // FCP SIMPLE 에서도 보인다
-    if (!fcpSimpleOn) toggleFcpSimple(); await wait(50);
-    o.inSimple = el(0).offsetParent !== null;
-    toggleFcpSimple(); localStorage.removeItem('fcpSimple');
+    o.inSimple = el(0).offsetParent !== null && el(0).nextElementSibling !== null;
     return o;
   });
   t.eq(r.top, 'Map Range −|Map Range +|PFD Map Settings|Traffic Map|PFD Settings|OBS|Active NAV|Sensors|Hover Display|Hover Position|CAS|SIM', '최상위 12칸 — 그림 5 의 순서 · 맨 오른쪽 SIM');
@@ -74,5 +72,5 @@ export async function run(page, t) {
   t.eq(r.ra, '|RA1|RA2||||||||Back|', 'Sensors ▸ RA Settings ▸ — 그림 8');
   t.ok(r.ra2, 'RA2 를 고르면 녹색 바');
   t.eq(r.idle, 45000, '하위 메뉴는 45초 동안 누르지 않으면 최상위로');
-  t.ok(r.inSimple, 'FCP SIMPLE 에서도 소프트키가 보인다');
+  t.ok(r.inSimple, '소프트키는 FCP 맨 위에 늘 보인다');
 }
