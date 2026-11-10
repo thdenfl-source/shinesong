@@ -23,6 +23,10 @@ export async function run(page, t) {
     o.pitot = has(s, 'PITOT OFF'); o.park = has(s, 'PARKING BRAKE SET'); o.ai1 = has(s, '1 ENG A/I ON'); o.ai2 = has(s, '2 ENG A/I ON');
     o.nlg = has(s, 'NLG LOCK'); o.flt = has(s, 'EMER FLOATS ARMED');
     ovhdSet('pitotHeat', 'ON'); o.pitotOn = !!has(shot(), 'PITOT OFF');
+    // GEN 스위치 OFF — 그 번호의 GEN OFF 황색
+    ovhdSet('gen1', 'OFF'); const g = shot(); o.gen1 = has(g, '1 GEN OFF'); o.gen2a = !!has(g, '2 GEN OFF');
+    ovhdSet('gen2', 'OFF'); o.gen2 = has(shot(), '2 GEN OFF');
+    ovhdSet('gen1', 'ON'); ovhdSet('gen2', 'ON'); o.genBack = pfdMsgs().some(m => /GEN OFF/.test(m.t));
     // NgR 87.5 % 이하 — 스위치가 OFF 여도 A/I ON
     ovhdSet('engAi1', 'OFF');
     window.engParams = fake(87.5, 80);
@@ -35,6 +39,8 @@ export async function run(page, t) {
   t.eq(r.none, 0, '스위치가 모두 평소 자리이고 NgR 이 높으면 메시지가 없다');
   t.ok(r.pitot && r.pitot[1] === AMB, `PITOT HEAT OFF — PITOT OFF 황색 (${r.pitot && r.pitot[1]})`);
   t.ok(!r.pitotOn, 'PITOT HEAT ON 이면 PITOT OFF 가 사라진다');
+  t.ok(r.gen1 && r.gen1[1] === AMB && !r.gen2a && r.gen2 && r.gen2[1] === AMB && !r.genBack,
+    `GEN1 · GEN2 스위치 OFF — 1 GEN OFF · 2 GEN OFF 황색, ON 이면 사라진다`);
   t.ok(r.park && r.park[1] === GRN, 'PARKING BRAKE SET — 녹색');
   t.ok(r.ai1 && r.ai1[1] === GRN && !r.ai2, '1번 ANTI ICE 스위치 ON — 1 ENG A/I ON 녹색(2번은 없음)');
   t.ok(r.nlg && r.nlg[1] === GRN, 'NOSE WHEEL LOCK — NLG LOCK 녹색');
