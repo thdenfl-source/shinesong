@@ -121,7 +121,24 @@ export async function runDegenerate(page, t) {
     CDU_ACT.switchMode('HOME'); await wait(50);
     return { home, wxTitle, wxLabels, hrefs, cctv, back };
   });
-  t.eq(wx.home[0], 'Weather', `CDU 홈 첫 버튼이 Weather 다 (${wx.home.slice(0, 4).join(' · ')})`);
+  t.eq(wx.home.join('|'),
+    'MAP|AircraftSystems|PERF|Charts|Flight Plan|PROC|VNAV|WaypointInfo|NOTAM|Track &Point|Services|Utilities|SkyVector|Tideforecast|ERavailability|Wildfirestatus|Weather|Checklist',
+    `CDU 홈 배열 — 4칸씩 MAP… / Flight Plan… / NOTAM… / SkyVector… / Weather · Checklist (${wx.home.join(' · ')})`);
+  // Waypoint Info — 누르면 INFO, INFO 의 Back 은 Waypoint Info 로
+  const wpt = await page.evaluate(async () => {
+    const wait = ms => new Promise(r => setTimeout(r, ms));
+    const title = () => document.getElementById('modeTitle').textContent.trim();
+    CDU_ACT.switchMode('HOME'); await wait(50);
+    document.querySelector('#mainContentArea [data-arg=\'["WPTINFO"]\']').click(); await wait(60);
+    const t1 = title(), labels = [...document.querySelectorAll('#mainContentArea .icon-label')].map(e => e.textContent.trim());
+    document.querySelector('#mainContentArea [data-arg=\'["AIRFIELD"]\']').click(); await wait(60);
+    const t2 = title();
+    [...document.querySelectorAll('#footerNav .nav-btn')].pop().click(); await wait(60);
+    const t3 = title(); CDU_ACT.switchMode('HOME'); await wait(50);
+    return { t1, labels, t2, t3 };
+  });
+  t.ok(wpt.t1 === 'Waypoint Info' && wpt.labels.join('|') === 'INFO' && wpt.t2 === '비행장 정보' && wpt.t3 === 'Waypoint Info',
+    `Waypoint Info → INFO, Back 은 Waypoint Info 로 (${wpt.t1} · ${wpt.labels.join(',')} · ${wpt.t2} → ${wpt.t3})`);
   t.ok(!wx.home.some(l => /Windy|CCTV|METAR/.test(l)), '날씨 버튼 넷은 홈에서 Weather 안으로 들어갔다');
   t.ok(wx.wxTitle === 'Weather' && wx.wxLabels.join('|') === 'Windy|저고도날씨|CCTV|METAR/TAF',
     `Weather 를 누르면 넷이 나온다 (${wx.wxTitle}: ${wx.wxLabels.join(' · ')})`);
