@@ -57,7 +57,8 @@ function pfdLayout(W, H, ctrlH) {
     baro: { x: altX, y: tY + tH + 3, w: tapW, h: botH },
     eng:  { x: 0, y: aiH, w: engW, h: hsiH },
     hsi:  { x: engW, y: aiH, w: W - engW - raW, h: hsiH },
-    crht: { x: W - raW, y: aiH, w: raW, h: hsiH },
+    crht: { x: W - raW, y: aiH, w: raW, h: Math.round(hsiH * 2 / 3) },                       // 위 2/3 — 레이더 고도계
+    navs: { x: W - raW, y: aiH + Math.round(hsiH * 2 / 3), w: raW, h: hsiH - Math.round(hsiH * 2 / 3) },   // 아래 1/3 — FMS·NAV1·NAV2
   };
 }
 
@@ -92,11 +93,62 @@ function drawPFD() {
   drawHSI(L.hsi.x, L.hsi.y, L.hsi.w, L.hsi.h, W / 2);
   drawEnginePanel(L.eng.x, L.eng.y, L.eng.w, L.eng.h);
   drawCrhtDisplay(L.crht.x, L.crht.y, L.crht.w, L.crht.h);
+  drawNavSrcBox(L.navs.x, L.navs.y, L.navs.w, L.navs.h);
   ctx.strokeStyle = '#1e1e1e'; ctx.lineWidth = 1;
   ctx.beginPath(); ctx.moveTo(0, L.aiH); ctx.lineTo(W, L.aiH); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(L.hsi.x + 0.5, L.aiH); ctx.lineTo(L.hsi.x + 0.5, L.usableH); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(L.crht.x + 0.5, L.aiH); ctx.lineTo(L.crht.x + 0.5, L.usableH); ctx.stroke();
   if (hocasOn) drawHocas(L.hsi.x, L.hsi.y, L.hsi.w, L.hsi.h, W / 2);
+}
+
+// ── FMS · NAV1 · NAV2 목적지(명칭·방위·거리) ── 오른쪽 아래, CRHT 계기 밑 칸(높이 1/3).
+// 칸이 좁아 소스마다 두 줄: 윗줄 소스·식별자 · 아랫줄 방위·거리(VOR/DME 는 경사거리, FMS 는 GPS 수평거리).
+function drawNavSrcBox(x, y, w, h) {
+  if (!(w > 30) || !(h > 30)) return;
+  const rows = [];
+  {   // FMS — 비행계획 활성 웨이포인트
+    const ok = S.awp >= 0 && S.awp < S.wps.length;
+    const wp = ok ? S.wps[S.awp] : null;
+    rows.push({ src: 'FMS', ident: ok ? (wp.ident || 'WPT') : '----',
+                lat: ok ? wp.lat : null, lon: ok ? wp.lon : null, color: '#00cc44' });
+  }
+  ['NAV1', 'NAV2'].forEach(id => {
+    const rr = navRadios[id] || {};
+    const ok = rr.lat !== null && rr.lat !== undefined && rr.lon !== null && rr.lon !== undefined;
+    rows.push({ src: id, ident: ok ? (rr.id || '----') : '----',
+                lat: ok ? rr.lat : null, lon: ok ? rr.lon : null, color: '#44aaff', dme: true, elev: rr.elev || 0 });
+  });
+  ctx.save(); ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
+  ctx.fillStyle = 'rgba(18,30,48,0.55)'; ctx.fillRect(x, y, w, h);   // 땅 위에 반투명
+  ctx.strokeStyle = '#3a4653'; ctx.lineWidth = 1; ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+  const cellH = (h - 4) / 3;
+  const valFs = Math.max(8, Math.min(13, cellH * 0.34, w * 0.13));
+  const lblFs = Math.max(7, Math.min(10, valFs * 0.78));
+  const lblFont = `${lblFs}px Helvetica Neue, Arial, sans-serif`;
+  const valFont = `bold ${valFs}px Helvetica Neue, Arial, sans-serif`;
+  rows.forEach((rw, i) => {
+    const cy = y + 2 + cellH * i;
+    const has = rw.lat !== null;
+    const brg = has ? fmtA(toMag(bearing(S.lat, S.lon, rw.lat, rw.lon))) + '°' : '---°';
+    const dNM = !has ? 0 : rw.dme ? dmeDist(rw.lat, rw.lon, rw.elev) : distance(S.lat, S.lon, rw.lat, rw.lon);
+    const dst = has ? uDist(dNM, 1) : '--.-';
+    // 선택된 소스는 은은한 배경으로 강조
+    if (navSrc === rw.src) { ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(x + 2, cy + 1, w - 4, cellH - 2); }
+    const y1 = cy + cellH * 0.44, y2 = cy + cellH * 0.86;
+    ctx.textAlign = 'left';
+    ctx.font = lblFont; ctx.fillStyle = navSrc === rw.src ? rw.color : '#888';
+    ctx.fillText(rw.src, x + 4, y1);
+    ctx.textAlign = 'right';
+    ctx.font = valFont; ctx.fillStyle = has ? '#fff' : '#666';
+    ctx.fillText(rw.ident, x + w - 4, y1);
+    ctx.textAlign = 'left';
+    ctx.fillStyle = has ? rw.color : '#666';
+    ctx.fillText(brg, x + 4, y2);
+    ctx.textAlign = 'right';
+    ctx.fillStyle = has ? '#cccc66' : '#666';
+    ctx.fillText(dst, x + w - 4, y2);
+  });
+  ctx.restore();
 }
 
 // ── 속도계 아래 GS 칸 · 고도계 위 RA 칸 · 아래 QNH 칸 ──
@@ -1273,65 +1325,7 @@ function drawHSI(x, y, w, h, cxC) {
     ctx.restore();
   }
 
-  // ── 우측 NAV SOURCE 3줄: 소스별 목적지(명칭·방위·거리) ──
-  // 좌하단 TAS/OAT·GS/ISA와 같은 방식(황토 바탕 위 한 줄 중앙정렬)으로 맞춘다.
-  {
-    const rows = [];
-    {   // FMS — 비행계획 활성 웨이포인트
-      const ok = S.awp >= 0 && S.awp < S.wps.length;
-      const wp = ok ? S.wps[S.awp] : null;
-      rows.push({ src:'FMS', ident: ok ? (wp.ident || 'WPT') : '----',
-                  lat: ok ? wp.lat : null, lon: ok ? wp.lon : null, color:'#00cc44' });
-    }
-    ['NAV1','NAV2'].forEach(id => {
-      const rr = navRadios[id] || {};
-      const ok = rr.lat !== null && rr.lat !== undefined && rr.lon !== null && rr.lon !== undefined;
-      rows.push({ src:id, ident: ok ? (rr.id || '----') : '----',
-                  lat: ok ? rr.lat : null, lon: ok ? rr.lon : null, color:'#44aaff',
-                  dme: true, elev: rr.elev || 0 });
-    });
-
-    const colX  = rightX + sideWR / 2;
-    const valFs = Math.max(9, r * 0.100);
-    const lblFs = Math.max(7, r * 0.072);
-    const lblFont = `${lblFs}px Helvetica Neue, Arial, sans-serif`;
-    const valFont = `bold ${valFs}px Helvetica Neue, Arial, sans-serif`;
-    // 좌하단 TAS/OAT(0.83)·GS/ISA(0.95)와 같은 간격·같은 하단선으로 맞춰 좌우 균형을 맞춘다
-    const rowY = [y + h * 0.71, y + h * 0.83, y + h * 0.95];
-
-    ctx.save();
-    rows.forEach((rw, i) => {
-      const has = rw.lat !== null;
-      const brg = has ? fmtA(toMag(bearing(S.lat, S.lon, rw.lat, rw.lon))) + '°' : '---°';
-      // VOR/DME 는 경사거리(항공기↔국 직선거리), FMS 는 GPS 수평거리다.
-      const dNM = !has ? 0
-                : rw.dme ? dmeDist(rw.lat, rw.lon, rw.elev)
-                : distance(S.lat, S.lon, rw.lat, rw.lon);
-      const dst = has ? uDist(dNM, 1) : '--.-';
-      const parts = [
-        [rw.src + ' ', navSrc === rw.src ? rw.color : '#888', lblFont],
-        [rw.ident,     has ? '#fff' : '#666',                 valFont],
-        ['  ' + brg,   has ? rw.color : '#666',               valFont],
-        ['  ' + dst,   has ? '#cccc66' : '#666',              valFont],
-      ];
-      let total = 0;
-      parts.forEach(pp => { ctx.font = pp[2]; total += ctx.measureText(pp[0]).width; });
-      // 사이드 컬럼이 좁을 때 글자가 HSI 영역 밖으로 새지 않도록 좌우로 물린다
-      let px = Math.max(x + 2, Math.min(colX - total / 2, x + w - total - 2));
-      // 선택된 소스는 은은한 배경으로 강조
-      if (navSrc === rw.src) {
-        ctx.fillStyle = 'rgba(0,0,0,0.28)';
-        ctx.fillRect(px - 4, rowY[i] - valFs, total + 8, valFs * 1.35);
-      }
-      ctx.textAlign = 'left';
-      parts.forEach(pp => {
-        ctx.font = pp[2]; ctx.fillStyle = pp[1];
-        ctx.fillText(pp[0], px, rowY[i]);
-        px += ctx.measureText(pp[0]).width;
-      });
-    });
-    ctx.restore();
-  }
+  // (FMS · NAV1 · NAV2 목적지 줄은 오른쪽 아래 칸으로 옮겼다 — drawNavSrcBox · HSI 와 겹치지 않게)
 
   // ── 좌하단 2줄 정보: ①TAS·OAT ②GS·ISA ──
   {
