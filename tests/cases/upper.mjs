@@ -1,5 +1,6 @@
 // UPPER CONSOLE(상부 콘솔) — 탭 'UPPER' 로 여는 오버헤드 패널(js/17-upper.js).
 // 스위치를 실제 마우스로 눌러 위치가 바뀌는지, 덮개·스프링·T-핸들, 저장과 알림(연동 고리)을 본다.
+import { SIM_SETUP_SRC } from './simmode.mjs';
 export const name = '상부 콘솔';
 
 export async function run(page, t) {
@@ -81,5 +82,33 @@ export async function run(page, t) {
   await page.evaluate(() => ovhdReset());
   const rs = await page.evaluate(() => [ovhdGet('airSour'), ovhdGet('apuFire'), ovhdGet('fireDet'), ovhdGet('instPlt')]);
   t.ok(rs.join() === 'ENG,IN,OPER,0', `RESET 은 모두 처음 위치로 (${rs.join(' · ')})`);
+
+  // ── 연동: TRAINING NO1/NO2 ENG TRNG → SIM OEI 훈련 ──
+  const tr = await page.evaluate(`(() => {
+    (${SIM_SETUP_SRC})();
+    const st = () => { const p = engParams(); return { eng: simEng, fail: simEngFail, trng: simEngTrng,
+      e1: Math.round(p.e1.ng), e2: Math.round(p.e2.ng), t1: Math.round(p.e1.tq), avail: simEngAvail() / mtaNow(),
+      btn: document.getElementById('eng-3d').textContent }; };
+    const o = { aeo: st() };
+    ovhdSet('trng1', 'TRNG'); o.t1 = st();
+    ovhdSet('trng2', 'TRNG'); o.both = st();
+    ovhdSet('trng1', 'OFF');  o.t2 = st();
+    toggleSimMode(false); toggleSimMode(true); o.reset = st();      // SIM 을 다시 켜도 스위치대로 훈련
+    ovhdSet('trng2', 'OFF');  o.off = st();
+    cycleSimEng(); o.btnOei = st(); cycleSimEng(); cycleSimEng();   // ENG 버튼의 OEI 는 그대로 2번 고장
+    toggleSimMode(false);
+    return o;
+  })()`);
+  t.ok(tr.aeo.eng === 2 && !tr.aeo.trng, `처음은 두 엔진 정상(AEO)`);
+  t.ok(tr.t1.eng === 1 && tr.t1.fail === 1 && tr.t1.trng && Math.abs(tr.t1.avail - 0.73) < 0.01,
+    `TRNG 1 을 올리면 ENG 1 OEI 훈련 — 남은 엔진 2.5분 정격(MTA 의 ${(tr.t1.avail * 100).toFixed(0)}%)`);
+  t.ok(tr.t1.e1 === 62 && tr.t1.t1 === 0 && tr.t1.e2 > 62 && tr.t1.btn === 'ENG1 TRNG',
+    `엔진 계기: 1번은 IDLE(NG ${tr.t1.e1} · TQ ${tr.t1.t1}), 2번이 다 낸다(NG ${tr.t1.e2}) · 버튼 ${tr.t1.btn}`);
+  t.ok(tr.both.eng === 2 && !tr.both.trng, '두 스위치가 다 올라가면 훈련이 걸리지 않는다(AEO)');
+  t.ok(tr.t2.eng === 1 && tr.t2.fail === 2 && tr.t2.e2 === 62 && tr.t2.e1 > 62, 'TRNG 2 만 남으면 ENG 2 OEI 훈련');
+  t.ok(tr.reset.eng === 1 && tr.reset.fail === 2 && tr.reset.trng, 'SIM 을 다시 켜도 스위치가 올라가 있으면 훈련 그대로');
+  t.ok(tr.off.eng === 2 && !tr.off.trng, '스위치를 다 내리면 AEO 로 돌아온다');
+  t.ok(tr.btnOei.eng === 1 && tr.btnOei.fail === 2 && !tr.btnOei.trng && tr.btnOei.e1 > 62 && tr.btnOei.e2 === 0,
+    'ENG 버튼의 OEI 는 종전대로 2번 고장(훈련과 따로)');
   await page.evaluate(() => { selectPanel('right', 'map', true); localStorage.removeItem('ovhdState'); });
 }

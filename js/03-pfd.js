@@ -202,12 +202,13 @@ function drawBaroBox(x, y, w, h) {
 //   NR  : 로터 회전(SIM 의 simNr) · NP : 엔진이 로터를 돌리면 NR 과 같고, IDLE 이면 아래로 갈라진다(needle split)
 //   NG·TGT : 토크를 따라 오르는 자리 표시값
 function engParams() {
-  let tq = 0, nr = 100, eng = 2;
+  let tq = 0, nr = 100, eng = 2, fail = 2, trng = false;
   try { tq = tqShown(); } catch (e) { _swallow(e); }
-  if (simModeOn) { try { nr = simNr; eng = simEng; } catch (e) { _swallow(e); } }
-  const run = [eng >= 1, eng >= 2];          // OEI 는 2번이 멎었다
-  const idle = eng === 0;
-  const one = (on) => {
+  if (simModeOn) { try { nr = simNr; eng = simEng; fail = simEngFail; trng = simEngTrng; } catch (e) { _swallow(e); } }
+  // OEI 는 simEngFail 번이 멎었다(ENG 버튼은 2번 · 상부 콘솔 TRAINING 은 고른 쪽). 훈련은 멎지 않고 IDLE 로 보인다
+  const run = [eng >= 2 || (eng === 1 && fail !== 1), eng >= 2 || (eng === 1 && fail !== 2)];
+  const idleOf = i => eng === 0 || (eng === 1 && trng && fail === i + 1);
+  const one = (on, idle) => {
     const t = on ? tq : 0;
     // NP 는 거버너가 100% 를 지킨다 — NR 이 위로 넘치면(자동회전 · 레버 최하단) 바늘이 갈라져 NP 는 100 그대로,
     // 출력을 넘겨 당겨 NR 이 처지면(RPM LOW) 함께 처진다
@@ -215,7 +216,7 @@ function engParams() {
     if (idle) return { tq: 0, ng: 62, tgt: 450, np: Math.min(nr, 70) };
     return { tq: 0, ng: 0, tgt: 0, np: 0 };
   };
-  const e1 = one(run[0]), e2 = one(run[1]);
+  const e1 = one(run[0], idleOf(0)), e2 = one(run[1], idleOf(1));
   return { e1, e2, nr };
 }
 function _engBox(x, y, w, h, title) {
@@ -813,6 +814,7 @@ function drawAI(x, y, w, h) {
         if (simEng === 1) {
           const left = Math.max(0, OEI_25_SEC - simOeiT);
           warns.push([left > 0 ? `OEI 2.5MIN ${Math.floor(left / 60)}:${String(Math.floor(left % 60)).padStart(2, '0')}` : 'OEI CONT', '#ffb000']);
+          if (simEngTrng) warns.push([`ENG ${simEngFail} TRNG`, '#00e5ff']);   // 상부 콘솔 TRAINING 으로 든 OEI 훈련
         } else if (simEng === 0) warns.push(['ENG IDLE', '#ff3030']);
         if (simVrsOn()) warns.push(['VRS', '#ff3030']);
         if (simOverVne()) warns.push(['VNE', '#ff3030']);
