@@ -1958,9 +1958,17 @@ function act(name, ...args) {
     const AC_SYS_BOT = ['asys_tests', 'asys_light', 'asys_video', 'asys_maint'];
     let _acSysPage = 'asys_afcs';
 
+    // Waypoint Info — 하위 화면 묶음(지금은 INFO · 차차 더한다). 그림은 실기 CDU 사진(자홍 마름모 · 하늘색 육각 · 삼각)
+    const wptInfoBtn = { id: 'wptinfo', text: 'Waypoint<br>Info', icon: '<svg viewBox="2 26 96 48"><g transform="rotate(-30 22 50)"><rect x="8" y="36" width="28" height="28" rx="6" fill="#e020d0"/><rect x="19" y="40" width="6" height="20" rx="2" fill="#fff"/></g><polygon points="50,36 62,36 68,50 62,64 50,64 44,50" fill="#00d8ff"/><circle cx="56" cy="50" r="6" fill="#000"/><polygon points="80,36 94,62 66,62" fill="#00d8ff"/></svg>' };
+    const WPT_INFO_IDS = ['afld'];
+    // 홈 배열(사용자 지정) — 4칸씩: MAP·Aircraft Systems·PERF·Charts / Flight Plan·PROC·VNAV·Waypoint Info /
+    // NOTAM·Track & Point·Services·Utilities / SkyVector·Tide·ER·Wildfire / Weather·Checklist
+    const HOME_ORDER = ['map', 'acsys', 'perf', 'charts', 'fpl', 'proc', 'vnav', 'wptinfo',
+                        'notam', 'sys', 'serv', 'util', 'skyvector', 'tide', 'eravail', 'wildfire', 'wxgrp', 'check'];
     function renderHomeScreen(container, footer, title) {
         title.innerText = "Home";
-        container.innerHTML = homeGridHtml([wxGroupBtn, acSysGroupBtn].concat(homeButtons.filter(b => !WX_IDS.includes(b.id))));
+        const all = [wxGroupBtn, acSysGroupBtn, wptInfoBtn].concat(homeButtons);
+        container.innerHTML = homeGridHtml(HOME_ORDER.map(id => all.find(b => b.id === id)).filter(Boolean));
         footer.innerHTML = cduFooter('', `<div class="nav-btn" data-act="openUbikais"><span>🛰</span>UBIKAIS</div>`);
     }
     function renderWeatherScreen(container, footer, title) {
@@ -1969,6 +1977,11 @@ function act(name, ...args) {
         footer.innerHTML = cduFooter("switchMode('HOME')");
     }
 
+    function renderWptInfoScreen(container, footer, title) {
+        title.innerText = "Waypoint Info";
+        container.innerHTML = homeGridHtml(WPT_INFO_IDS.map(id => homeButtons.find(b => b.id === id)).filter(Boolean));
+        footer.innerHTML = cduFooter("switchMode('HOME')");
+    }
     function renderAcSysScreen(container, footer, title) {
         title.innerText = "Aircraft Systems";
         const cell = id => {
@@ -2024,7 +2037,7 @@ function act(name, ...args) {
                 'wildfire': "https://fd.forest.go.kr/ffas/"
             };
 
-            let isActiveBtn = btn.id.startsWith('asys_') || ['wxgrp', 'acsys', 'weather', 'charts', 'notam', 'metar', 'directTo', 'map', 'fpl', 'serv', 'sys', 'perf', 'util', 'proc', 'cctv', 'vnav', 'check', 'afld', 'skyvector', 'tide', 'eravail', 'wildfire'].includes(btn.id);
+            let isActiveBtn = btn.id.startsWith('asys_') || ['wxgrp', 'acsys', 'wptinfo', 'weather', 'charts', 'notam', 'metar', 'directTo', 'map', 'fpl', 'serv', 'sys', 'perf', 'util', 'proc', 'cctv', 'vnav', 'check', 'afld', 'skyvector', 'tide', 'eravail', 'wildfire'].includes(btn.id);
             let boxClass = isActiveBtn ? 'icon-box func-active' : 'icon-box';
 
             if (links[btn.id]) {
@@ -2036,6 +2049,7 @@ function act(name, ...args) {
             } else {
                 let clickAction = btn.id === 'wxgrp' ? `data-act="switchMode" data-arg='["WEATHER"]'` :
                                   btn.id === 'acsys' ? `data-act="switchMode" data-arg='["ACSYS"]'` :
+                                  btn.id === 'wptinfo' ? `data-act="switchMode" data-arg='["WPTINFO"]'` :
                                   btn.id.startsWith('asys_') ? `data-act="acSysOpen" data-arg='["${btn.id}"]'` :
                                   btn.id === 'sys' ? `data-act="switchMode" data-arg='["TRACKPOINT"]'` :
                                   btn.id === 'perf' ? `data-act="switchMode" data-arg='["PERF"]'` :
@@ -4292,6 +4306,7 @@ function act(name, ...args) {
             case 'HOME': renderHomeScreen(container, footer, title); break;
             case 'WEATHER': renderWeatherScreen(container, footer, title); break;
             case 'ACSYS': renderAcSysScreen(container, footer, title); break;
+            case 'WPTINFO': renderWptInfoScreen(container, footer, title); break;
             case 'ACSYS_PAGE': renderAcSysPage(container, footer, title); break;
             case 'PERF': renderPerfScreen(container, footer, title); break;
             case 'PERF_INPUT': renderPerfInputScreen(container, footer, title); break;
@@ -4496,7 +4511,7 @@ function act(name, ...args) {
               ${allBtn}
             </div>
             ${rows}</div>`;
-        footer.innerHTML = cduFooter("switchMode('HOME')");
+        footer.innerHTML = cduFooter("switchMode('WPTINFO')");
     }
     function renderAirfieldDetailScreen(container, footer, title) {
         const list = (typeof AIRFIELD_INFO !== 'undefined' ? AIRFIELD_INFO : []);
