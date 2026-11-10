@@ -580,7 +580,12 @@ function afcsTestStart() {
 function afcsPhase() {
   if (!afcsTest) return null;
   const t = (performance.now() - afcsTest.t0) / 1000;
-  if (t >= AFCS_AP1_SEC + AFCS_HOLD_SEC) { afcsTest = null; afcsLast = 'AFCS TEST OK'; return null; }
+  if (t >= AFCS_AP1_SEC + AFCS_HOLD_SEC) {
+    afcsTest = null; afcsLast = 'AFCS TEST OK';
+    // 하부 콘솔 AFCAU 의 P FLT TST 버튼은 시험이 끝나면 다시 나온다
+    try { if (typeof ovhdGet === 'function' && ovhdGet('bFltTst') === 'IN') ovhdSet('bFltTst', 'OUT'); } catch (e) { _swallow(e); }
+    return null;
+  }
   return { t, ap2: t >= AFCS_AP2_SEC, ap1: t >= AFCS_AP1_SEC, act: Math.floor(t / 1.2) % 3 };
 }
 function _sysAfcsPage(g) {
@@ -607,7 +612,7 @@ function _sysAfcsPage(g) {
       }
       g.fillStyle = '#fff'; g.font = _f(13, false); g.fillText(lbl, x, y + 20);
     });
-    if (!P) {
+    if (!P && !afcsLast) {                            // 시험을 마친 화면에서는 #1 · #2 모두 지운다
       g.fillStyle = '#e8d000'; g.textAlign = 'left'; g.font = _f(12, false);
       g.fillText('AFCS MAINTENANCE MODE', 444, y + 46);
       g.strokeStyle = '#e8d000'; g.lineWidth = 1; g.beginPath(); g.moveTo(444, y + 49); g.lineTo(612, y + 49); g.stroke();
@@ -796,7 +801,7 @@ function sysCduHtml(id) {
   if (id === 'asys_fuel') return fuelCduHtml();
   if (id === 'asys_elec') return `<div id="elecc" style="padding:10px 8px;color:#cde;font-size:12px"></div>`;
   if (id === 'asys_afcs') return `<div style="padding:12px 8px;color:#cde;font-size:12px">` +
-    `<div style="color:#567;font-size:10px;margin-bottom:8px">AFCS 시험 — AP1 · AP2 액추에이터(C · YR · P)를 차례로 시험합니다(약 10초).</div>` +
+    `<div style="color:#567;font-size:10px;margin-bottom:8px">AFCS 시험 — AP1 · AP2 액추에이터(C · YR · P)를 차례로 시험합니다(약 10초). LOWER 창 AFCAU 의 <b style="color:#9ab">P FLT TST</b> 를 눌러도 됩니다.</div>` +
     `<div class="nav-btn" data-act="afcsTestStart" style="width:100%;margin-bottom:10px">AFCS TEST</div>` +
     `<div id="afcsc" style="text-align:center;font-size:15px;font-weight:bold;color:#fff;min-height:22px"></div>` +
     `<div style="color:#567;font-size:10px;margin-top:12px">SYSTEM 창(탭 'SYSTEM')에 AFCS 화면이 보입니다.</div></div>`;
