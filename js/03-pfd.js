@@ -86,15 +86,17 @@ function drawPFD() {
   drawVSI(L.vsi.x, L.vsi.y, L.vsi.w, L.vsi.h);
   drawBaroBox(L.baro.x, L.baro.y, L.baro.w, L.baro.h);
 
-  // 아래: 엔진 파라미터 · HSI · 레이더 고도계(CRHT)
+  // 아래: 땅 빛이 아래까지 이어지고(실기처럼), 그 위에 엔진 파라미터 · HSI · 레이더 고도계(CRHT)를 반투명으로 얹는다.
+  // HSI 나침반 중심은 자세계 중심과 같은 세로선(화면 가운데)이다.
+  ctx.fillStyle = '#654321'; ctx.fillRect(0, L.aiH, W, L.usableH - L.aiH);
+  drawHSI(L.hsi.x, L.hsi.y, L.hsi.w, L.hsi.h, W / 2);
   drawEnginePanel(L.eng.x, L.eng.y, L.eng.w, L.eng.h);
-  drawHSI(L.hsi.x, L.hsi.y, L.hsi.w, L.hsi.h);
   drawCrhtDisplay(L.crht.x, L.crht.y, L.crht.w, L.crht.h);
   ctx.strokeStyle = '#1e1e1e'; ctx.lineWidth = 1;
   ctx.beginPath(); ctx.moveTo(0, L.aiH); ctx.lineTo(W, L.aiH); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(L.hsi.x + 0.5, L.aiH); ctx.lineTo(L.hsi.x + 0.5, L.usableH); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(L.crht.x + 0.5, L.aiH); ctx.lineTo(L.crht.x + 0.5, L.usableH); ctx.stroke();
-  if (hocasOn) drawHocas(L.hsi.x, L.hsi.y, L.hsi.w, L.hsi.h);
+  if (hocasOn) drawHocas(L.hsi.x, L.hsi.y, L.hsi.w, L.hsi.h, W / 2);
 }
 
 // ── 속도계 아래 GS 칸 · 고도계 위 RA 칸 · 아래 QNH 칸 ──
@@ -166,16 +168,17 @@ function engParams() {
 function _engBox(x, y, w, h, title) {
   ctx.strokeStyle = '#5a6672'; ctx.lineWidth = 1;
   const r = 5;
+  // 제목 자리만큼 위 테두리를 비운다(바탕을 칠해 가리면 반투명 바탕이 얼룩진다)
+  let gap = 0;
+  if (title) { ctx.font = 'bold 9px Helvetica Neue, Arial, sans-serif'; gap = ctx.measureText(title).width + 8; }
   ctx.beginPath();
-  ctx.moveTo(x + r, y); ctx.lineTo(x + w - r, y); ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.moveTo(x + w / 2 + gap / 2, y); ctx.lineTo(x + w - r, y); ctx.quadraticCurveTo(x + w, y, x + w, y + r);
   ctx.lineTo(x + w, y + h - r); ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
   ctx.lineTo(x + r, y + h); ctx.quadraticCurveTo(x, y + h, x, y + h - r);
-  ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y); ctx.lineTo(x + w / 2 - gap / 2, y);
   ctx.stroke();
   if (title) {
     ctx.font = 'bold 9px Helvetica Neue, Arial, sans-serif';
-    const tw = ctx.measureText(title).width + 6;
-    ctx.fillStyle = '#16191d'; ctx.fillRect(x + w / 2 - tw / 2, y - 6, tw, 11);
     ctx.fillStyle = '#e8edf2'; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
     ctx.fillText(title, x + w / 2, y + 3);
   }
@@ -184,7 +187,7 @@ function drawEnginePanel(x, y, w, h) {
   if (!(w > 60) || !(h > 80)) return;
   const P = engParams();
   ctx.save(); ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
-  ctx.fillStyle = '#16191d'; ctx.fillRect(x, y, w, h);
+  ctx.fillStyle = 'rgba(18,30,48,0.55)'; ctx.fillRect(x, y, w, h);   // 땅 위에 반투명(속도계·고도계와 같은 빛)
   const m = 4, half = (w - m * 3) / 2;
   // 위: TGT · NG 숫자
   const th = Math.max(36, Math.min(50, h * 0.2));
@@ -225,7 +228,7 @@ function drawNpNr(x, y, w, h, P) {
     ctx.fillText(Math.round(v), cx, y + 26);
     if (bh > 10) {
       const bx = cx - barW / 2;
-      ctx.fillStyle = '#0b0d10'; ctx.fillRect(bx, top, barW, bh);
+      ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.fillRect(bx, top, barW, bh);
       ctx.strokeStyle = '#3a4653'; ctx.strokeRect(bx + 0.5, top + 0.5, barW - 1, bh - 1);
       ctx.fillStyle = band === 'red' ? '#ff4444' : band === 'yel' ? '#ffcc00' : '#22dd55';
       ctx.fillRect(bx + 1, vToY(v), barW - 2, bot - vToY(v));
@@ -271,10 +274,9 @@ function hocasAxes() {
   } catch (e) { _swallow(e); }
   return { roll: a.roll || 0, pitch: a.pitch || 0, yaw: a.yaw || 0, trim, coll };
 }
-function drawHocas(x, y, w, h) {
+function drawHocas(x, y, w, h, cxC) {
   if (!(w >= 40) || !(h >= 40)) return;
-  const r = Math.min(w * 0.38, h * 0.46);
-  const sideW = Math.max(60, (w - r * 2) / 2 - 8);
+  const sideW = Math.max(60, hsiGeom(x, y, w, h, cxC).leftW);
   const ax = hocasAxes();
   const clamp = v => Math.max(-1, Math.min(1, v));
   const col = v => Math.abs(v) <= HOCAS_DEAD ? '#00ff88' : '#ffb74d';
@@ -472,7 +474,7 @@ function drawFMA(x, y, w) {
 // ────────────────────────────────────────
 function drawCrhtDisplay(x, y, w, h) {
   ctx.save(); ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
-  ctx.fillStyle = '#060612'; ctx.fillRect(x, y, w, h);
+  ctx.fillStyle = 'rgba(18,30,48,0.55)'; ctx.fillRect(x, y, w, h);   // 땅 위에 반투명
 
   // ── Target/VS header box (top) ──
   const HEAD_H = 26;
@@ -822,7 +824,7 @@ function drawTqGauge(x, y, w, h, vals) {
     vals.forEach((v, i) => {
       const bx = cxs[i] - barW / 2, c = TQ_COLORS[tqBand(v)];
       // 바탕 + 구간 — 0~100 녹색 · 100~113 노랑 · 113~ 빨강
-      ctx.fillStyle = '#0b0d10'; ctx.fillRect(bx, barY, barW, barH);
+      ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.fillRect(bx, barY, barW, barH);
       [[0, TQ_LIMIT, 'green'], [TQ_LIMIT, TQ_RED, 'yellow'], [TQ_RED, TQ_MAX, 'red']].forEach(([lo, hi, k]) => {
         ctx.fillStyle = TQ_COLORS[k].tint;
         ctx.fillRect(bx, vToY(hi), barW, vToY(lo) - vToY(hi));
@@ -1204,15 +1206,23 @@ function drawVSI(x, y, w, h) {
 // ────────────────────────────────────────
 // HSI
 // ────────────────────────────────────────
-function drawHSI(x, y, w, h) {
+// HSI 의 중심·반지름·좌우 남는 폭. 중심(cxC)을 주면 그 세로선에 맞춘다(자세계와 한 줄 — drawPFD)
+function hsiGeom(x, y, w, h, cxC) {
+  const cx = Number.isFinite(cxC) ? Math.max(x + 40, Math.min(x + w - 40, cxC)) : x + w / 2;
+  const hw = Math.min(cx - x, x + w - cx);                       // 중심에서 가까운 가장자리까지
+  const r  = Math.max(20, Math.min(hw * (hw < 210 ? 0.80 : 0.76), h * 0.46));
+  return { cx, cy: y + h * 0.50, r, leftW: cx - r - x - 8, rightW: x + w - (cx + r) - 8 };
+}
+function drawHSI(x, y, w, h, cxC) {
   if (!(w >= 40) || !(h >= 40)) return;   // 반지름이 음수가 되는 것을 원천 차단
   ctx.save();  // outer save — ensure lineWidth/strokeStyle don't bleed into drawPFD
   ctx.fillStyle='#654321';
   ctx.fillRect(x,y,w,h);
 
-  const cx   = x + w / 2;
-  const r    = Math.min(w * (w < 420 ? 0.31 : 0.38), h * 0.46);  // leave room for side panels(좁으면 옆 글자 칸을 더 남긴다)
-  const cy   = y + h * 0.50;
+  const G = hsiGeom(x, y, w, h, cxC);
+  const cx   = G.cx;
+  const r    = G.r;
+  const cy   = G.cy;
   const arrowR = r * 0.84;
 
   // ── Hover Page mode: simplified HSI + GPS speed readouts ──
@@ -1222,8 +1232,9 @@ function drawHSI(x, y, w, h) {
     return;
   }
 
-  // ── side panel widths ──
-  const sideW = (w - r * 2) / 2 - 8;  // available width each side
+  // ── side panel widths ── (중심을 자세계에 맞추면 좌우 폭이 다르다)
+  const sideW = Math.max(30, G.leftW);       // 왼쪽(바람 · TAS/OAT/GS/ISA)
+  const sideWR = Math.max(30, G.rightW);     // 오른쪽(NAV SOURCE 3줄)
   const leftX  = x + 4;
   const rightX = cx + r + 4;
 
@@ -1280,7 +1291,7 @@ function drawHSI(x, y, w, h) {
                   dme: true, elev: rr.elev || 0 });
     });
 
-    const colX  = rightX + sideW / 2;
+    const colX  = rightX + sideWR / 2;
     const valFs = Math.max(9, r * 0.100);
     const lblFs = Math.max(7, r * 0.072);
     const lblFont = `${lblFs}px Helvetica Neue, Arial, sans-serif`;
@@ -1337,36 +1348,27 @@ function drawHSI(x, y, w, h) {
     const isaC = 15 - 1.98 * S.alt / 1000;
     const oatC = _oatSurfaceC - 1.98 * S.alt / 1000;
 
-    const colX  = leftX + sideW / 2;
-    const valFs = Math.max(10, r * 0.115);
-    const lblFs = Math.max(8, r * 0.08);
-    const row1Y = y + h * 0.83;
-    const row2Y = y + h * 0.95;
-
-    ctx.save();
-    // 한 줄에 [라벨, 값, 라벨, 값]을 이어 그려 가운데 정렬
+    // 한 줄에 한 가지씩 네 줄 — 왼쪽 아래 구석(둥근 나침반이 비우는 자리)에 붙여, 나침반을 자세계 중심에 맞출 수 있게 한다
+    const valFs = Math.max(10, Math.min(16, r * 0.115));
+    const lblFs = Math.max(8, Math.min(12, r * 0.08));
     const lblFont = `${lblFs}px Helvetica Neue, Arial, sans-serif`;
     const valFont = `bold ${valFs}px Helvetica Neue, Arial, sans-serif`;
-    const drawRow = (yPos, parts) => {
-      let total = 0;
-      parts.forEach(p => { ctx.font = p[2]; total += ctx.measureText(p[0]).width; });
-      let x = colX - total / 2;
-      ctx.textAlign = 'left';
-      parts.forEach(p => {
-        ctx.font = p[2]; ctx.fillStyle = p[1];
-        ctx.fillText(p[0], x, yPos);
-        x += ctx.measureText(p[0]).width;
-      });
-    };
     const _sl = S_LBL().toLowerCase();
-    drawRow(row1Y, [
-      ['TAS ', '#888', lblFont], [`${Math.round(tas*S_CV())}${_sl}`, '#88ccff', valFont],
-      ['  OAT ', '#888', lblFont], [uTemp(oatC), '#ffd54f', valFont],
-    ]);
-    drawRow(row2Y, [
-      ['GS ', '#888', lblFont], [`${Math.round(gs*S_CV())}${_sl}`, '#00cc44', valFont],
-      ['  ISA ', '#888', lblFont], [uTemp(isaC), '#aaa', valFont],
-    ]);
+    const rows4 = [
+      ['TAS', `${Math.round(tas*S_CV())}${_sl}`, '#88ccff'],
+      ['OAT', uTemp(oatC), '#ffd54f'],
+      ['GS',  `${Math.round(gs*S_CV())}${_sl}`, '#00cc44'],
+      ['ISA', uTemp(isaC), '#aaa'],
+    ];
+    ctx.save();
+    ctx.font = lblFont; const lw = Math.max(...rows4.map(q => ctx.measureText(q[0] + ' ').width));
+    const sp = valFs * 1.25, y0 = y + h - 6 - sp * 3;
+    rows4.forEach((q, k) => {
+      const yy = y0 + sp * k;
+      ctx.textAlign = 'left';
+      ctx.font = lblFont; ctx.fillStyle = '#888'; ctx.fillText(q[0], leftX + 2, yy);
+      ctx.font = valFont; ctx.fillStyle = q[2]; ctx.fillText(q[1], leftX + 2 + lw, yy);
+    });
     ctx.restore();
   }
 
