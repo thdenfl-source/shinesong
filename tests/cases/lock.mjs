@@ -78,13 +78,16 @@ export async function run(page, t) {
     const end = await tb.evaluate(() => ({ locked: window.gateLocked, shown: getComputedStyle(document.getElementById('gate-overlay')).display !== 'none',
                                           solo: _soloActive, cur: _soloCurrent, mode: sessionStorage.getItem('vfrStartMode'),
                                           lay: !!document.querySelector('#simlay.show'), sim: simModeOn,
-                                          btns: [...document.querySelectorAll('#simlay .simlay-btn')].map(b => b.dataset.scr).join(',') }));
+                                          btns: [...document.querySelectorAll('#simlay .simlay-btn')].map(b => b.dataset.scr).join(','),
+                                          simple: document.body.classList.contains('simple-mode'),
+                                          sbar: [...document.querySelectorAll('#simple-bar [data-scr]')].map(b => b.textContent).join(','),
+                                          pfdIn: !!document.getElementById('pfd-wrap') && document.getElementById('pfd-wrap').parentElement.id }));
     await tb.reload(); await ready(tb); await tb.waitForTimeout(1500);
     end.reload = await tb.evaluate(() => ({ solo: _soloActive, cur: _soloCurrent }));
     await tb.close();
     return { mid, end };
   };
-  const m3 = await pick('3d'), mp = await pick('pc'), ms = await pick('sim');
+  const m3 = await pick('3d'), mp = await pick('pc'), ms = await pick('sim'), mq = await pick('simple');
   t.ok(m3.mid.locked && m3.mid.choose && m3.mid.pwHidden, '비밀번호가 맞으면 화면 고르기(PC 모드 · 3D 단독 모드)가 뜨고, 고르기 전에는 열리지 않는다');
   t.ok(!m3.end.locked && !m3.end.shown && m3.end.solo && m3.end.cur === 'm3d' && m3.end.mode === '3d',
     '3D 단독 모드를 고르면 3D Only 로 바로 열린다');
@@ -92,6 +95,8 @@ export async function run(page, t) {
   t.ok(!mp.end.locked && !mp.end.solo && mp.end.mode === 'pc' && !mp.end.lay, 'PC 모드를 고르면 지금처럼(분할) 열린다');
   t.ok(!ms.end.locked && ms.end.mode === 'sim' && ms.end.lay && ms.end.sim && ms.end.btns === 'pfd,m3d,map,cdu,ovhd,lcon,sysp',
     `SIM Mode 를 고르면 SIM 조종이 켜지고 창 배치판(화면마다 새 창 버튼)이 뜬다 (${ms.end.btns})`);
+  t.ok(!mq.end.locked && mq.end.mode === 'simple' && mq.end.simple && mq.end.sbar === 'PFD,3D,MAP,CDU,UPPER,LOWER,SYSTEM' && mq.end.pfdIn === 'simple-host',
+    `Simple Mode 를 고르면 위 막대(창 이름 일곱)와 PFD 하나만 화면 가득 (${mq.end.sbar} · ${mq.end.pfdIn})`);
 
   // 비밀번호 글자는 앱 파일 어디에도 없다(SHA-256 값만 둔다)
   if (PW) {

@@ -993,7 +993,9 @@ function applyPanels() {
                     plan: 'fp-wrap', ovhd: 'ovhd-wrap', sysp: 'sysp-wrap', lcon: 'lcon-wrap' };
   // 화면 하나만 새 창에 띄운 것(SIM Mode 창 배치판 · 00-popout.js popoutScreen)은 그 그릇이 먼저다
   const scrHost = k => (window._scrHost && window._scrHost[k]) ? document.getElementById('po-host-' + k) : null;
-  const hostOf = k => scrHost(k) || (leftSel === k ? L : (tripleMode && midSel === k ? M : (rightSel === k ? R : (quadMode && botSel === k ? B : null))));
+  // Simple mode — 고른 화면 하나가 전체 화면 그릇(#simple-host)을 차지한다
+  const simpleHost = k => (window._simpleScr === k) ? document.getElementById('simple-host') : null;
+  const hostOf = k => simpleHost(k) || scrHost(k) || (leftSel === k ? L : (tripleMode && midSel === k ? M : (rightSel === k ? R : (quadMode && botSel === k ? B : null))));
   ['pfd', 'map', 'cdu', 'm3d', 'plan', 'ovhd', 'sysp', 'lcon'].forEach(k => {
     const el = document.getElementById(wrapIds[k]);
     if (!el) return;
@@ -1522,9 +1524,22 @@ function pfdOvHost() {
   if (!d3 || !d3.classList.contains('active') || !(d3.offsetWidth > 40) || !(d3.offsetHeight > 40)) return null;
   return d3.parentElement;
 }
+// 겹친 계기 크기(3D 단독 등) — 3D 창의 계기 −/+ 로 60~160%(이 기기에 적어 둔다)
+const PFD_OV_SCALE_KEY = 'pfdOvScale';
+let pfdOvScale = 1;
+try { const v = parseFloat(localStorage.getItem(PFD_OV_SCALE_KEY)); if (v >= 0.6 && v <= 1.6) pfdOvScale = v; } catch (e) { _swallow(e); }
+function pfdOvSize(d) {
+  pfdOvScale = Math.round(Math.max(0.6, Math.min(1.6, pfdOvScale + 0.1 * (Number(d) || 0))) * 10) / 10;
+  try { localStorage.setItem(PFD_OV_SCALE_KEY, String(pfdOvScale)); } catch (e) { _swallow(e); }
+  pfdOverlaySync(); pfdOverlayDraw(true);
+}
 function pfdOverlaySync() {
   const ov = document.getElementById('pfd-ov');
   if (!ov) return false;
+  const w = `${(25 * pfdOvScale).toFixed(1)}%`, h = `${Math.min(92, 60 * pfdOvScale).toFixed(1)}%`;
+  if (ov.style.width !== w) { ov.style.width = w; ov.style.height = h; }
+  const lb = document.getElementById('pfdov-pct');
+  if (lb) { const t = `${Math.round(pfdOvScale * 100)}%`; if (lb.textContent !== t) lb.textContent = t; }
   // 외부 시점(EXT)에서도 계기 ON 이면 띄운다(모형이 가리면 계기 OFF 나 EXT 카메라 버튼으로 비켜 본다)
   const host = pfdOvOn ? pfdOvHost() : null;
   if (host && ov.parentElement !== host) host.appendChild(ov);
@@ -1783,4 +1798,49 @@ function simLayoutStart() {
   simLayoutShow();
 }
 // (화면 버튼 등록은 19-lower.js — appRegister 는 09-cdu.js 에서 정의되어 이 파일보다 늦다)
+
+// ── Simple mode ── 시작 화면에서 'Simple Mode' 를 고르면 창 하나만 화면 가득 본다.
+// 위 막대에 쓸 수 있는 창(PFD · 3D · MAP · CDU · UPPER · LOWER · SYSTEM)이 다 있고, 누른 창 하나만 보인다.
+// 분할 패널(#app)은 감추고, 고른 화면 묶음을 그릇(#simple-host)에 옮긴다(applyPanels 의 hostOf).
+const SIMPLE_SCREENS = [['pfd', 'PFD'], ['m3d', '3D'], ['map', 'MAP'], ['cdu', 'CDU'], ['ovhd', 'UPPER'], ['lcon', 'LOWER'], ['sysp', 'SYSTEM']];
+let simpleOn = false;
+function _simpleEnsure() {
+  if (document.getElementById('simple-bar')) return;
+  const bar = document.createElement('div'); bar.id = 'simple-bar';
+  bar.innerHTML = SIMPLE_SCREENS.map(([k, n]) => `<button type="button" data-act="simpleSet" data-arg='["${k}"]' data-scr="${k}">${n}</button>`).join('') +
+    `<button type="button" class="simple-exit" data-act="simpleExit" title="Simple mode 끝내기 — 분할 화면(PC 모드)으로">PC 모드</button>`;
+  const view = document.createElement('div'); view.id = 'simple-view';
+  view.innerHTML = '<div id="simple-host"></div>';
+  document.body.appendChild(bar); document.body.appendChild(view);
+}
+function simpleModeStart(k) {
+  try { if (typeof _soloActive !== 'undefined' && _soloActive) exitSolo(); } catch (e) { _swallow(e); }
+  _simpleEnsure();
+  simpleOn = true;
+  document.body.classList.add('simple-mode');
+  simpleSet(k || window._simpleScr || 'pfd');
+}
+function simpleSet(k) {
+  if (!SIMPLE_SCREENS.some(s => s[0] === k)) return;
+  if (!simpleOn) { simpleModeStart(k); return; }
+  window._simpleScr = k;
+  try { applyPanels(); } catch (e) { _swallow(e); }
+  document.querySelectorAll('#simple-bar [data-scr]').forEach(b => b.classList.toggle('on', b.dataset.scr === k));
+  const kick = () => {
+    try { window.dispatchEvent(new Event('resize')); } catch (e) { _swallow(e); }
+    try { if (k === 'pfd' && typeof resizePFD === 'function') { resizePFD(); drawPFD(); } } catch (e) { _swallow(e); }
+    try { if (k === 'cdu' && typeof scaleCdu === 'function') scaleCdu(); } catch (e) { _swallow(e); }
+    try { if (k === 'map' && typeof leafMap !== 'undefined') leafMap.invalidateSize(); } catch (e) { _swallow(e); }
+    try { if (k === 'sysp' && typeof sysDraw === 'function') sysDraw(); } catch (e) { _swallow(e); }
+  };
+  kick(); setTimeout(kick, 80); setTimeout(kick, 300);
+}
+function simpleExit() {
+  simpleOn = false;
+  window._simpleScr = null;
+  document.body.classList.remove('simple-mode');
+  try { applyPanels(); } catch (e) { _swallow(e); }
+  try { sessionStorage.setItem('vfrStartMode', 'pc'); } catch (e) { _swallow(e); }
+  setTimeout(() => { try { window.dispatchEvent(new Event('resize')); resizePFD(); } catch (e) { _swallow(e); } }, 60);
+}
 
