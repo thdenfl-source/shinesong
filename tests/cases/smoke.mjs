@@ -134,11 +134,15 @@ export async function runDegenerate(page, t) {
     document.querySelector('#mainContentArea [data-arg=\'["AIRFIELD"]\']').click(); await wait(60);
     const t2 = title();
     [...document.querySelectorAll('#footerNav .nav-btn')].pop().click(); await wait(60);
-    const t3 = title(); CDU_ACT.switchMode('HOME'); await wait(50);
-    return { t1, labels, t2, t3 };
+    const t3 = title();
+    document.querySelector('#mainContentArea [data-act="wptOpen"][data-arg=\'["wpt_vor"]\']').click(); await wait(60);
+    const t4 = title(); [...document.querySelectorAll('#footerNav .nav-btn')].pop().click(); await wait(60);
+    const t5 = title(); CDU_ACT.switchMode('HOME'); await wait(50);
+    return { t1, labels, t2, t3, t4, t5 };
   });
-  t.ok(wpt.t1 === 'Waypoint Info' && wpt.labels.join('|') === 'INFO' && wpt.t2 === '비행장 정보' && wpt.t3 === 'Waypoint Info',
-    `Waypoint Info → INFO, Back 은 Waypoint Info 로 (${wpt.t1} · ${wpt.labels.join(',')} · ${wpt.t2} → ${wpt.t3})`);
+  t.ok(wpt.t1 === 'Waypoint Info' && wpt.labels.join('|') === 'Airport|INT|VOR|NDB|VRP|UserWaypoint|CreateWaypoint|AirportINFO' && wpt.t2 === '비행장 정보' && wpt.t3 === 'Waypoint Info',
+    `Waypoint Info → Airport·INT·VOR·NDB·VRP·User·Create·Airport INFO, Airport INFO 의 Back 은 Waypoint Info 로 (${wpt.t1} · ${wpt.labels.join(',')} · ${wpt.t2} → ${wpt.t3})`);
+  t.ok(wpt.t4 === 'VOR' && wpt.t5 === 'Waypoint Info', `VOR 등은 제 화면(준비 중) · Back 은 Waypoint Info 로 (${wpt.t4} → ${wpt.t5})`);
   t.ok(!wx.home.some(l => /Windy|CCTV|METAR/.test(l)), '날씨 버튼 넷은 홈에서 Weather 안으로 들어갔다');
   t.ok(wx.wxTitle === 'Weather' && wx.wxLabels.join('|') === 'Windy|저고도날씨|CCTV|METAR/TAF',
     `Weather 를 누르면 넷이 나온다 (${wx.wxTitle}: ${wx.wxLabels.join(' · ')})`);
