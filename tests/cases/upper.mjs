@@ -32,16 +32,31 @@ export async function run(page, t) {
   };
   const get = id => page.evaluate(i => ovhdGet(i), id);
 
-  // 2단 토글 — 아래쪽을 누르면 ON, 위쪽은 OFF
-  await press('[data-ov="batt"] .ov-bez', 'd');
+  // 터치 영역 — 글자 쪽을 누르면 그 위치로(2단: 윗글자 OFF · 아랫글자 ON)
+  await press('[data-ov="batt"] .ov-pl.bot');
   const b1 = await get('batt');
-  await press('[data-ov="batt"] .ov-bez', 'u');
-  t.ok(b1 === 'ON' && await get('batt') === 'OFF', `BATT 토글 — 아래로 ON, 위로 OFF (${b1})`);
-  // 3단 토글 — 한 칸씩
-  await press('[data-ov="airSour"] .ov-bez', 'd'); const a1 = await get('airSour');
-  await press('[data-ov="airSour"] .ov-bez', 'd'); const a2 = await get('airSour');
-  await press('[data-ov="airSour"] .ov-bez', 'd'); const a3 = await get('airSour');
-  t.ok(a1 === 'OFF' && a2 === 'APU' && a3 === 'APU', `AIR SOUR 3단 — ENG → OFF → APU, 끝에서 멈춘다 (${a1} · ${a2} · ${a3})`);
+  await press('[data-ov="batt"] .ov-pl.top');
+  t.ok(b1 === 'ON' && await get('batt') === 'OFF', `BATT — 'ON' 글자를 누르면 ON, 'OFF' 글자를 누르면 OFF (${b1})`);
+  // 3단 — 아랫글자 · 옆 글자(가운데) · 윗글자
+  await press('[data-ov="airSour"] .ov-pl.bot'); const a1 = await get('airSour');
+  await press('[data-ov="airSour"] .ov-pl.side'); const a2 = await get('airSour');
+  await press('[data-ov="airSour"] .ov-pl.top'); const a3 = await get('airSour');
+  t.ok(a1 === 'APU' && a2 === 'OFF' && a3 === 'ENG', `AIR SOUR 3단 — APU · OFF(옆 글자) · ENG 글자를 누르면 그 위치로 (${a1} · ${a2} · ${a3})`);
+  await press('[data-ov="airSour"] .ov-pl.bot');
+  // 영역이 모든 토글·덮개 스위치에 있다
+  const zones = await page.evaluate(() => [...document.querySelectorAll('#ovhd-wrap .ov-tg, #ovhd-wrap .ov-guard')]
+    .every(el => el.querySelectorAll('.ov-hit[data-hz]').length === 3));
+  t.ok(zones, '모든 토글·덮개 스위치에 위·가운데·아래 터치 영역이 있다');
+  // 노브 — 위치 글자를 누르면 그 위치로 바로
+  await press('[data-ov="ecsMode"] [data-ov-pos="HEAT"]'); const e1 = await get('ecsMode');
+  await press('[data-ov="consUpper"] [data-ov-pos="10"]'); const c1 = await get('consUpper');
+  await press('[data-ov="ecsMode"] [data-ov-pos="OFF"]'); await press('[data-ov="consUpper"] [data-ov-pos="0"]');
+  t.ok(e1 === 'HEAT' && c1 === 10, `노브 글자를 누르면 그 위치로 — ECS 'HEAT' · CONSOLE UPPER 'BRT'(10) (${e1} · ${c1})`);
+  // ZONES — 터치 영역 테두리 보기
+  await page.click('#ovhd-zones');
+  const zv = await page.evaluate(() => document.getElementById('ovhd-wrap').classList.contains('ov-zones'));
+  await page.click('#ovhd-zones');
+  t.ok(zv, 'ZONES 로 터치 영역을 테두리로 볼 수 있다');
   // 노브 — 오른쪽 절반은 시계 방향, 왼쪽은 반시계
   await press('[data-ov="fireDet"] .ov-knob', 'r'); await press('[data-ov="fireDet"] .ov-knob', 'r');
   const f2 = await get('fireDet');
