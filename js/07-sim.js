@@ -874,6 +874,7 @@ function applyQuadRatio() {
       else { c = Math.max(15, Math.min(85, py)); }
       quadRatio = [a, b, c]; applyQuadRatio();
       try { resizePFD(); } catch (err) { _swallow(err); }
+      try { scaleCdu(); } catch (err) { _swallow(err); }   // CDU 도 PFD 처럼 끄는 동안 바로 맞춘다
     });
     const end = () => { if (!drag) return; drag = false; try { localStorage.setItem('quadSplit', JSON.stringify(quadRatio)); } catch (err) { _swallow(err); } after(); };
     el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end);
@@ -1141,6 +1142,7 @@ function applyPoRatio() {
         applyTriRatio();
       }
       try { resizePFD(); } catch(err) { _swallow(err); }
+      try { scaleCdu(); } catch(err) { _swallow(err); }   // CDU 도 PFD HSI 처럼 끄는 동안 바로 맞춘다(놓은 뒤가 아니라)
     });
     const end = () => {
       if (!dragging) return;

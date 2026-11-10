@@ -43,6 +43,7 @@ import * as hocas from './cases/hocas.mjs';
 import * as pfdmsg from './cases/pfdmsg.mjs';
 import * as fcpsimple from './cases/fcpsimple.mjs';
 import * as pfdsk from './cases/pfdsk.mjs';
+import * as cdulive from './cases/cdulive.mjs';
 import * as joycenter from './cases/joycenter.mjs';
 import * as ship3d from './cases/ship3d.mjs';
 import * as heli3d from './cases/heli3d.mjs';
@@ -59,7 +60,7 @@ import * as upper from './cases/upper.mjs';
 import * as system from './cases/system.mjs';
 import * as lower from './cases/lower.mjs';
 
-const SUITES0 = [smoke, actions, coords, chartcal, hold, nav, gspd, dialog, chartview, procdata, simspd, tascalc, brg, fpwpt, maprot, map3d, dmearc, dme, fporder, wptcrs, brglbl, directto, crssync, locsta, susp, layout, gslope, joystick, geosearch, simmode, ga, tdown, bbtrim, physics2, hocas, joycenter, ship3d, heli3d, ralt, startapt, hdgref, sound, view3d, runway, apptune, lock, popout, upper, system, lower, pfdmsg, fcpsimple, pfdsk];
+const SUITES0 = [smoke, actions, coords, chartcal, hold, nav, gspd, dialog, chartview, procdata, simspd, tascalc, brg, fpwpt, maprot, map3d, dmearc, dme, fporder, wptcrs, brglbl, directto, crssync, locsta, susp, layout, gslope, joystick, geosearch, simmode, ga, tdown, bbtrim, physics2, hocas, joycenter, ship3d, heli3d, ralt, startapt, hdgref, sound, view3d, runway, apptune, lock, popout, upper, system, lower, pfdmsg, fcpsimple, pfdsk, cdulive];
 // 여러 묶음으로 나뉜 검사(suites 를 내보내는 파일)는 펼친다
 const SUITES = SUITES0.flatMap(m => m.suites ? m.suites : [m]);
 const filter = process.argv.slice(2);
