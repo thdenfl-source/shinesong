@@ -23,6 +23,14 @@ export async function run(page, t) {
     const hht0 = selHht; turn('hht', 'up'); o.hht = selHht - hht0;
     window._qnhHpa = 1013; turn('baro', 'up'); o.baro = window._qnhHpa;
     document.querySelector('#fcp-simple [data-k="baro"] .fks-push').click(); o.std = window._qnhHpa;
+    // IN 으로 볼 때 — STD 는 29.92, 돌리면 0.01 inHg 씩
+    pfdBaroUnit = 'IN'; fcpsSync(); o.stdIn = document.getElementById('fks-baro').textContent;
+    const seen = [], orig = CanvasRenderingContext2D.prototype.fillText;
+    CanvasRenderingContext2D.prototype.fillText = function (tx, ...a) { seen.push(String(tx)); return orig.call(this, tx, ...a); };
+    try { drawPFD(); } finally { CanvasRenderingContext2D.prototype.fillText = orig; }
+    o.pfdIn = seen.find(x => / IN$/.test(x)) || '';
+    turn('baro', 'up'); fcpsSync(); o.inStep = document.getElementById('fks-baro').textContent;
+    pfdBaroUnit = 'HPA'; window._qnhHpa = 1013.25;
     // 누름 · 버튼
     altHoldOn = false; document.getElementById('fks-alt').click(); o.altBtn = altHoldOn;
     fcpsSync(); o.altLit = document.getElementById('fks-alt').classList.contains('on');
@@ -38,7 +46,8 @@ export async function run(page, t) {
   t.ok(r.simple && r.tog === 'FULL' && r.saved, `왼쪽 세로 탭을 누르면 SIMPLE — 탭 글씨는 FULL, 고른 것은 기억한다`);
   t.eq(r.lbls, 'IAS,HDG,VS,ALT.A,ALT,CR.HT,NAVD CPL,T-DOWN,T.D.HOV,H.HT,BARO,UPLIM,CRS,DH', '사진의 배치(위 · 아래 · 오른쪽 BARO/UPLIM · CRS/DH)');
   t.ok(r.hdg === 1 && r.alt === 100 && r.crht === -10 && r.hht === 10, `노브를 돌리면 HDG +1 · ALT.A +100 · CR.HT −10 · H.HT +10 (${r.hdg} · ${r.alt} · ${r.crht} · ${r.hht})`);
-  t.ok(r.baro === 1014 && r.std === 1013, `BARO — 돌리면 1 hPa, 누르면 STD 1013 (${r.baro} → ${r.std})`);
+  t.ok(r.baro === 1014 && r.std === 1013.25, `BARO — 돌리면 1 hPa, 누르면 STD 1013.25 hPa (${r.baro} → ${r.std})`);
+  t.ok(r.stdIn === '29.92' && r.pfdIn === '29.92 IN' && r.inStep === '29.93', `IN 으로 보면 STD 29.92 · PFD 29.92 IN · 돌리면 0.01 (${r.stdIn} · ${r.pfdIn} · ${r.inStep})`);
   t.ok(r.altBtn && r.altLit, 'ALT 버튼 — ALT 유지가 걸리고 녹색으로 켜진다');
   t.ok(r.navd, 'NAVD CPL — NAV 결합(지금 FCP 의 NAV 와 같다)');
   t.ok(r.uplimOff, 'UPLIM · DH 는 아직 기능 없이 자리만');

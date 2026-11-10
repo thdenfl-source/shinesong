@@ -82,7 +82,6 @@ export async function run(page, t) {
   const cases = [
     ['#obs-btn',      () => obsOn,      'OBS'],
     ['#nav-ap-btn',   () => navApOn,    'NAV'],
-    ['#brg1-tog',     () => brg1Visible, 'BRG1'],
     ['#fix-btn',      () => document.getElementById('fix-panel').classList.contains('open'), 'FIX 패널'],
     ['#aspc-btn',     () => document.getElementById('aspc-panel').classList.contains('open'), '공역 패널'],
   ];

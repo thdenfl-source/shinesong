@@ -1912,13 +1912,17 @@ function _fcpsBuild() {
   });
   fcpSimpleApply();
 }
-// BARO — QNH(hPa) 를 1 씩 · 누르면 STD(1013)
+// BARO — QNH 를 1 hPa(IN 이면 0.01 inHg) 씩 · 누르면 STD(29.92 inHg = 1013.25 hPa)
+// 표준 기압 — 29.92 inHg = 1013.25 hPa. IN 으로 볼 때는 0.01 inHg 씩, HPA 로 볼 때는 1 hPa 씩 돈다
+const QNH_STD = 1013.25, HPA_PER_IN = 33.8639;
 function fcpsBaro(d) {
-  const q = (typeof window._qnhHpa === 'number' && Number.isFinite(window._qnhHpa)) ? window._qnhHpa : 1013;
-  window._qnhHpa = Math.max(940, Math.min(1060, Math.round(q) + d));
+  const q = (typeof window._qnhHpa === 'number' && Number.isFinite(window._qnhHpa)) ? window._qnhHpa : QNH_STD;
+  const inHg = typeof pfdBaroUnit !== 'undefined' && pfdBaroUnit === 'IN';
+  const nq = inHg ? (Math.round(q / HPA_PER_IN * 100) + d) / 100 * HPA_PER_IN : Math.round(q) + d;
+  window._qnhHpa = Math.max(940, Math.min(1060, nq));
   try { drawPFD(); } catch (e) { _swallow(e); }
 }
-function fcpsBaroStd() { window._qnhHpa = 1013; try { drawPFD(); } catch (e) { _swallow(e); } fcpsSync(); }
+function fcpsBaroStd() { window._qnhHpa = QNH_STD; try { drawPFD(); } catch (e) { _swallow(e); } fcpsSync(); }
 // 노브 아래 작은 값 · 걸린 모드는 노브 테·버튼이 녹색
 function fcpsSync() {
   const p = document.getElementById('fcp-simple');
@@ -1934,7 +1938,8 @@ function fcpsSync() {
   set('alta', String(Math.round(selAlt)));
   set('crht', String(Math.round(selCrht)));
   set('hht', String(Math.round(selHht)));
-  set('baro', String(Math.round(g(() => (Number.isFinite(window._qnhHpa) ? window._qnhHpa : 1013), 1013))));
+  { const q = g(() => (Number.isFinite(window._qnhHpa) ? window._qnhHpa : QNH_STD), QNH_STD);
+    set('baro', (typeof pfdBaroUnit !== 'undefined' && pfdBaroUnit === 'IN') ? (q / HPA_PER_IN).toFixed(2) : String(Math.round(q))); }
   set('crs', fmtA(g(() => (navSrc !== 'FMS' ? vorObsCrs : S.crs), S.crs)) + '°');
   on('ias', g(() => simModeOn && simIasOn, false));
   on('hdg', g(() => hdgSelOn, false));
