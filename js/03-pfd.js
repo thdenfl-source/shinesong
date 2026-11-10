@@ -300,6 +300,7 @@ function drawNpNr(x, y, w, h, P) {
 // ── 스톱워치(HSI 오른쪽 아래 — 메시지 시현창 · HOCAS 창 아래, HOCAS 와 같은 폭) ── FCP 의 STOP WATCH 를 옮겼다
 // 시계 모드: 현재 시각 + [STOP WATCH] · 스톱워치 모드: 경과 시간 + [GO/STP] [RST] [TIME]. 칸을 누르면 그 동작(_swHit · onPfdTap)
 let _swHit = [];
+let _pfdMsgBottom = NaN;   // 메시지 시현창의 아래끝(drawHSI 가 그 프레임에 적는다) — HOCAS 가 그 아래로
 function drawStopwatch(x, y, w, h, cxC) {
   if (!(w >= 40) || !(h >= 40)) return;
   const RC = hsiRightCol(x, y, w, h, cxC);
@@ -434,10 +435,16 @@ function hsiRightCol(x, y, w, h, cxC) {
   const sideW = Math.max(60, G.rightW);
   const fs = Math.max(8, Math.min(11, sideW * 0.10));
   const colW = 8, colGap = 6;                      // HOCAS 오른쪽에 컬렉티브 막대
-  const box = Math.min(sideW - 8 - colW - colGap, h * 0.40);
-  const bx = Math.min(x + w - 8 - box - colW - colGap, G.cx + G.r + 4 + (sideW - box - colW - colGap) / 2);
   const swH = Math.round(fs * 3.6 + 8);            // 스톱워치 칸 높이(시각 한 줄 + 버튼 한 줄)
-  return { G, sideW, fs, colW, colGap, box, bx, left: bx - 4, width: box + colW + colGap + 8, swH, swY: y + h - 6 - swH };
+  const box0 = Math.min(sideW - 8 - colW - colGap, h * 0.40);
+  const bx = Math.min(x + w - 8 - box0 - colW - colGap, G.cx + G.r + 4 + (sideW - box0 - colW - colGap) / 2);
+  // 메시지 시현창(바람 아래)을 가리지 않게 — 그 아래 남는 높이에 맞춰 HOCAS 만 줄인다(왼쪽 끝은 그대로 · 스톱워치는 제 폭)
+  let box = box0;
+  if (Number.isFinite(_pfdMsgBottom)) {
+    const room = (y + h - 6 - swH - 4) - (_pfdMsgBottom + 4) - (fs * 4.8 + 18);
+    box = Math.max(30, Math.min(box0, room));
+  }
+  return { G, sideW, fs, colW, colGap, box, bx, left: bx - 4, width: box0 + colW + colGap + 8, swH, swY: y + h - 6 - swH };
 }
 function drawHocas(x, y, w, h, cxC) {
   if (!(w >= 40) || !(h >= 40)) return;
@@ -1440,6 +1447,7 @@ function drawHSI(x, y, w, h, cxC) {
     ctx.restore();
     // ── 메시지 시현창(바람 정보 아래) ── 콘솔 스위치 · 엔진 상태를 따른다(pfdMsgs)
     const msgs = pfdMsgs();
+    _pfdMsgBottom = wdY + fs * 1.1 + 4;    // 바람 글자 아래끝(메시지가 없을 때)
     if (msgs.length) {
       ctx.save();
       const mx0 = rightX, mw = Math.max(20, x + w - 4 - rightX);
@@ -1450,6 +1458,7 @@ function drawHSI(x, y, w, h, cxC) {
       ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
       let my = wdY + fs * 1.1 + 6 + mfs * 1.25;
       msgs.forEach(m => { ctx.fillStyle = m.c; ctx.fillText(m.t, mx0 + 2, my); my += mfs * 1.3; });
+      _pfdMsgBottom = my - mfs * 1.3 + mfs * 0.35;
       ctx.restore();
     }
   }
