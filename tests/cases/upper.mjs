@@ -12,7 +12,7 @@ export async function run(page, t) {
     ovhdOn((id, v, prev) => window._ovhdLog.push([id, v, prev]));
     return { shown: !w.classList.contains('page-hidden') && r.width > 100,
              plates: w.querySelectorAll('.ov-plate').length,
-             ctrls: w.querySelectorAll('[data-ov]').length, defs: Object.keys(_ovhdDefs).length,
+             ctrls: w.querySelectorAll('[data-ov]').length, defs: OVHD_PLATES.flatMap(p => p.items.filter(i => i.id)).length,
              tab: !!document.querySelector('#page-tabs [data-sel="ovhd"].active') };
   });
   t.ok(info.shown && info.tab, `UPPER 탭으로 상부 콘솔이 열린다`);

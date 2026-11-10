@@ -329,7 +329,10 @@ function _sysFuelPage(g, F) {
     g.fillStyle = '#fff'; g.textAlign = 'center'; g.font = _f(txt2 ? 10 : 11);
     if (txt2) { g.fillText(txt, x, y - 1); g.fillText(txt2, x, y + 11); } else g.fillText(txt, x, y + 4);
   };
-  pump(542, 297, 14, 'BP', '', run1); pump(663, 297, 14, 'BP', '', run2); pump(602, 300, 21, 'TP', 'AUTO', true);
+  // 하부 콘솔 FUEL 패널(19-lower.js) — BP1/BP2 부스터 펌프 · XFER 선택
+  const xfer = _ov('xferSel', 'AUTO');
+  pump(542, 297, 14, 'BP', '', run1 && _ov('bp1', 'BP1') !== 'OFF'); pump(663, 297, 14, 'BP', '', run2 && _ov('bp2', 'BP2') !== 'OFF');
+  pump(602, 300, 21, 'TP', xfer, xfer !== 'OFF');
   g.strokeStyle = '#e8e8e8'; g.lineWidth = 2.5; g.strokeRect(714, 330, 92, 63);
   pump(739, 371, 16, 'TP1', '', true); pump(782, 371, 16, 'TP2', '', true);
   g.strokeStyle = '#e8e8e8'; g.strokeRect(400, 330, 90, 63);
@@ -565,7 +568,8 @@ function _sysAfcsPage(g) {
         g.fillStyle = hot ? '#ff2020' : '#c01010'; g.fillRect(x - 24, y - 26, 48, 26);
         g.fillStyle = '#fff'; g.font = _f(13, false); g.fillText(act, x, y - 8);
       } else if (!P) {
-        g.fillStyle = ase ? '#22e022' : '#e8d000'; g.font = _f(13, false); g.fillText(ase ? 'ON' : 'OFF', x, y - 8);
+        const on = ase && _ov('ap' + n, 'OUT') !== 'IN';   // 하부 콘솔 AFCAU 의 AP1/AP2 OFF 를 누르면 그 레인 OFF
+        g.fillStyle = on ? '#22e022' : '#e8d000'; g.font = _f(13, false); g.fillText(on ? 'ON' : 'OFF', x, y - 8);
       }
       g.fillStyle = '#fff'; g.font = _f(13, false); g.fillText(lbl, x, y + 20);
     });
@@ -711,9 +715,12 @@ function _sysStatusPage(g, F) {
   kv(357, 600, 490, 'AFT (LH) Fuel High', 'OK'); kv(357, 600, 507, 'FWD (RH) Fuel High', 'OK');
   panel(347, 532, 610, 668, '');
   const eng = F.f1 > 0 || F.f2 > 0, mainLeft = (fuel.mainL + fuel.mainR) > 0;
-  [['Crossfeed Valve Position', 'Closed', Y], ['Transfer Pump State', eng ? 'On' : 'Off', eng ? '#fff' : Y],
-   ['F5 Transfer Pump Flow', eng && mainLeft ? 'On' : 'Off', eng && mainLeft ? '#fff' : Y], ['I-AUX Fuel Pump Control', 'Off', Y],
-   ['E-AUX1 Fuel Pump Control', 'Off', Y], ['E-AUX2 Fuel Pump Control', 'Off', Y]].forEach((r, i) => kv(357, 600, 551 + i * 19, r[0], r[1], r[2]));
+  // 하부 콘솔 FUEL 패널 — X-FEED · XFER · F5/AUX XFER
+  const xf = _ov('xFeed', 'OFF') !== 'OFF', tp = eng && _ov('xferSel', 'AUTO') !== 'OFF', f5 = eng && mainLeft && _ov('f5Xfer', 'AUTO') !== 'OFF';
+  const auxv = id => { const a = _ov(id, 'AUTO'); return a === 'ON' ? ['On', '#fff'] : a === 'AUTO' ? ['Auto', '#fff'] : ['Off', Y]; };
+  [['Crossfeed Valve Position', xf ? 'Open' : 'Closed', xf ? '#fff' : Y], ['Transfer Pump State', tp ? 'On' : 'Off', tp ? '#fff' : Y],
+   ['F5 Transfer Pump Flow', f5 ? 'On' : 'Off', f5 ? '#fff' : Y], ['I-AUX Fuel Pump Control', 'Off', Y],
+   ['E-AUX1 Fuel Pump Control', ...auxv('aux1Xfer')], ['E-AUX2 Fuel Pump Control', ...auxv('aux2Xfer')]].forEach((r, i) => kv(357, 600, 551 + i * 19, r[0], r[1], r[2]));
   // 화재 탐지 — FIRE DETECTOR 노브를 시험 자리로 돌리면 그 항목이 FIRE(붉게)
   const det = _ov('fireDet', 'OPER');
   panel(615, 30, 800, 136, 'Fire Detection');
