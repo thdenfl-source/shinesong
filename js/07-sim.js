@@ -1957,3 +1957,48 @@ function toggleFcpSimple() {
 }
 try { _fcpsBuild(); } catch (e) { _swallow(e); }
 setInterval(() => { try { fcpsSync(); } catch (e) { _swallow(e); } }, 250);
+
+// ══════════════════════════════════════════════════════
+// PFD 소프트키(터치바) — 실기 PFD 아래쪽 12칸. FCP 맨 위 한 줄(FULL · SIMPLE 어느 쪽에서도 보인다).
+//   Map Range − · Map Range + · PFD Map Settings · Traffic Map · PFD Settings · OBS · Active NAV · Sensors ·
+//   Hover Display · Hover Position · CAS · (빈칸)
+// 지금 기능이 있는 칸: OBS(지금 FCP 의 OBS) · Active NAV(FMS → NAV1 → NAV2 순환) · Hover Display(HSI ⇄ HOVER).
+// 켜진 칸은 아래에 녹색 바. 나머지 칸은 차차 기능을 붙인다(지금은 자리만 · Hover Position · CAS 는 흐리게).
+const PFD_SK = [
+  { id: 'mapdn', lbl: 'Map<br>Range −' }, { id: 'mapup', lbl: 'Map<br>Range +' },
+  { id: 'pfdmap', lbl: 'PFD Map<br>Settings' }, { id: 'tfc', lbl: 'Traffic<br>Map' },
+  { id: 'pfdset', lbl: 'PFD<br>Settings' }, { id: 'obs', lbl: 'OBS', act: 'toggleObs' },
+  { id: 'nav', lbl: 'Active NAV', act: 'pfdSkNavCycle', sub: true }, { id: 'sens', lbl: 'Sensors' },
+  { id: 'hov', lbl: 'Hover<br>Display', act: 'toggleHoverPage' }, { id: 'hpos', lbl: 'Hover<br>Position', dim: true },
+  { id: 'cas', lbl: 'CAS', dim: true }, { id: 'blank', lbl: '' },
+];
+function _pfdSkBuild() {
+  const bar = document.querySelector('#pfd-wrap .ctrl-bar');
+  if (!bar || document.getElementById('pfd-sk')) return;
+  const sk = document.createElement('div'); sk.id = 'pfd-sk';
+  sk.innerHTML = PFD_SK.map(k => `<div class="pfd-sk${k.dim ? ' dim' : ''}${k.act ? '' : ' none'}" id="sk-${k.id}"${k.act ? ` data-act="${k.act}"` : ''}>` +
+    `<span>${k.lbl}</span>${k.sub ? '<em id="sk-nav-src"></em>' : ''}<i></i></div>`).join('');
+  // 세로 탭(SIMPLE/FULL) 다음 · FCP 줄들 앞
+  const tog = document.getElementById('fcps-tog');
+  if (tog) tog.after(sk); else bar.prepend(sk);
+  pfdSkSync();
+}
+// Active NAV — FMS → NAV1 → NAV2 → FMS
+function pfdSkNavCycle() {
+  const order = ['FMS', 'NAV1', 'NAV2'];
+  const i = order.indexOf(navSrc);
+  setNavSrc(order[(i + 1) % order.length]);
+  pfdSkSync();
+}
+function pfdSkSync() {
+  const set = (id, on) => { const e = document.getElementById('sk-' + id); if (e && e.classList.contains('on') !== !!on) e.classList.toggle('on', !!on); };
+  set('obs', obsOn);
+  set('hov', hoverPageOn);
+  const src = document.getElementById('sk-nav-src');
+  if (src && src.textContent !== navSrc) src.textContent = navSrc;
+  // Hover Display 는 지금 FCP 의 HOVER PAGE 처럼 80kt 아래(또는 켜져 있을 때)만 누를 수 있다
+  const hb = document.getElementById('hover-btn'), h = document.getElementById('sk-hov');
+  if (hb && h && h.classList.contains('off') !== hb.disabled) h.classList.toggle('off', hb.disabled);
+}
+try { _pfdSkBuild(); } catch (e) { _swallow(e); }
+setInterval(() => { try { pfdSkSync(); } catch (e) { _swallow(e); } }, 250);
