@@ -27,12 +27,19 @@ const FUEL_MAX = 2500;                              // 채울 수 있는 끝(lbs
 const FUEL_XFER_PPH = 1000;                         // 이송 펌프가 집합 탱크로 보내는 빠르기(lbs/h)
 const FUEL_LOW_LBS = 165;                           // FUEL n LOW — 집합 탱크가 이 아래
 const FUEL_IMB_LBS = 200;                           // FUEL IMBALANCE — 양쪽 차가 이 위
-let fuel = { ft1: 266, ft2: 305, mainL: 690, mainR: 653, aux: 0 };   // L 956 · R 958 · 합 1914
+// AUX 탱크(EXT AUX1 왼쪽 · EXT AUX2 오른쪽) — 처음 525 lbs 씩. 하부 콘솔 AUX1/AUX2 XFER 로 주 탱크에 보낸다:
+//   AUTO — 그쪽 주 탱크가 100 lbs 넘게 비면 이송 펌프가 저절로 돌고 거의 차면 멈춘다
+//   ON   — AUX 에 연료가 있는 한 주 탱크가 찰 때까지 늘 보낸다   · OFF — 보내지 않는다
+const FUEL_AUX_FULL = 525, FUEL_AUX_PPH = 600;
+const FUEL_MAIN_CAP = { L: 690, R: 653 };          // 주 탱크(제 쪽 몫)가 찬 양
+let fuel = { ft1: 266, ft2: 305, mainL: 690, mainR: 653, auxL: FUEL_AUX_FULL, auxR: FUEL_AUX_FULL };   // L 956 · R 958 · AUX 1050
+const auxPump = { 1: false, 2: false };             // 이송 펌프가 돌고 있나(Fuel 화면의 TP 심벌)
 let sysFltSec = 0;                                  // FLT — 비행 시간(시뮬 시간)
 function fuelLeft()  { return fuel.ft1 + fuel.mainL; }
 function fuelRight() { return fuel.ft2 + fuel.mainR; }
-function fuelTotal() { return fuelLeft() + fuelRight() + fuel.aux; }
-// 합을 정해 양쪽에 반씩 채운다 — 집합 탱크를 먼저 채우고 나머지는 주 탱크로
+function fuelAux()   { return fuel.auxL + fuel.auxR; }
+function fuelTotal() { return fuelLeft() + fuelRight() + fuelAux(); }
+// 기내 연료(L + R)의 합을 정해 양쪽에 반씩 채운다 — 집합 탱크를 먼저 채우고 나머지는 주 탱크로(AUX 는 그대로)
 function fuelSetTotal(lbs) {
   const tot = Math.max(0, Math.min(FUEL_MAX, Number(lbs) || 0));
   const side = n => {
@@ -40,11 +47,25 @@ function fuelSetTotal(lbs) {
     return { ft, main: half - ft };
   };
   const a = side(1), b = side(2);
-  fuel = { ft1: a.ft, ft2: b.ft, mainL: a.main, mainR: b.main, aux: 0 };
+  fuel = { ft1: a.ft, ft2: b.ft, mainL: a.main, mainR: b.main, auxL: fuel.auxL, auxR: fuel.auxR };
   _fuelCduRefresh();
 }
-function fuelAdjust(d) { fuelSetTotal(fuelTotal() + Number(d || 0)); }
-function fuelReset() { fuel = { ft1: 266, ft2: 305, mainL: 690, mainR: 653, aux: 0 }; sysFltSec = 0; _fuelCduRefresh(); }
+function fuelAdjust(d) { fuelSetTotal(fuelLeft() + fuelRight() + Number(d || 0)); }
+function fuelReset() {
+  fuel = { ft1: 266, ft2: 305, mainL: 690, mainR: 653, auxL: FUEL_AUX_FULL, auxR: FUEL_AUX_FULL };
+  auxPump[1] = auxPump[2] = false; sysFltSec = 0; _fuelCduRefresh();
+}
+// AUX 이송 펌프 — 스위치(하부 콘솔)와 주 탱크 양으로 돌지 정한다
+function fuelAuxPumps() {
+  [[1, 'auxL', 'mainL', 'L'], [2, 'auxR', 'mainR', 'R']].forEach(([n, ak, mk, side]) => {
+    const mode = _ov(n === 1 ? 'aux1Xfer' : 'aux2Xfer', 'AUTO'), cap = FUEL_MAIN_CAP[side];
+    let on;
+    if (fuel[ak] <= 0 || mode === 'OFF') on = false;
+    else if (mode === 'ON') on = fuel[mk] < cap - 0.5;
+    else on = auxPump[n] ? fuel[mk] < cap - 10 : fuel[mk] < cap - 100;   // AUTO — 100 비면 돌고 거의 차면 멈춘다
+    auxPump[n] = on;
+  });
+}
 // 주 탱크 셋으로 나눠 보인다(처음 양의 비)
 function fuelMainSplit() {
   const m = fuel.mainL + fuel.mainR, m0 = FUEL_MAIN0.fwd + FUEL_MAIN0.aft + FUEL_MAIN0.f5;
@@ -80,7 +101,14 @@ function sysTick() {
       fuel[ftKey] += x; fuel[mainKey] -= x;
     };
     burn('ft1', 'mainL', f1); burn('ft2', 'mainR', f2);
+    // AUX → 주 탱크
+    [[1, 'auxL', 'mainL', 'L'], [2, 'auxR', 'mainR', 'R']].forEach(([n, ak, mk, side]) => {
+      if (!auxPump[n]) return;
+      const x = Math.min(fuel[ak], FUEL_MAIN_CAP[side] - fuel[mk], FUEL_AUX_PPH * dt / 3600);
+      if (x > 0) { fuel[ak] -= x; fuel[mk] += x; }
+    });
   }
+  fuelAuxPumps();
   const w = document.getElementById('sysp-wrap');
   if (w && !w.classList.contains('page-hidden')) sysDraw();
   _fuelCduRefresh();
@@ -218,7 +246,7 @@ function _sysLeftStrip(g, F) {
   g.font = _f(9); g.fillText('L', 33, 548); g.fillText('R', 90, 548);
   g.font = _f(14); g.fillText(r0(fuelLeft()), 33, 564); g.fillText(r0(fuelRight()), 90, 564);
   g.textAlign = 'left'; g.font = _f(11); g.fillText('Aux', 28, 594); g.fillText('Total', 28, 613);
-  g.textAlign = 'right'; g.font = _f(13); g.fillText(r0(fuel.aux), 96, 594); g.fillText(r0(fuelTotal()), 96, 613);
+  g.textAlign = 'right'; g.font = _f(13); g.fillText(r0(fuelAux()), 96, 594); g.fillText(r0(fuelTotal()), 96, 613);
   // Battery · ACCP
   // 배터리 — 전기 계통(elecState)과 같은 값(충전 + · 방전 −)
   let bat = { a: 0, v: 25 };
@@ -294,7 +322,7 @@ function _sysFuelPage(g, F) {
     g.fillStyle = '#fff'; g.textAlign = 'center'; g.font = _f(19); g.fillText(l1, x, y); g.fillText(l2, x, y + 22);
   };
   big(488, 92, 'Left', `${r0(L)} LBS`); big(592, 92, 'Total', `${r0(T)} LBS`);
-  big(698, 92, 'Right', `${r0(R)} LBS`); big(815, 90, 'AUX', `${r0(fuel.aux)} LBS`);
+  big(698, 92, 'Right', `${r0(R)} LBS`); big(815, 90, 'AUX', `${r0(fuelAux())} LBS`);
   const tankLbl = (x, y, a, b) => {
     g.fillStyle = '#fff'; g.textAlign = 'center'; g.font = _f(13); g.fillText(a, x, y);
     g.font = _f(14); const w1 = g.measureText(b).width; g.fillText(b, x - 8, y + 20);
@@ -305,8 +333,10 @@ function _sysFuelPage(g, F) {
   ln([[312, 200], [312, 297], [361, 297]], run1); ln([[417, 297], [435, 297]], run1); ln([[491, 297], [528, 297]], run1);
   ln([[892, 200], [892, 297], [845, 297]], run2); ln([[787, 297], [770, 297]], run2); ln([[713, 297], [677, 297]], run2);
   ln([[870, 297], [870, 312], [905, 312], [905, 516]], run2);
-  ln([[705, 330], [705, 322], [760, 322], [760, 330]]);                    // TP 배관
-  ln([[705, 322], [705, 465], [648, 465]]);
+  // AUX 이송 배관 — 펌프가 돌 때 녹색(AUX2 → F5 · AUX1 → AFT)
+  ln([[705, 330], [705, 322], [760, 322], [760, 330]], auxPump[2]);
+  ln([[705, 322], [705, 465], [648, 465]], auxPump[2]);
+  ln([[445, 393], [445, 415], [507, 415]], auxPump[1]);
   ln([[466, 498], [556, 498]]);                                             // 급유구 → F5
   g.strokeStyle = SYS_LINE; g.lineWidth = 3;
   g.beginPath(); g.moveTo(312, 215); g.lineTo(320, 215); g.stroke();     // 압력 탭
@@ -333,10 +363,12 @@ function _sysFuelPage(g, F) {
   const xfer = _ov('xferSel', 'AUTO');
   pump(542, 297, 14, 'BP', '', run1 && _ov('bp1', 'BP1') !== 'OFF'); pump(663, 297, 14, 'BP', '', run2 && _ov('bp2', 'BP2') !== 'OFF');
   pump(602, 300, 21, 'TP', xfer, xfer !== 'OFF');
-  g.strokeStyle = '#e8e8e8'; g.lineWidth = 2.5; g.strokeRect(714, 330, 92, 63);
-  pump(739, 371, 16, 'TP1', '', true); pump(782, 371, 16, 'TP2', '', true);
-  g.strokeStyle = '#e8e8e8'; g.strokeRect(400, 330, 90, 63);
-  tankLbl(355, 352, 'EXT AUX1', '0'); tankLbl(856, 352, 'EXT AUX2', '0');
+  // EXT AUX1 · AUX2 — 채움, 펌프가 돌 때만 TP 심벌
+  _sysTank(g, 400, 330, 90, 63, fuel.auxL / FUEL_AUX_FULL);
+  _sysTank(g, 714, 330, 92, 63, fuel.auxR / FUEL_AUX_FULL);
+  if (auxPump[1]) pump(445, 361, 17, 'TP', '', true);
+  if (auxPump[2]) { pump(739, 371, 16, 'TP1', '', true); pump(782, 371, 16, 'TP2', '', true); }
+  tankLbl(355, 352, 'EXT AUX1', r0(fuel.auxL)); tankLbl(856, 352, 'EXT AUX2', r0(fuel.auxR));
   // 경고 칸
   _sysAnn(g, 284, 231, 60, 37, 'MFSOV 1', 'CLOSE', false);
   _sysAnn(g, 863, 230, 60, 37, 'MFSOV 2', 'CLOSE', false);
@@ -374,7 +406,8 @@ function fuelCduHtml() {
     `<div style="display:flex;gap:6px;margin-bottom:8px">${btn('−100', 'fuelAdjust', [-100])}${btn('+100', 'fuelAdjust', [100])}</div>` +
     `<div style="color:#567;font-size:10px;margin:4px 0">합계로 정하기(LBS)</div>` +
     `<div style="display:flex;gap:6px;margin-bottom:8px">${[1000, 1500, 2000, FUEL_MAX].map(v => btn(String(v), 'fuelSetTotal', [v])).join('')}</div>` +
-    `<div style="display:flex;gap:6px">${btn('RESET (1914)', 'fuelReset', [])}</div>` +
+    `<div style="text-align:center;margin:4px 0 8px">AUX L <b id="fuelc-al" style="color:#fff"></b> · R <b id="fuelc-ar" style="color:#fff"></b> LBS</div>` +
+    `<div style="display:flex;gap:6px">${btn('RESET (1914 + AUX 1050)', 'fuelReset', [])}</div>` +
     `<div style="color:#567;font-size:10px;margin-top:12px">SYSTEM 창(탭 'SYSTEM')에 Fuel 계통도가 보입니다.</div></div>`;
 }
 function _fuelCduRefresh() {
@@ -385,6 +418,7 @@ function _fuelCduRefresh() {
   set('fuelc-l', String(Math.round(fuelLeft()))); set('fuelc-r', String(Math.round(fuelRight())));
   set('fuelc-t', String(Math.round(fuelTotal())) + ' LBS');
   set('fuelc-ff', String(Math.round(ff)));
+  set('fuelc-al', String(Math.round(fuel.auxL)) + (auxPump[1] ? ' ▸' : '')); set('fuelc-ar', String(Math.round(fuel.auxR)) + (auxPump[2] ? ' ▸' : ''));
   set('fuelc-end', ff > 0 ? `${Math.floor(fuelTotal() / ff)}+${String(Math.floor((fuelTotal() / ff % 1) * 60)).padStart(2, '0')}` : '—');
 }
 
@@ -695,8 +729,8 @@ function _sysStatusPage(g, F) {
     g.fillStyle = '#fff'; g.fillText('0', 592, y);
   };
   [['FWD Fuel', M.fwd], ['FT1 Fuel', fuel.ft1, lowFt(1)], ['FT2 Fuel', fuel.ft2, lowFt(2)], ['AFT Fuel', M.aft], ['FT5 Fuel', M.f5],
-   ['I-AUX Fuel', 0], ['E-AUX1 Fuel', 0], ['E-AUX2 Fuel', 0]].forEach((r, i) => frow(92 + i * 15.2, r[0], r[1], r[2]));
-  frow(248, 'R-Fuel', fuelRight(), lowFt(2)); frow(263, 'L-Fuel', fuelLeft(), lowFt(1)); frow(279, 'AUX Fuel', fuel.aux);
+   ['I-AUX Fuel', 0], ['E-AUX1 Fuel', fuel.auxL], ['E-AUX2 Fuel', fuel.auxR]].forEach((r, i) => frow(92 + i * 15.2, r[0], r[1], r[2]));
+  frow(248, 'R-Fuel', fuelRight(), lowFt(2)); frow(263, 'L-Fuel', fuelLeft(), lowFt(1)); frow(279, 'AUX Fuel', fuelAux());
   frow(316, 'Total Fuel', fuelTotal(), fuelTotal() < 2 * FUEL_LOW_LBS);
   panel(347, 341, 610, 465, '');
   g.textAlign = 'center'; g.font = _f(12, false); g.fillStyle = '#fff'; g.fillText('Left', 520, 356); g.fillText('Right', 585, 356);
@@ -717,7 +751,8 @@ function _sysStatusPage(g, F) {
   const eng = F.f1 > 0 || F.f2 > 0, mainLeft = (fuel.mainL + fuel.mainR) > 0;
   // 하부 콘솔 FUEL 패널 — X-FEED · XFER · F5/AUX XFER
   const xf = _ov('xFeed', 'OFF') !== 'OFF', tp = eng && _ov('xferSel', 'AUTO') !== 'OFF', f5 = eng && mainLeft && _ov('f5Xfer', 'AUTO') !== 'OFF';
-  const auxv = id => { const a = _ov(id, 'AUTO'); return a === 'ON' ? ['On', '#fff'] : a === 'AUTO' ? ['Auto', '#fff'] : ['Off', Y]; };
+  const auxv = id => { const a = _ov(id, 'AUTO'), on = auxPump[id === 'aux1Xfer' ? 1 : 2];
+    return a === 'ON' || on ? ['On', '#fff'] : a === 'AUTO' ? ['Auto', '#fff'] : ['Off', Y]; };
   [['Crossfeed Valve Position', xf ? 'Open' : 'Closed', xf ? '#fff' : Y], ['Transfer Pump State', tp ? 'On' : 'Off', tp ? '#fff' : Y],
    ['F5 Transfer Pump Flow', f5 ? 'On' : 'Off', f5 ? '#fff' : Y], ['I-AUX Fuel Pump Control', 'Off', Y],
    ['E-AUX1 Fuel Pump Control', ...auxv('aux1Xfer')], ['E-AUX2 Fuel Pump Control', ...auxv('aux2Xfer')]].forEach((r, i) => kv(357, 600, 551 + i * 19, r[0], r[1], r[2]));
