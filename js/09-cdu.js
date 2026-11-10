@@ -199,23 +199,16 @@ function init(){
     const CTRL_H = ctrlEl ? ctrlEl.offsetHeight : 80;
     const W      = cvs.width;
     const H      = cvs.height;
-    const usableH = H - CTRL_H;
-    const tapW   = Math.max(56, Math.min(76, W * 0.082));
-    const vsiW   = Math.max(28, Math.min(38, W * 0.046));
-    const aiX    = tapW;
-    const aiW    = W - tapW * 2 - vsiW;
-    const aiH    = Math.floor(usableH * 0.52);
+    const L      = pfdLayout(W, H, CTRL_H);       // drawPFD 와 같은 배치(03-pfd.js)
+    const aiX    = L.ai.x, aiW = L.ai.w;
 
-    // Right-column header box (where selAlt / selCrht + VS are shown)
+    // Header boxes (where selAlt / selCrht + VS are shown)
     const HEAD_H   = 26;
-    const altX     = W - tapW - vsiW;
-    const altRight = W - vsiW;                  // ALT tape right edge (top half)
-    const crhtRight = W;                        // CRHT display right edge (bottom half — full width incl. former VSI column)
 
-    // — ALT tape header (top half, x in [altX, altRight]) —
+    // — ALT tape header (x in alt tape) —
     // Header is sub-divided: top half ≈ selAlt, bottom half ≈ selVS
-    if (py >= 0 && py <= HEAD_H && px >= altX && px <= altRight) {
-      if (py < HEAD_H * 0.5) {
+    if (py >= L.alt.y && py <= L.alt.y + HEAD_H && px >= L.alt.x && px <= L.alt.x + L.alt.w) {
+      if (py < L.alt.y + HEAD_H * 0.5) {
         const v = await uiPrompt('ALT preselect (ft):', selAlt, { numeric: true });
         if (v !== null) { const n = parseInt(v, 10); if (!isNaN(n) && n >= 0) selAlt = n; }
       } else {
@@ -227,7 +220,7 @@ function init(){
     // — CRHT display header (bottom half, x in [altX, crhtRight]) —
     // Tap for a free-form CRHT target entry (alternative to the
     // 10 ft step CRHT +/- buttons in the ctrl-bar's first row).
-    if (py >= aiH && py <= aiH + HEAD_H && px >= altX && px <= crhtRight) {
+    if (py >= L.crht.y && py <= L.crht.y + HEAD_H && px >= L.crht.x && px <= L.crht.x + L.crht.w) {
       const v = await uiPrompt('CRHT preselect (ft):', selCrht, { numeric: true });
       if (v !== null) { const n = parseInt(v, 10); if (!isNaN(n) && n >= 0) selCrht = n; }
       return;
@@ -1292,10 +1285,10 @@ function _parseMetar(raw) {
 
   // QNH
   const qm = raw.match(/\bQ(\d{4})\b/);
-  if (qm) p.qnh = `Q${qm[1]} hPa`;
+  if (qm) { p.qnh = `Q${qm[1]} hPa`; window._qnhHpa = parseInt(qm[1], 10); }
   else {
     const am = raw.match(/\bA(\d{4})\b/);
-    if (am) p.qnh = `${(parseInt(am[1]) / 100).toFixed(2)} inHg (≈${Math.round(parseInt(am[1]) / 100 * 33.8639)} hPa)`;
+    if (am) { p.qnh = `${(parseInt(am[1]) / 100).toFixed(2)} inHg (≈${Math.round(parseInt(am[1]) / 100 * 33.8639)} hPa)`; window._qnhHpa = parseInt(am[1]) / 100 * 33.8639; }
   }
 
   return p;
