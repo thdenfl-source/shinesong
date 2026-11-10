@@ -1877,7 +1877,7 @@ function act(name, ...args) {
         { id: 'util', text: 'Utilities', icon: '<svg viewBox="0 0 100 100"><path d="M62 22 C75 22, 84 32, 80 44 L48 76 C44 88, 28 88, 22 78 C16 68, 22 54, 34 52 L66 20" fill="none" stroke="#9e9e9e" stroke-width="8" stroke-linecap="round"/><circle cx="34" cy="66" r="8" fill="none" stroke="#9e9e9e" stroke-width="5"/><line x1="72" y1="22" x2="82" y2="12" stroke="#9e9e9e" stroke-width="6" stroke-linecap="round"/></svg>' },
         /* AS-565 Performance — orange trend line */
         /* INFO — 비행장 정보 (control tower + freq) */
-        { id: 'afld', text: 'INFO', icon: '<svg viewBox="0 0 100 100"><rect x="42" y="30" width="16" height="52" fill="#00e5ff"/><polygon points="34,30 66,30 58,18 42,18" fill="#00e5ff"/><circle cx="50" cy="12" r="4" fill="#ff5252"/><path d="M62 20 a14 14 0 0 1 10 10" fill="none" stroke="#ffca28" stroke-width="4"/><path d="M38 20 a14 14 0 0 0 -10 10" fill="none" stroke="#ffca28" stroke-width="4"/><rect x="30" y="82" width="40" height="6" fill="#00e5ff"/></svg>' },
+        { id: 'afld', text: 'Airport<br>INFO', icon: '<svg viewBox="0 0 100 100"><rect x="42" y="30" width="16" height="52" fill="#00e5ff"/><polygon points="34,30 66,30 58,18 42,18" fill="#00e5ff"/><circle cx="50" cy="12" r="4" fill="#ff5252"/><path d="M62 20 a14 14 0 0 1 10 10" fill="none" stroke="#ffca28" stroke-width="4"/><path d="M38 20 a14 14 0 0 0 -10 10" fill="none" stroke="#ffca28" stroke-width="4"/><rect x="30" y="82" width="40" height="6" fill="#00e5ff"/></svg>' },
         /* Row 5 */
         /* SkyVector — 항공 차트 (지구+경위선) */
         { id: 'skyvector', text: 'SkyVector', icon: '<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="34" fill="none" stroke="#00e5ff" stroke-width="4"/><ellipse cx="50" cy="50" rx="14" ry="34" fill="none" stroke="#00e5ff" stroke-width="3"/><line x1="16" y1="50" x2="84" y2="50" stroke="#00e5ff" stroke-width="3"/><line x1="50" y1="16" x2="50" y2="84" stroke="#00e5ff" stroke-width="3"/></svg>' },
@@ -1960,7 +1960,30 @@ function act(name, ...args) {
 
     // Waypoint Info — 하위 화면 묶음(지금은 INFO · 차차 더한다). 그림은 실기 CDU 사진(자홍 마름모 · 하늘색 육각 · 삼각)
     const wptInfoBtn = { id: 'wptinfo', text: 'Waypoint<br>Info', icon: '<svg viewBox="2 26 96 48"><g transform="rotate(-30 22 50)"><rect x="8" y="36" width="28" height="28" rx="6" fill="#e020d0"/><rect x="19" y="40" width="6" height="20" rx="2" fill="#fff"/></g><polygon points="50,36 62,36 68,50 62,64 50,64 44,50" fill="#00d8ff"/><circle cx="56" cy="50" r="6" fill="#000"/><polygon points="80,36 94,62 66,62" fill="#00d8ff"/></svg>' };
-    const WPT_INFO_IDS = ['afld'];
+    // Waypoint Info 하위 — 실기 CDU 사진의 자리(3칸씩): Airport · INT · VOR / NDB · VRP · User Waypoint / Create Waypoint · Airport INFO
+    // Airport INFO(비행장 정보) 말고는 아직 '준비 중' 화면(renderWptPage)
+    const WPT_SUB_BTNS = [
+        { id: 'wpt_apt', text: 'Airport', icon: '<svg viewBox="0 0 100 100"><g fill="#c0158f"><rect x="45" y="10" width="10" height="16"/><rect x="45" y="74" width="10" height="16"/><rect x="10" y="45" width="16" height="10"/><rect x="74" y="45" width="16" height="10"/></g><circle cx="50" cy="50" r="28" fill="#c0158f"/><g stroke="#fff" stroke-width="5" stroke-linecap="round"><line x1="32" y1="56" x2="68" y2="44"/><line x1="40" y1="44" x2="44" y2="54"/></g></svg>' },
+        { id: 'wpt_int', text: 'INT', icon: '<svg viewBox="0 0 100 100"><polygon points="50,14 88,84 12,84" fill="#2ab4f0"/></svg>' },
+        { id: 'wpt_vor', text: 'VOR', icon: '<svg viewBox="0 0 100 100"><polygon points="30,16 70,16 82,38 62,72 38,72 18,38" fill="#2ab4f0"/><polygon points="40,36 60,36 64,48 56,60 44,60 36,48" fill="#000"/><circle cx="50" cy="48" r="4" fill="#2ab4f0"/></svg>' },
+        { id: 'wpt_ndb', text: 'NDB', icon: '<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="12" fill="none" stroke="#c0158f" stroke-width="6"/><circle cx="50" cy="50" r="4" fill="#c0158f"/><g fill="#c0158f">' + Array.from({ length: 12 }, (_, i) => { const a = i * Math.PI / 6; return `<circle cx="${(50 + 30 * Math.cos(a)).toFixed(1)}" cy="${(50 + 30 * Math.sin(a)).toFixed(1)}" r="4.5"/>`; }).join('') + '</g></svg>' },
+        { id: 'wpt_vrp', text: 'VRP', icon: '<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="34" fill="none" stroke="#f08c1e" stroke-width="7" stroke-dasharray="14 9"/><polygon points="50,30 68,64 32,64" fill="#f08c1e"/></svg>' },
+        { id: 'wpt_user', text: 'User<br>Waypoint', icon: '<svg viewBox="0 0 100 100"><rect x="26" y="20" width="48" height="48" fill="#f08c1e"/></svg>' },
+        { id: 'wpt_create', text: 'Create<br>Waypoint', icon: '<svg viewBox="0 0 100 100"><rect x="24" y="16" width="46" height="46" fill="#f08c1e"/><g stroke="#ffe000" stroke-width="3"><path d="M20 24 V12 H32"/><path d="M62 12 H74 V24"/><path d="M20 54 V66 H32"/></g><polygon points="52,26 56,36 67,37 59,44 61,55 52,49 43,55 45,44 37,37 48,36" fill="#fff" stroke="#333" stroke-width="1.5"/><line x1="58" y1="46" x2="86" y2="72" stroke="#111" stroke-width="4" stroke-linecap="round"/><line x1="58" y1="46" x2="86" y2="72" stroke="#888" stroke-width="1.5"/></svg>' }
+    ];
+    const WPT_INFO_IDS = ['wpt_apt', 'wpt_int', 'wpt_vor', 'wpt_ndb', 'wpt_vrp', 'wpt_user', 'wpt_create', 'afld'];
+    let _wptPage = 'wpt_apt';
+    function wptOpen(id) { _wptPage = id; switchMode('WPT_PAGE'); }
+    function renderWptPage(container, footer, title) {
+        const b = WPT_SUB_BTNS.find(x => x.id === _wptPage) || WPT_SUB_BTNS[0];
+        const name = b.text.replace(/<br>/g, ' ');
+        title.innerText = name;
+        container.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:14px;color:#567;">` +
+            `<div style="width:84px;height:84px;opacity:.7">${b.icon}</div>` +
+            `<div style="color:#00cfff;font-size:16px;font-weight:bold;letter-spacing:1px;">${name.toUpperCase()}</div>` +
+            `<div style="font-size:12px;">준비 중 — 이 화면은 차차 갖춥니다</div></div>`;
+        footer.innerHTML = cduFooter("switchMode('WPTINFO')");
+    }
     // 홈 배열(사용자 지정) — 4칸씩: MAP·Aircraft Systems·PERF·Charts / Flight Plan·PROC·VNAV·Waypoint Info /
     // NOTAM·Track & Point·Services·Utilities / SkyVector·Tide·ER·Wildfire / Weather·Checklist
     const HOME_ORDER = ['map', 'acsys', 'perf', 'charts', 'fpl', 'proc', 'vnav', 'wptinfo',
@@ -1979,7 +2002,8 @@ function act(name, ...args) {
 
     function renderWptInfoScreen(container, footer, title) {
         title.innerText = "Waypoint Info";
-        container.innerHTML = homeGridHtml(WPT_INFO_IDS.map(id => homeButtons.find(b => b.id === id)).filter(Boolean));
+        const all = WPT_SUB_BTNS.concat(homeButtons);
+        container.innerHTML = homeGridHtml(WPT_INFO_IDS.map(id => all.find(b => b.id === id)).filter(Boolean)).replace('class="home-grid"', 'class="home-grid wpt-grid"');
         footer.innerHTML = cduFooter("switchMode('HOME')");
     }
     function renderAcSysScreen(container, footer, title) {
@@ -2037,7 +2061,7 @@ function act(name, ...args) {
                 'wildfire': "https://fd.forest.go.kr/ffas/"
             };
 
-            let isActiveBtn = btn.id.startsWith('asys_') || ['wxgrp', 'acsys', 'wptinfo', 'weather', 'charts', 'notam', 'metar', 'directTo', 'map', 'fpl', 'serv', 'sys', 'perf', 'util', 'proc', 'cctv', 'vnav', 'check', 'afld', 'skyvector', 'tide', 'eravail', 'wildfire'].includes(btn.id);
+            let isActiveBtn = btn.id.startsWith('asys_') || btn.id.startsWith('wpt_') || ['wxgrp', 'acsys', 'wptinfo', 'weather', 'charts', 'notam', 'metar', 'directTo', 'map', 'fpl', 'serv', 'sys', 'perf', 'util', 'proc', 'cctv', 'vnav', 'check', 'afld', 'skyvector', 'tide', 'eravail', 'wildfire'].includes(btn.id);
             let boxClass = isActiveBtn ? 'icon-box func-active' : 'icon-box';
 
             if (links[btn.id]) {
@@ -2050,6 +2074,7 @@ function act(name, ...args) {
                 let clickAction = btn.id === 'wxgrp' ? `data-act="switchMode" data-arg='["WEATHER"]'` :
                                   btn.id === 'acsys' ? `data-act="switchMode" data-arg='["ACSYS"]'` :
                                   btn.id === 'wptinfo' ? `data-act="switchMode" data-arg='["WPTINFO"]'` :
+                                  btn.id.startsWith('wpt_') ? `data-act="wptOpen" data-arg='["${btn.id}"]'` :
                                   btn.id.startsWith('asys_') ? `data-act="acSysOpen" data-arg='["${btn.id}"]'` :
                                   btn.id === 'sys' ? `data-act="switchMode" data-arg='["TRACKPOINT"]'` :
                                   btn.id === 'perf' ? `data-act="switchMode" data-arg='["PERF"]'` :
@@ -4307,6 +4332,7 @@ function act(name, ...args) {
             case 'WEATHER': renderWeatherScreen(container, footer, title); break;
             case 'ACSYS': renderAcSysScreen(container, footer, title); break;
             case 'WPTINFO': renderWptInfoScreen(container, footer, title); break;
+            case 'WPT_PAGE': renderWptPage(container, footer, title); break;
             case 'ACSYS_PAGE': renderAcSysPage(container, footer, title); break;
             case 'PERF': renderPerfScreen(container, footer, title); break;
             case 'PERF_INPUT': renderPerfInputScreen(container, footer, title); break;
@@ -4844,7 +4870,7 @@ switchMode('HOME');
       openNavSel,
       openProc: () => { if (_soloActive) setSolo('plan'); else goCduPage('plan'); fpGo('IFR'); },
       openUbikais,
-      acSysOpen,
+      acSysOpen, wptOpen,
       pickNavVor,
       prefetchTiles,
       pwaInstall,
