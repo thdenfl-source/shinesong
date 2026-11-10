@@ -173,32 +173,45 @@ function _ovhdItemHtml(it) {
         `<div class="ov-pl top">${_esc(top)}</div>` +
         `<div class="ov-bez"><div class="ov-lever"></div></div>` +
         (n === 3 && it.side ? `<div class="ov-pl side">${_esc(it.pos[1])}</div>` : '') +
-        `<div class="ov-pl bot">${_esc(it.pos[n - 1])}</div></div>`;
+        `<div class="ov-pl bot">${_esc(it.pos[n - 1])}</div>${_ovhdZones(it)}</div>`;
     }
     case 'guard': {
       return `<div class="ov-guard${it.hazard ? ' hazard' : ''}" data-ov="${it.id}" style="${at}">${title}` +
         `<div class="ov-gbody"><div class="ov-pl top">${_esc(it.pos[0])}</div>` +
-        `<div class="ov-bez"><div class="ov-lever"></div></div><div class="ov-pl bot">${_esc(it.pos[1])}</div>` +
+        `<div class="ov-bez"><div class="ov-lever"></div></div><div class="ov-pl bot">${_esc(it.pos[1])}</div>${_ovhdZones(it)}` +
         `<div class="ov-cover" data-ov-cover="${it.id}">${it.num ? `<b>${_esc(it.num)}</b>` : ''}</div></div></div>`;
     }
     case 'rot': case 'dim': {
       const lbls = it.t === 'rot'
-        ? it.pos.map((p, i) => _ovhdRotLbl(p, it.ang[i], it.small ? 44 : 58)).join('')
-        : [[it.lo, DIM.from], [it.mid, 0], [it.hi, DIM.to]].filter(a => a[0]).map(a => _ovhdRotLbl(a[0], a[1], it.small ? 38 : 50)).join('');
+        ? it.pos.map((p, i) => _ovhdRotLbl(p, it.ang[i], it.small ? 44 : 58, p)).join('')
+        : [[it.lo, DIM.from, 0], [it.mid, 0, (DIM.steps - 1) / 2], [it.hi, DIM.to, DIM.steps - 1]].filter(a => a[0])
+            .map(a => _ovhdRotLbl(a[0], a[1], it.small ? 38 : 50, a[2])).join('');
       return `<div class="ov-rot${it.small ? ' sm' : ''}${it.t === 'dim' ? ' dim' : ''}" data-ov="${it.id}" style="${at}">${title}` +
         `<div class="ov-knob"><div class="ov-ptr"></div></div>${lbls}</div>`;
     }
     case 'pb':
-      return `<div class="ov-pb" data-ov="${it.id}" style="${at}">${title}<div class="ov-btn"></div></div>`;
+      return `<div class="ov-pb" data-ov="${it.id}" style="${at}">${title}<div class="ov-btn"></div>` +
+        `<div class="ov-hit" style="left:-36px;top:-40px;width:72px;height:62px"></div></div>`;
     case 'th':
       return `<div class="ov-th" data-ov="${it.id}" style="${at}">${title}` +
         `<div class="ov-thbar"><i></i><span>APU</span><i></i></div></div>`;
   }
   return '';
 }
-function _ovhdRotLbl(txt, ang, r) {
+// 노브의 위치 글자 — 누르면 그 위치로 바로 돈다(data-ov-pos)
+function _ovhdRotLbl(txt, ang, r, val) {
   const a = ang * Math.PI / 180;
-  return `<div class="ov-rl" style="left:${(Math.sin(a) * r).toFixed(1)}px;top:${(-Math.cos(a) * r).toFixed(1)}px">${_esc(txt)}</div>`;
+  return `<div class="ov-rl" data-ov-pos="${_esc(val)}" style="left:${(Math.sin(a) * r).toFixed(1)}px;top:${(-Math.cos(a) * r).toFixed(1)}px">${_esc(txt)}</div>`;
+}
+// ── 터치 영역 ── 토글은 글자 쪽을 누르면 그 위치로 간다:
+//   위 칸(윗글자 + 레버 위쪽) → 맨 위 위치 · 아래 칸(레버 아래쪽 + 아랫글자) → 맨 아래 위치
+//   가운데 띠(3단은 옆 글자까지) → 가운데 위치 — 2단에서는 누를 때마다 바꾼다
+function _ovhdZones(it) {
+  const mid3 = it.pos.length === 3;
+  const side = mid3 && it.side;
+  return `<div class="ov-hit" data-hz="top" style="left:-30px;top:-50px;width:60px;height:43px"></div>` +
+         `<div class="ov-hit" data-hz="mid" style="left:${side ? -64 : -30}px;top:-7px;width:${side ? 94 : 60}px;height:14px"></div>` +
+         `<div class="ov-hit" data-hz="bot" style="left:-30px;top:7px;width:60px;height:36px"></div>`;
 }
 function ovhdBuild() {
   const wrap = document.getElementById('ovhd-wrap');
@@ -208,7 +221,8 @@ function ovhdBuild() {
     OVHD_PLATES.map(p => `<div class="ov-plate" style="left:${p.x}px;top:${p.y}px;width:${p.w}px;height:${p.h}px">` +
       '<i class="ov-screw a"></i><i class="ov-screw b"></i><i class="ov-screw c"></i><i class="ov-screw d"></i>' +
       p.items.map(_ovhdItemHtml).join('') + '</div>').join('') +
-    `</div><button id="ovhd-reset" type="button" title="모든 스위치를 처음 위치로">RESET</button>`;
+    `</div><button id="ovhd-reset" type="button" title="모든 스위치를 처음 위치로">RESET</button>` +
+    `<button id="ovhd-zones" type="button" title="터치 영역을 테두리로 보이기/감추기">ZONES</button>`;
   Object.keys(_ovhdDefs).forEach(_ovhdPaint);
   wrap.addEventListener('pointerdown', _ovhdDown);
   wrap.addEventListener('pointerup', _ovhdUp);
@@ -216,6 +230,10 @@ function ovhdBuild() {
   wrap.addEventListener('pointerleave', _ovhdUp);
   wrap.addEventListener('wheel', _ovhdWheel, { passive: false });
   wrap.querySelector('#ovhd-reset').addEventListener('click', ovhdReset);
+  wrap.querySelector('#ovhd-zones').addEventListener('click', () => {
+    const on = wrap.classList.toggle('ov-zones');
+    wrap.querySelector('#ovhd-zones').classList.toggle('on', on);
+  });
   try { new ResizeObserver(ovhdFit).observe(wrap); } catch (e) { window.addEventListener('resize', ovhdFit); }
   ovhdFit();
 }
@@ -267,11 +285,23 @@ function _ovhdDown(e) {
   const v = ovhdState[id];
   if (d.t === 'tg' || d.t === 'mom' || d.t === 'guard') {
     if (d.t === 'guard' && !_ovhdGuard[id]) return;   // 덮개가 닫혀 있으면 스위치에 손이 닿지 않는다
-    const bez = el.querySelector('.ov-bez').getBoundingClientRect();
-    const up = e.clientY < bez.top + bez.height / 2;
-    const i = d.pos.indexOf(v), j = Math.max(0, Math.min(d.pos.length - 1, i + (up ? -1 : 1)));
+    const n = d.pos.length, i = d.pos.indexOf(v);
+    const hz = e.target.dataset && e.target.dataset.hz;
+    let j;
+    if (hz === 'top') j = 0;                            // 윗글자 쪽 → 맨 위 위치
+    else if (hz === 'bot') j = n - 1;                   // 아랫글자 쪽 → 맨 아래 위치
+    else if (hz === 'mid') j = n === 3 ? 1 : (i === 0 ? 1 : 0);   // 가운데(옆 글자) → 가운데 · 2단은 바꾼다
+    else {                                              // 레버 그 자체 — 누른 쪽으로 한 칸
+      const bez = el.querySelector('.ov-bez').getBoundingClientRect();
+      const up = e.clientY < bez.top + bez.height / 2;
+      j = Math.max(0, Math.min(n - 1, i + (up ? -1 : 1)));
+    }
+    if (d.t === 'mom' && j === 0) return;               // 스프링 스위치는 아래(TEST)로만 누른다
     ovhdSet(id, d.pos[j]);
     if (d.t === 'mom') _ovhdMom = id;
+  } else if ((d.t === 'rot' || d.t === 'dim') && e.target.closest('[data-ov-pos]')) {
+    const pv = e.target.closest('[data-ov-pos]').dataset.ovPos;   // 위치 글자를 누르면 그 위치로 바로
+    ovhdSet(id, d.t === 'dim' ? Number(pv) : pv);
   } else if (d.t === 'rot' || d.t === 'dim') {
     const kb = el.querySelector('.ov-knob').getBoundingClientRect();
     _ovhdTurn(id, e.clientX < kb.left + kb.width / 2 ? -1 : 1);
