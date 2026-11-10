@@ -1978,9 +1978,10 @@ function act(name, ...args) {
         const b = AC_SYS_BTNS.find(x => x.id === _acSysPage) || AC_SYS_BTNS[0];
         const name = b.text.replace(/<br>/g, ' ');
         title.innerText = name;
-        // Fuel — 연료를 넣고 빼는 칸(18-system.js). 나머지는 아직 '준비 중'
-        if (b.id === 'asys_fuel' && typeof fuelCduHtml === 'function') {
-            container.innerHTML = `<div class="acsys-page" data-page="${b.id}">${fuelCduHtml()}</div>`;
+        // 갖춘 계통(18-system.js sysCduHtml — Fuel · Electrical)은 제 칸을, 나머지는 아직 '준비 중'
+        const own = (typeof sysCduHtml === 'function') ? sysCduHtml(b.id) : '';
+        if (own) {
+            container.innerHTML = `<div class="acsys-page" data-page="${b.id}">${own}</div>`;
             footer.innerHTML = cduFooter("switchMode('ACSYS')");
             try { _fuelCduRefresh(); } catch (e) { _swallow(e); }
             return;

@@ -62,4 +62,37 @@ export async function run(page, t) {
   t.ok(r.burn > r.expect * 0.6 && r.burn < r.expect * 1.6 && Math.abs(r.ft1 - 266) < 0.5,
     `돌면 흐름 × 배속만큼 준다(${r.burn.toFixed(2)} lbs · 예상 ${r.expect.toFixed(2)}) · 집합 탱크는 가득 유지(FT1 ${r.ft1.toFixed(1)})`);
   t.ok(r.lowAmber, '집합 탱크가 낮으면 FUEL 1 LOW 칸이 호박색');
+
+  // ── Electrical — 상부 콘솔 스위치를 따른다 ──
+  const e = await page.evaluate(async () => {
+    localStorage.removeItem('ovhdState'); ovhdReset();
+    selectPanel('right', 'sysp', true); await new Promise(res => setTimeout(res, 150));
+    sysPageSet('asys_elec');
+    const pick = st => ({ gen1: st.gen1, gen2: st.gen2, apu: st.apu, ac: st.ac, tru1: st.tru1, tru2: st.tru2, dc: st.dc,
+                          tie: st.tie, genA: Math.round(st.genA), truA: Math.round(st.truA), bat: st.bat.a + '/' + st.bat.v });
+    const o = { norm: pick(elecState()) };
+    const proto = CanvasRenderingContext2D.prototype, orig = proto.fillText, seen = [];
+    proto.fillText = function (x, ...a) { seen.push(String(x)); return orig.call(this, x, ...a); };
+    try { sysDraw(); } finally { proto.fillText = orig; }
+    o.missing = ['Electrical', 'GEN 1', 'GEN 2', 'APU GEN', 'AC GPU', 'AC 1', 'AC 2', 'Primary Bus', 'DIC 1', 'ESS 1', 'N-ESS',
+                 'BATT', 'BATT BUS', 'TRU 1', 'TRU 2', 'DC 1', 'DC 2', 'SEC 1', 'SEC 2', '115A', '60A', '28V', '25.0°C'].filter(x => !seen.includes(x));
+    ovhdSet('gen2', 'OFF'); o.oneGen = pick(elecState());
+    ovhdSet('tru1', 'OFF'); ovhdSet('tru2', 'OFF'); o.noTru = pick(elecState());
+    ovhdSet('apuContr', 'ON'); ovhdSet('apuGen', 'APU GEN'); o.apu = pick(elecState());
+    ovhdSet('gen1', 'OFF'); ovhdSet('apuContr', 'OFF'); o.noGen = pick(elecState());
+    ovhdSet('batt', 'OFF'); o.dead = pick(elecState());
+    ovhdReset(); localStorage.removeItem('ovhdState'); sysPageSet('asys_fuel');
+    selectPanel('right', 'map', true);
+    return o;
+  });
+  t.eq(e.missing.length, 0, `Electrical 화면의 글자가 다 있다${e.missing.length ? ' (없음: ' + e.missing.join(', ') + ')' : ''}`);
+  t.ok(e.norm.gen1 && e.norm.gen2 && e.norm.ac && e.norm.tru1 && e.norm.tru2 && e.norm.dc && !e.norm.tie &&
+       e.norm.genA === 115 && e.norm.truA === 60 && e.norm.bat === '5/28',
+    `정상(GEN·TRU·BATT ON) — 발전기 115A 씩 · TRU 60A 씩 · 배터리 충전 (${JSON.stringify(e.norm)})`);
+  t.ok(!e.oneGen.gen2 && e.oneGen.ac && e.oneGen.tie && e.oneGen.genA === 230,
+    `GEN 2 OFF — GEN 1 이 230A 로 두 버스를 맡고 가운데 연결선이 켜진다`);
+  t.ok(e.noTru.dc && e.noTru.bat === '-45/24', 'TRU 둘 다 OFF — DC 는 배터리가 맡는다(방전 −45A · 24V)');
+  t.ok(e.apu.apu && e.apu.genA === 115, 'APU GEN 이 들어오면 부하를 나눈다');
+  t.ok(!e.noGen.ac && !e.noGen.tru1 && e.noGen.dc, '발전기가 다 없으면 AC 가 죽고 DC 는 배터리로');
+  t.ok(!e.dead.dc, 'BATT 까지 OFF 면 DC 도 죽는다');
 }

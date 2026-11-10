@@ -84,6 +84,7 @@ function sysTick() {
   const w = document.getElementById('sysp-wrap');
   if (w && !w.classList.contains('page-hidden')) sysDraw();
   _fuelCduRefresh();
+  _elecCduRefresh();
 }
 setInterval(sysTick, 250);
 
@@ -123,6 +124,7 @@ function sysDraw() {
   g.strokeStyle = '#ccc'; g.lineWidth = 1; g.strokeRect(605 - tw / 2 + 0.5, 33.5, tw - 1, 13);
   g.fillStyle = '#fff'; g.textAlign = 'center'; g.fillText(name, 605, 44);
   if (sysPage === 'asys_fuel') _sysFuelPage(g, F);
+  else if (sysPage === 'asys_elec') _sysElecPage(g, F);
   else {
     g.fillStyle = '#4a6a7a'; g.font = 'bold 26px Helvetica Neue, Arial, sans-serif';
     g.fillText(name.toUpperCase(), 610, 310);
@@ -206,11 +208,12 @@ function _sysLeftStrip(g, F) {
   g.textAlign = 'left'; g.font = _f(11); g.fillText('Aux', 28, 594); g.fillText('Total', 28, 613);
   g.textAlign = 'right'; g.font = _f(13); g.fillText(r0(fuel.aux), 96, 594); g.fillText(r0(fuelTotal()), 96, 613);
   // Battery · ACCP
-  let batt = true;
-  try { if (typeof ovhdGet === 'function') batt = ovhdGet('batt') !== 'OFF' || rot; } catch (e) { _swallow(e); }
+  // 배터리 — 전기 계통(elecState)과 같은 값(충전 + · 방전 −)
+  let bat = { a: 0, v: 25 };
+  try { bat = elecState().bat; } catch (e) { _swallow(e); }
   _sysBox(g, 118, 524, 100, 50, 'Battery', '');
   g.textAlign = 'left'; g.font = _f(11); g.fillStyle = '#fff'; g.fillText('Amps', 126, 545); g.fillText('Volts', 126, 563);
-  g.textAlign = 'right'; g.font = _f(13); g.fillText(batt ? '-1' : '0', 210, 545); g.fillText(batt ? '28' : '0', 210, 563);
+  g.textAlign = 'right'; g.font = _f(13); g.fillText(String(bat.a), 210, 545); g.fillText(String(bat.v), 210, 563);
   _sysBox(g, 118, 588, 100, 34, 'ACCP', '');
   g.textAlign = 'left'; g.font = _f(11); g.fillText('PSI', 126, 612);
   g.textAlign = 'right'; g.font = _f(13); g.fillText(rot ? '2837' : '0', 210, 612);
@@ -370,7 +373,146 @@ function _fuelCduRefresh() {
   set('fuelc-end', ff > 0 ? `${Math.floor(fuelTotal() / ff)}+${String(Math.floor((fuelTotal() / ff % 1) * 60)).padStart(2, '0')}` : '—');
 }
 
+// ── 전기 계통(Electrical) ──
+// 상부 콘솔(17-upper.js)의 스위치를 따른다.
+//   GEN n   — 그 엔진이 돌고(NG > 50) GEN n 스위치 ON 이면 온라인(AC 115V)
+//   APU GEN — APU CONTR ON + APU GEN 스위치 'APU GEN'
+//   AC 1·2 버스 — 발전기 하나라도 있으면 둘 다(한쪽이 멎으면 가운데 연결선으로 넘겨 준다)
+//   TRU n   — 제 AC 버스가 살아 있고 TRU n ON 이면 28V DC
+//   DC 1·2 버스 — TRU 하나라도 있으면 둘 다(DC 연결), 없으면 BATT ON 일 때 배터리가 맡는다(방전)
+const ELEC_AC_LOAD = 230, ELEC_DC_LOAD = 120;       // 버스 부하(A) — 살아 있는 발전기·TRU 가 나눠 진다
+function elecState() {
+  let P = null;
+  try { P = engParams(); } catch (e) { P = null; }
+  const sw = (id, on) => { try { return typeof ovhdGet === 'function' ? ovhdGet(id) === on : true; } catch (e) { return true; } };
+  const ng = i => P ? (i === 1 ? P.e1.ng : P.e2.ng) : 0;
+  const gen1 = ng(1) > 50 && sw('gen1', 'ON'), gen2 = ng(2) > 50 && sw('gen2', 'ON');
+  const apu = sw('apuContr', 'ON') && sw('apuGen', 'APU GEN');
+  const gpu = false;
+  const nGen = (gen1 ? 1 : 0) + (gen2 ? 1 : 0) + (apu ? 1 : 0) + (gpu ? 1 : 0);
+  const ac = nGen > 0;
+  const tru1 = ac && sw('tru1', 'ON'), tru2 = ac && sw('tru2', 'ON');
+  const nTru = (tru1 ? 1 : 0) + (tru2 ? 1 : 0);
+  const batt = sw('batt', 'ON');
+  const dc = nTru > 0 || batt;
+  const genA = nGen ? ELEC_AC_LOAD / nGen : 0, truA = nTru ? ELEC_DC_LOAD / nTru : 0;
+  const bat = !batt ? { a: 0, v: 25 } : nTru ? { a: 5, v: 28 } : { a: -45, v: 24 };
+  return { gen1, gen2, apu, gpu, ac, tru1, tru2, dc, batt, battBus: batt || dc, nGen, genA, truA, bat,
+           tie: apu || gpu || (gen1 !== gen2) };
+}
+// 둥근 계기(270° 호) — 값 → 바늘, 색 띠
+function _sysGauge(g, cx, cy, r, frac, bands) {
+  const a0 = Math.PI * 0.75, span = Math.PI * 1.5;
+  g.strokeStyle = '#3a4a3a'; g.lineWidth = 3; g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.stroke();
+  bands.forEach(([f0, f1, col]) => {
+    g.strokeStyle = col; g.lineWidth = 9;
+    g.beginPath(); g.arc(cx, cy, r - 6, a0 + span * f0, a0 + span * f1); g.stroke();
+  });
+  const a = a0 + span * Math.max(0, Math.min(1, frac));
+  g.strokeStyle = '#fff'; g.lineWidth = 4; g.lineCap = 'round';
+  g.beginPath(); g.moveTo(cx, cy); g.lineTo(cx + Math.cos(a) * (r - 10), cy + Math.sin(a) * (r - 10)); g.stroke();
+  g.lineCap = 'butt';
+  g.fillStyle = '#444'; g.beginPath(); g.arc(cx, cy, 9, 0, Math.PI * 2); g.fill();
+}
+function _sysElecPage(g) {
+  const E = elecState();
+  const ON = '#2ec82e', OFF = '#5a5a5a';
+  // 사진(KUH MFD ELEC) 좌표로 그리고 큰 칸에 맞춰 줄인다
+  g.save();
+  const k = 0.535;
+  g.translate(224 + 14 - 320 * k, 32 + 26 - 300 * k); g.scale(k, k);
+  const ln = (pts, on) => {
+    g.strokeStyle = on ? ON : OFF; g.lineWidth = 5; g.lineJoin = 'miter';
+    g.beginPath(); g.moveTo(pts[0][0], pts[0][1]); pts.slice(1).forEach(p => g.lineTo(p[0], p[1])); g.stroke();
+  };
+  const box = (x0, y0, x1, y1, l1, l2, on) => {
+    g.fillStyle = '#000'; g.fillRect(x0, y0, x1 - x0, y1 - y0);
+    g.strokeStyle = on ? ON : OFF; g.lineWidth = 5; g.strokeRect(x0, y0, x1 - x0, y1 - y0);
+    g.fillStyle = on ? '#e8e8e8' : '#777'; g.textAlign = 'center'; g.font = _f(l2 ? 26 : 24, false);
+    const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+    if (l2) { g.fillText(l1, cx, cy - 4); g.fillText(l2, cx, cy + 24); } else g.fillText(l1, cx, cy + 9);
+  };
+  const txt = (x, y, s, sz, col) => { g.fillStyle = col || '#fff'; g.textAlign = 'center'; g.font = _f(sz || 26, false); g.fillText(s, x, y); };
+  // 배선
+  ln([[496, 442], [536, 442], [536, 627]], E.gen1);
+  ln([[766, 442], [733, 442], [733, 627]], E.apu);
+  ln([[733, 577], [1345, 577]], E.tie);
+  ln([[1310, 442], [1345, 442], [1345, 627]], E.gpu);
+  ln([[1580, 442], [1540, 442], [1540, 627]], E.gen2);
+  [[438, 'DIC 1'], [634, 'ESS 1']].forEach(([x]) => ln([[x, 692], [x, 742]], E.ac));
+  [[1248], [1443], [1638]].forEach(([x]) => ln([[x, 692], [x, 742]], E.ac));
+  ln([[733, 692], [733, 890], [772, 890]], E.ac);
+  ln([[772, 948], [733, 948], [733, 1104]], E.tru1);
+  ln([[1345, 692], [1345, 890], [1306, 890]], E.ac);
+  ln([[1306, 948], [1345, 948], [1345, 1104]], E.tru2);
+  ln([[496, 920], [536, 920], [536, 1104]], E.batt);
+  ln([[536, 1036], [573, 1036]], E.battBus);
+  ln([[890, 1137], [1188, 1137]], E.dc);
+  [438, 634, 1248, 1443, 1638].forEach(x => ln([[x, 1170], [x, 1220]], E.dc));
+  // 버스
+  box(378, 627, 890, 692, 'AC 1', 'Primary Bus', E.ac);
+  box(1188, 627, 1698, 692, 'AC 2', 'Primary Bus', E.ac);
+  box(378, 742, 498, 782, 'DIC 1', '', E.ac); box(573, 742, 694, 782, 'ESS 1', '', E.ac);
+  box(1188, 742, 1308, 782, 'DIC 2', '', E.ac); box(1383, 742, 1503, 782, 'ESS 2', '', E.ac); box(1578, 742, 1698, 782, 'N-ESS', '', E.ac);
+  box(573, 1015, 694, 1057, 'BATT BUS', '', E.battBus);
+  box(378, 1104, 890, 1170, 'DC 1', 'Primary Bus', E.dc);
+  box(1188, 1104, 1698, 1170, 'DC 2', 'Primary Bus', E.dc);
+  box(378, 1220, 498, 1260, 'SEC 1', '', E.dc); box(573, 1220, 694, 1260, 'ESS 1', '', E.dc);
+  box(1188, 1220, 1308, 1260, 'SEC 2', '', E.dc); box(1383, 1220, 1503, 1260, 'ESS 2', '', E.dc); box(1578, 1220, 1698, 1260, 'N-ESS', '', E.dc);
+  // APU GEN · AC GPU
+  const src = (x, y, s, on) => {
+    g.fillStyle = '#000'; g.beginPath(); g.arc(x, y, 62, 0, Math.PI * 2); g.fill();
+    g.strokeStyle = on ? ON : OFF; g.lineWidth = 4; g.stroke();
+    txt(x, y + 9, s, 26, on ? '#e8e8e8' : '#888');
+  };
+  src(828, 442, 'APU GEN', E.apu); src(1248, 442, 'AC GPU', E.gpu);
+  // 계기 — 발전기(0~300A: 녹 ~230 · 황 ~260 · 적) · TRU(0~400A: 녹 ~300 · 황 ~350 · 적) · 배터리(−100~+100A: 양 끝 적·황)
+  const genB = [[0, 0.77, ON], [0.77, 0.87, '#e8d000'], [0.87, 1, '#e02020']];
+  const truB = [[0, 0.75, ON], [0.75, 0.87, '#e8d000'], [0.87, 1, '#e02020']];
+  const batB = [[0, 0.12, '#e02020'], [0.12, 0.25, '#e8d000'], [0.25, 0.75, ON], [0.75, 0.88, '#e8d000'], [0.88, 1, '#e02020']];
+  const gauge = (x, y, title, frac, bands, lines) => {
+    txt(x, y - 74, title, 26);
+    _sysGauge(g, x, y, 60, frac, bands);
+    lines.forEach((s, i) => txt(x - 6, y + 82 + i * 27, s, 30));
+  };
+  const genA = on => on ? E.genA : 0;
+  gauge(438, 442, 'GEN 1', genA(E.gen1) / 300, genB, [`${Math.round(genA(E.gen1))}A`, `${E.gen1 ? 115 : 0}V`]);
+  gauge(1638, 442, 'GEN 2', genA(E.gen2) / 300, genB, [`${Math.round(genA(E.gen2))}A`, `${E.gen2 ? 115 : 0}V`]);
+  const tA = on => on ? E.truA : 0;
+  gauge(828, 920, 'TRU 1', tA(E.tru1) / 400, truB, [`${Math.round(tA(E.tru1))}A`, `${E.tru1 ? 28 : 0}V`]);
+  gauge(1248, 920, 'TRU 2', tA(E.tru2) / 400, truB, [`${Math.round(tA(E.tru2))}A`, `${E.tru2 ? 28 : 0}V`]);
+  gauge(438, 920, 'BATT', (E.bat.a + 100) / 200, batB, [`${E.bat.a}A`, `${E.bat.v}V`, '25.0°C']);
+  g.restore();
+}
+
+// ── CDU 의 계통 칸 — Fuel 은 연료 조정, Electrical 은 전원 상태(스위치는 UPPER 창) ──
+function sysCduHtml(id) {
+  if (id === 'asys_fuel') return fuelCduHtml();
+  if (id === 'asys_elec') return `<div id="elecc" style="padding:10px 8px;color:#cde;font-size:12px"></div>`;
+  return '';
+}
+function _elecCduRefresh() {
+  const el = document.getElementById('elecc');
+  if (!el) return;
+  const E = elecState();
+  const row = (k, on, v) => `<div style="display:flex;justify-content:space-between;padding:5px 4px;border-bottom:1px solid #1e2a33">` +
+    `<span>${k}</span><b style="color:${on ? '#3ad13a' : '#888'}">${v}</b></div>`;
+  const h = `<div style="color:#567;font-size:10px;margin-bottom:6px">전원 상태 — 스위치는 UPPER 창(GEN · APU · TRU · BATT)</div>` +
+    row('GEN 1', E.gen1, E.gen1 ? `ON · ${Math.round(E.genA)}A` : 'OFF') +
+    row('GEN 2', E.gen2, E.gen2 ? `ON · ${Math.round(E.genA)}A` : 'OFF') +
+    row('APU GEN', E.apu, E.apu ? `ON · ${Math.round(E.genA)}A` : 'OFF') +
+    row('AC 1 · AC 2 BUS', E.ac, E.ac ? (E.tie ? 'ON (TIE)' : 'ON') : 'OFF') +
+    row('TRU 1', E.tru1, E.tru1 ? `ON · ${Math.round(E.truA)}A` : 'OFF') +
+    row('TRU 2', E.tru2, E.tru2 ? `ON · ${Math.round(E.truA)}A` : 'OFF') +
+    row('DC 1 · DC 2 BUS', E.dc, E.dc ? (E.tru1 || E.tru2 ? 'ON' : 'ON (BATT)') : 'OFF') +
+    row('BATT', E.batt, `${E.bat.a}A · ${E.bat.v}V`) +
+    `<div style="color:#567;font-size:10px;margin-top:12px">SYSTEM 창(탭 'SYSTEM')에 Electrical 계통도가 보입니다.</div>`;
+  if (el.innerHTML !== h) el.innerHTML = h;
+}
+
 // 창이 보일 때(applyPanels 가 부른다)
 function sysShow() { sysDraw(); }
 try { appRegister({ fuelAdjust, fuelSetTotal, fuelReset, sysPageSet }); } catch (e) { _swallow(e); }
 try { window.addEventListener('resize', () => { try { sysDraw(); } catch (e) { _swallow(e); } }); } catch (e) { _swallow(e); }
+// 상부 콘솔 스위치가 바뀌면 곧바로 다시 그린다(발전기·TRU·배터리 → Electrical)
+try { if (typeof ovhdOn === 'function') ovhdOn(() => { try { sysDraw(); } catch (e) { _swallow(e); } }); } catch (e) { _swallow(e); }
