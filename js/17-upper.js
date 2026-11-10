@@ -106,8 +106,8 @@ const OVHD_PLATES = [
     { t: 'pb', id: 'mtr1', x: 150, y: 58, title: 'MTRING 1' },
     { t: 'pb', id: 'mtr2', x: 270, y: 58, title: 'MTRING 2' },
     { t: 'lbl', x: 210, y: 112, text: 'OFF' }, { t: 'lbl', x: 210, y: 167, text: 'IDLE' }, { t: 'lbl', x: 210, y: 222, text: 'FLY' },
-    { t: 'lv', id: 'pcd1', x: 150, y: 112, ys: [0, 55, 110], pos: ['OFF', 'IDLE', 'FLY'], def: 'FLY' },
-    { t: 'lv', id: 'pcd2', x: 270, y: 112, ys: [0, 55, 110], pos: ['OFF', 'IDLE', 'FLY'], def: 'FLY' },
+    { t: 'lv', id: 'pcd1', x: 150, y: 112, ys: [0, 55, 110], pos: ['OFF', 'IDLE', 'FLY'], def: 'FLY' , latch: true },
+    { t: 'lv', id: 'pcd2', x: 270, y: 112, ys: [0, 55, 110], pos: ['OFF', 'IDLE', 'FLY'], def: 'FLY' , latch: true },
     { t: 'lbl', x: 150, y: 266, text: 'No.1 PCD', small: true }, { t: 'lbl', x: 270, y: 266, text: 'No.2 PCD', small: true },
     { t: 'tg', id: 'fuel1', x: 55, y: 108, title: 'ENG1 FUEL', pos: ['OPEN', 'CLOSE'], def: 'OPEN' },
     { t: 'tg', id: 'fuel2', x: 365, y: 108, title: 'ENG2 FUEL', pos: ['OPEN', 'CLOSE'], def: 'OPEN' },
@@ -364,7 +364,7 @@ function _ovhdDown(e) {
     if (!m) return;
     let j = Number(m[1]);
     const i = d.pos.indexOf(v);
-    if (d.pos.length > 2 && i === d.pos.length - 1 && j === 0) j = 1;   // 누름쇠 — FLY 에서 한 번에 OFF 로 가지 않고 IDLE 에서 멈춘다
+    if (d.latch && i === d.pos.length - 1 && j === 0) j = 1;   // 누름쇠(PCD) — FLY 에서 한 번에 OFF 로 가지 않고 IDLE 에서 멈춘다
     ovhdSet(id, d.pos[j]);
   } else if ((d.t === 'rot' || d.t === 'dim') && e.target.closest('[data-ov-pos]')) {
     const pv = e.target.closest('[data-ov-pos]').dataset.ovPos;   // 위치 글자를 누르면 그 위치로 바로

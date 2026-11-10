@@ -137,9 +137,10 @@ const LCON_PLATES = [
     { t: 'lv', id: 'noseLock', x: 120, y: 92, ys: [0, 120], pos: ['UNLOCK', 'LOCK'], def: 'LOCK' },
     { t: 'lbl', x: 200, y: 92, text: 'UNLOCK', small: true }, { t: 'lbl', x: 200, y: 212, text: 'LOCK', small: true },
     { t: 'lbl', x: 360, y: 30, text: 'PARKING BRAKE' },
-    { t: 'lv', id: 'parkBrake', x: 360, y: 92, ys: [0, 120], pos: ['REL', 'ON'], def: 'REL' },
-    { t: 'lbl', x: 285, y: 92, text: 'REL', small: true }, { t: 'lbl', x: 285, y: 212, text: 'ON', small: true },
-    { t: 'lbl', x: 438, y: 144, text: 'EMER', small: true }, { t: 'lbl', x: 438, y: 160, text: 'PARK', small: true },
+    // RELEASE · EMER(비상 — 스페이스 휠 브레이크와 SET 사이의 세기) · SET(파킹)
+    { t: 'lv', id: 'parkBrake', x: 360, y: 92, ys: [0, 60, 120], pos: ['RELEASE', 'EMER', 'SET'], def: 'RELEASE' },
+    { t: 'lbl', x: 280, y: 92, text: 'RELEASE', small: true }, { t: 'lbl', x: 280, y: 152, text: 'EMER', small: true },
+    { t: 'lbl', x: 280, y: 212, text: 'SET', small: true },
   ]},
 ];
 
@@ -151,9 +152,13 @@ try {
 } catch (e) { _swallow(e); }
 
 // ── 시뮬레이터 연동 ──
-// PARKING BRAKE → SIM 파킹 브레이크(14-simmode.js simParkBrake — 스페이스 두 번으로도 바뀐다)
+// PARKING BRAKE 레버 → SIM 브레이크(14-simmode.js) — SET 은 파킹(simParkBrake · 스페이스 두 번으로도), EMER 는 비상(simEmerBrake)
 function lconSyncPark() {
-  try { if (typeof simParkBrake !== 'undefined') simParkBrake = ovhdGet('parkBrake') === 'ON'; } catch (e) { _swallow(e); }
+  try {
+    const v = ovhdGet('parkBrake');
+    if (typeof simParkBrake !== 'undefined') simParkBrake = v === 'SET';
+    if (typeof simEmerBrake !== 'undefined') simEmerBrake = v === 'EMER';
+  } catch (e) { _swallow(e); }
 }
 ovhdOn(id => {
   if (id === 'parkBrake') lconSyncPark();

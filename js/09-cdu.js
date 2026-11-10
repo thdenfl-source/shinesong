@@ -424,6 +424,7 @@ function shipPlaceHeli() {
   try { gspdActFwd = 0; gspdActLat = 0; gspdRefFwd = 0; gspdRefLat = 0; gspdCoasting = false; } catch (e) { _swallow(e); }
   try { if (typeof simTrimReset === 'function') simTrimReset(); } catch (e) { _swallow(e); }
   try { if (typeof simParkBrake !== 'undefined') simParkBrake = false; } catch (e) { _swallow(e); }
+  try { if (typeof simEmerBrake !== 'undefined') simEmerBrake = false; } catch (e) { _swallow(e); }
   const fwd = SHIP3D_TD.fwd, h = shipHdg * D2R;                   // 착함 원 한가운데(함정 가운데에서 30m 뒤)
   S.lat = shipLat + fwd * Math.cos(h) / 111320;
   S.lon = shipLon + fwd * Math.sin(h) / (111320 * Math.cos(shipLat * D2R));

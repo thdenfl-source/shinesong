@@ -41,16 +41,28 @@ export async function run(page, t) {
   const after = await page.evaluate(() => [ovhdGet('fltTest'), document.querySelectorAll('#lcon-wrap .ov-lamp.on').length]);
   t.ok(during[0] === 1 && during[1] === 8 && after[0] === 0 && after[1] === 0,
     `FLOATS TEST 키 — 누르는 동안만 BTL 표시등 8개가 켜진다 (${during.join('/')} → ${after.join('/')})`);
-  // 레버 — PARKING BRAKE ON/REL 은 2단이라 누름쇠 없이 오간다
-  await press('[data-ov="parkBrake"] [data-hz="p1"]'); const pk1 = await get('parkBrake');
+  // 레버 — PARKING BRAKE RELEASE · EMER · SET(누름쇠 없이 바로 오간다)
+  await press('[data-ov="parkBrake"] [data-hz="p2"]'); const pk2 = await get('parkBrake');
   await press('[data-ov="parkBrake"] [data-hz="p0"]'); const pk0 = await get('parkBrake');
-  t.ok(pk1 === 'ON' && pk0 === 'REL', `PARKING BRAKE 레버 ON · REL (${pk1} · ${pk0})`);
+  await press('[data-ov="parkBrake"] [data-hz="p1"]'); const pk1 = await get('parkBrake');
+  await press('[data-ov="parkBrake"] [data-hz="p0"]');
+  t.ok(pk2 === 'SET' && pk0 === 'RELEASE' && pk1 === 'EMER', `PARKING BRAKE 레버 SET · RELEASE · EMER 를 고를 수 있다 (${pk2} · ${pk0} · ${pk1})`);
   // 연동
   const L = await page.evaluate(`(() => {
     (${SIM_SETUP_SRC})();
     const o = {};
-    ovhdSet('parkBrake', 'ON'); o.parkOn = simParkBrake === true && simParkBrakeOn();
-    ovhdSet('parkBrake', 'REL'); o.parkOff = simParkBrake === false;
+    ovhdSet('parkBrake', 'SET'); o.parkOn = simParkBrake === true && simParkBrakeOn() && !simEmerBrake;
+    ovhdSet('parkBrake', 'EMER'); o.emer = simEmerBrakeOn() && !simParkBrake;
+    const seen = [], orig = CanvasRenderingContext2D.prototype.fillText;
+    CanvasRenderingContext2D.prototype.fillText = function (x, ...a) { seen.push(String(x)); return orig.call(this, x, ...a); };
+    try { drawPFD(); } finally { CanvasRenderingContext2D.prototype.fillText = orig; }
+    o.emerPfd = seen.includes('EMER BRAKE');
+    o.order = GND_WHEEL_BRK < GND_EMER_BRK && GND_EMER_BRK < GND_PARK_BRK;
+    ovhdSet('parkBrake', 'RELEASE'); o.parkOff = simParkBrake === false && simEmerBrake === false;
+    simSpaceDown(1000); simSpaceUp(); simSpaceDown(1400); simSpaceUp();      // 스페이스 두 번 — 파킹 SET
+    o.spaceSet = ovhdGet('parkBrake') === 'SET' && simParkBrake;
+    simSpaceDown(5000); simSpaceUp(); simSpaceDown(5400); simSpaceUp();
+    o.spaceRel = ovhdGet('parkBrake') === 'RELEASE' && !simParkBrake;
     selectPanel('right', 'sysp', true);
     const texts = () => {
       const proto = CanvasRenderingContext2D.prototype, orig = proto.fillText, seen = [];
@@ -72,7 +84,9 @@ export async function run(page, t) {
       res(o);
     }, 150));
   })()`);
-  t.ok(L.parkOn && L.parkOff, 'PARKING BRAKE 레버가 SIM 파킹 브레이크를 걸고 푼다');
+  t.ok(L.parkOn && L.parkOff, 'PARKING BRAKE 레버 SET · RELEASE 가 SIM 파킹 브레이크를 걸고 푼다');
+  t.ok(L.emer && L.emerPfd && L.order, 'EMER — 비상 브레이크(세기는 스페이스 6 < EMER 9 < SET 12 kt/s) · PFD 에 EMER BRAKE');
+  t.ok(L.spaceSet && L.spaceRel, '스페이스 두 번으로 파킹을 걸고 풀면 레버도 SET · RELEASE 로 따라간다');
   t.ok(L.xfeed && L.aux, 'FUEL 패널 X-FEED · AUX1 XFER 가 Aircraft Status(Crossfeed Valve Open · E-AUX1 On)에 보인다');
   t.ok(L.tp, 'FUEL 패널 XFER 선택이 Fuel 화면 TP 칸에 보인다(LH)');
   t.ok(L.afcs[0] === 6 && L.afcs[1] === 3, `AFCAU AP1 OFF 를 누르면 AFCS 화면 레인 1 이 OFF (ON ${L.afcs[0]} → ${L.afcs[1]})`);
