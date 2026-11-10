@@ -154,7 +154,9 @@ function engParams() {
   const idle = eng === 0;
   const one = (on) => {
     const t = on ? tq : 0;
-    if (on) return { tq: t, ng: Math.min(105, 62 + 0.33 * t), tgt: Math.round(420 + 3.4 * t), np: nr };
+    // NP 는 거버너가 100% 를 지킨다 — NR 이 위로 넘치면(자동회전 · 레버 최하단) 바늘이 갈라져 NP 는 100 그대로,
+    // 출력을 넘겨 당겨 NR 이 처지면(RPM LOW) 함께 처진다
+    if (on) return { tq: t, ng: Math.min(105, 62 + 0.33 * t), tgt: Math.round(420 + 3.4 * t), np: Math.min(100, nr) };
     if (idle) return { tq: 0, ng: 62, tgt: 450, np: Math.min(nr, 70) };
     return { tq: 0, ng: 0, tgt: 0, np: 0 };
   };
@@ -216,19 +218,20 @@ function drawNpNr(x, y, w, h, P) {
     ctx.font = 'bold 8px Helvetica Neue, Arial, sans-serif'; ctx.fillStyle = '#c6ced6'; ctx.textAlign = 'center';
     ctx.fillText(lbl, cx, y + 13);
     ctx.font = `bold ${Math.max(9, Math.min(13, colW * 0.38))}px Helvetica Neue, Arial, sans-serif`;
-    const warn = lbl === 'NR' ? (v > 106 || v < 90) : v > 106;
-    ctx.fillStyle = warn ? '#ff5555' : '#ffffff';
+    // NR 은 자동회전 RPM 수정표의 띠(녹 88~110 · 황 84~88/110~114 · 적) · NP 는 106% 넘으면 빨강
+    const band = lbl === 'NR' ? (v > NR_HIGH_RED || v < NR_LOW_RED ? 'red' : v > NR_HIGH || v < NR_LOW_YEL ? 'yel' : 'ok') : (v > 106 ? 'red' : 'ok');
+    const warn = band === 'red';
+    ctx.fillStyle = band === 'red' ? '#ff5555' : band === 'yel' ? '#ffcc00' : '#ffffff';
     ctx.fillText(Math.round(v), cx, y + 26);
     if (bh > 10) {
       const bx = cx - barW / 2;
       ctx.fillStyle = '#0b0d10'; ctx.fillRect(bx, top, barW, bh);
       ctx.strokeStyle = '#3a4653'; ctx.strokeRect(bx + 0.5, top + 0.5, barW - 1, bh - 1);
-      ctx.fillStyle = warn ? '#ff4444' : '#22dd55';
+      ctx.fillStyle = band === 'red' ? '#ff4444' : band === 'yel' ? '#ffcc00' : '#22dd55';
       ctx.fillRect(bx + 1, vToY(v), barW - 2, bot - vToY(v));
       const line = (lv, c) => { const ly = Math.round(vToY(lv)) + 0.5; ctx.strokeStyle = c; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(bx - 2, ly); ctx.lineTo(bx + barW + 2, ly); ctx.stroke(); ctx.lineWidth = 1; };
-      line(106, '#ff4444');
-      if (lbl === 'NR') line(90, '#ff4444');
-      line(100, '#ffcc00');
+      if (lbl === 'NR') { line(NR_HIGH_RED, '#ff4444'); line(NR_HIGH, '#ffcc00'); line(NR_LOW_YEL, '#ffcc00'); line(NR_LOW_RED, '#ff4444'); }
+      else { line(106, '#ff4444'); line(100, '#ffffff'); }
     }
   });
 }

@@ -154,6 +154,8 @@ function updateGsBtn() {
 // SIM 모드(조종간 직접 조종) — 법칙은 14-simmode.js. 선언만 여기 둔다:
 // 시뮬 루프(07-sim.js)가 그 파일보다 먼저 실행될 수 있어 TDZ 를 피한다.
 let simModeOn = false;
+// NR 경고 — 자동회전 비행 RPM 수정표의 띠: 녹 88~110 · 황 84~88/110~114 · 적 84 미만/114 초과(PFD 엔진 계기 · 14-simmode.js)
+const NR_HIGH = 110, NR_HIGH_RED = 114, NR_LOW_YEL = 88, NR_LOW_RED = 84;
 // SIM 모드의 IAS 상위모드 — 걸면 기수 자세를 선택 속도(selSpd)를 내는 자세로 잡는다
 // (14-simmode.js). 평소(SIM 밖)에는 속도가 늘 IAS 로 나므로 쓰지 않는다.
 let simIasOn = false;

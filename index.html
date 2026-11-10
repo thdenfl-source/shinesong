@@ -17,7 +17,7 @@
      CDN 을 쓰면 한 번이라도 못 받는 순간 앱이 통째로 죽는다 — 비행 중에는
      그럴 여지를 두지 않는다. -->
 <!-- 패널 새 창(다중 모니터) — 라이브러리가 거는 이벤트까지 받아 적어야 하므로 맨 먼저 -->
-<script src="js/00-popout.js?v=528"></script>
+<script src="js/00-popout.js?v=529"></script>
 <link rel="stylesheet" href="vendor/leaflet.css"/>
 <script src="vendor/leaflet.js"></script>
 <link rel="stylesheet" href="vendor/leaflet-velocity.min.css"/>
@@ -1976,7 +1976,7 @@ body.gate-open #gate-overlay { display: none; }
     </div>
   </form>
 </div>
-<script src="js/00-gate.js?v=528"></script>
+<script src="js/00-gate.js?v=529"></script>
 <!-- ── 단일화면 선택 바 (기본 숨김) ── -->
 <!-- ── 시작 안내(사용법/키보드) 오버레이 ── -->
 <div id="help-overlay" style="display:none;">
@@ -2108,7 +2108,9 @@ body.gate-open #gate-overlay { display: none; }
             <b>플레어</b>: 기수를 그 속도의 자세보다 2° 넘게 들어 감속하면 <b>Vy 에서 20kt 로 줄어드는 만큼에 비례해 강하율이 점점 줄어</b>
             20kt 언저리에서 약 <b>1,700fpm</b> 줄어듭니다(레버 그대로 — Vy · −500fpm 에서 20° 로 들면 강하가 멎고 오른다).
             플레어 중에는 속도가 줄며 늘어나는 필요 동력을 치르지 않고, 기수를 고르면 사라집니다. 감속에 걸리는 시간은 종전의 120% 입니다.<br>
-            <b>오토로테이션</b>(두 엔진 IDLE · 고장): 레버는 <b>NR</b> 을 다룹니다 — 다 내리면 과속(ROTOR HIGH), 조금 올려 견제합니다.
+            <b>오토로테이션</b>(두 엔진 IDLE · 고장): 레버는 <b>NR</b> 을 다룹니다 — <b>컬렉티브 최하단이면 자동회전 비행 RPM 수정표</b>
+            (총중량 12~20,000lb · 밀도고도 −6,000~16,000ft · 75KIAS)의 NR 로 자리 잡고, 레버 1% 당 0.6% 씩 낮아집니다.
+            110% 를 넘으면 NR HIGH 입니다. 조금 올려 견제합니다.
             NR 이 90% 위에 있는 동안은 레버를 조금 써도 강하율이 크게 늘지 않습니다(80kt 약 1,900fpm).
             마지막에 플레어로 강하율을 2,000fpm 가까이 줄이고, 땅 가까이에서 <b>레버를 당기면(쿠션)</b> 로터 회전(NR)을 강하율과 맞바꿔
             1초 남짓 강하가 크게 줄어듭니다 — 너무 일찍 당기면 NR 만 쓰고 다시 가라앉습니다.<br>
@@ -2374,7 +2376,8 @@ body.gate-open #gate-overlay { display: none; }
             <b>고도계 + 승강계</b>(오른쪽 · 위 <b>RA</b> 칸 — 2,500ft 위면 RA UP · 아래 <b>QNH</b> 칸)가 반투명으로 얹힙니다.
             아래쪽은 왼쪽 <b>엔진 파라미터</b>(TGT · NG · TQ1/TQ2 · NP1/NR/NP2), 가운데 HSI, 오른쪽 <b>레이더 고도계(CRHT)</b> 테이프입니다.
             엔진 파라미터의 TQ 막대에는 HOV · Vy · MTA 선이 그대로 있고, TGT · NG · NP 값은 지금은 토크·NR·엔진 상태(AEO/OEI/IDLE)에서
-            어림한 값입니다(엔진 모델은 차차 갖춥니다).</li>
+            어림한 값입니다(엔진 모델은 차차 갖춥니다). 엔진이 돌면 <b>NP 는 거버너가 100% 를 지키고</b>, 레버를 내려 NR 이 넘치면
+            바늘이 갈라져 NR 만 오릅니다(출력을 넘겨 당겨 NR 이 처지면 NP 도 함께 처짐). NR 막대 띠는 자동회전 RPM 수정표(녹 88~110 · 황 84~88/110~114 · 적)입니다.</li>
         <li><b>NAV SRC</b>: <b>FMS / NAV1 / NAV2</b>. NAV1·NAV2는 CDU에서 튜닝한 VOR을 따라갑니다.</li>
         <li><b>접근절차 자동 튜닝</b> — 비행계획에서 접근절차를 불러오면(＋ ADD APPROACH) <b>NAV1 은 그 공항의 VOR</b>,
             <b>NAV2 는 그 활주로의 LOC</b> 주파수로 저절로 맞춥니다(알림으로 보여 줍니다). VOR 은 절차 경로에 든 VOR →
@@ -3344,33 +3347,33 @@ body.gate-open #gate-overlay { display: none; }
 <!-- 앱 코드 — 클래식 스크립트(모듈 아님)라 전역 스코프를 공유한다.
      순서가 곧 실행 순서이므로 임의로 바꾸지 말 것. -->
   <!-- AIP 데이터 — 코드보다 먼저 로드한다 -->
-  <script src="js/data/terminal-fixes.js?v=528"></script>
-  <script src="js/data/ifr-fixes.js?v=528"></script>
-  <script src="js/data/ifr-procedures.js?v=528"></script>
-  <script src="js/data/airfield-info.js?v=528"></script>
-  <script src="js/data/enr-vors.js?v=528"></script>
-  <script src="js/data/loc-stations.js?v=528"></script>
-  <script src="js/data/enr-routes.js?v=528"></script>
-  <script src="js/data/airspace.js?v=528"></script>
-  <script src="js/data/runways.js?v=528"></script>
+  <script src="js/data/terminal-fixes.js?v=529"></script>
+  <script src="js/data/ifr-fixes.js?v=529"></script>
+  <script src="js/data/ifr-procedures.js?v=529"></script>
+  <script src="js/data/airfield-info.js?v=529"></script>
+  <script src="js/data/enr-vors.js?v=529"></script>
+  <script src="js/data/loc-stations.js?v=529"></script>
+  <script src="js/data/enr-routes.js?v=529"></script>
+  <script src="js/data/airspace.js?v=529"></script>
+  <script src="js/data/runways.js?v=529"></script>
   <!-- 앱 코드 -->
-  <script src="js/00-ui.js?v=528"></script>
-  <script src="js/01-state.js?v=528"></script>
-  <script src="js/02-math.js?v=528"></script>
-  <script src="js/03-pfd.js?v=528"></script>
-  <script src="js/04-map.js?v=528"></script>
-  <script src="js/05-gps.js?v=528"></script>
-  <script src="js/06-nav.js?v=528"></script>
-  <script src="js/07-sim.js?v=528"></script>
-  <script src="js/08-ifrdb.js?v=528"></script>
-  <script src="js/09-cdu.js?v=528"></script>
-  <script src="js/10-tools.js?v=528"></script>
-  <script src="js/11-charts.js?v=528"></script>
-  <script src="js/12-joystick.js?v=528"></script>
-  <script src="js/13-joyhid.js?v=528"></script>
-  <script src="js/14-simmode.js?v=528"></script>
-  <script src="js/15-heli3d.js?v=528"></script>
-  <script src="js/16-sound.js?v=528"></script>
+  <script src="js/00-ui.js?v=529"></script>
+  <script src="js/01-state.js?v=529"></script>
+  <script src="js/02-math.js?v=529"></script>
+  <script src="js/03-pfd.js?v=529"></script>
+  <script src="js/04-map.js?v=529"></script>
+  <script src="js/05-gps.js?v=529"></script>
+  <script src="js/06-nav.js?v=529"></script>
+  <script src="js/07-sim.js?v=529"></script>
+  <script src="js/08-ifrdb.js?v=529"></script>
+  <script src="js/09-cdu.js?v=529"></script>
+  <script src="js/10-tools.js?v=529"></script>
+  <script src="js/11-charts.js?v=529"></script>
+  <script src="js/12-joystick.js?v=529"></script>
+  <script src="js/13-joyhid.js?v=529"></script>
+  <script src="js/14-simmode.js?v=529"></script>
+  <script src="js/15-heli3d.js?v=529"></script>
+  <script src="js/16-sound.js?v=529"></script>
 
 <input type="file" id="zipFileInput" accept=".zip,application/zip,application/x-zip-compressed,application/octet-stream" style="display:none" onchange="handleZipFile(this.files[0]); this.value='';"></body>
 </html>

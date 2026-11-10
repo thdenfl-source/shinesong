@@ -54,6 +54,12 @@ export async function run(page, t) {
     rotorDir = 'CCW'; o.tfCcw = tf(15, false); rotorDir = 'CW';
     rcOpt.blowback = true; rotorChar = false; aseOn = false;
     o.turnSl = turn(0); o.turnHi = turn(10000);
+    o.chart = { a: autoNrChart(15000, 0), b: autoNrChart(17000, 4000), c: autoNrChart(17000, 12000) };
+    { joyAxes = { coll: { i: 3, inv: false, abs: true } }; simEng = 2;
+      S.alt = 3000; S.spd = 75; S.pit = pitchFromSpd(75); simTrimReset(); simTrim.pitch = -pitchFromSpd(75); simTrimAct.pitch = simTrim.pitch;
+      S.vs = 0; simVsAcc = 0; simNr = 100; _ax(3, -1); fly(15);
+      o.np = { nr: simNr, pw: engParams().e1.np };
+      joyAxes = { roll: { i: 0, inv: false }, pitch: { i: 1, inv: false }, yaw: { i: 2, inv: false }, coll: { i: 3, inv: false } }; _ax(3, 0); simTrimReset(); }
     // ── 오토로테이션(두 엔진 IDLE · 80kt) — 레버는 NR 을 다루고(강하율은 크게 안 바뀜), 플레어는 강하를 줄이고, 쿠션은 NR 을 강하와 맞바꾼다
     { joyAxes = { coll: { i: 3, inv: false, abs: true } };
       const lev = tq => _ax(3, Math.max(-1, Math.min(1, tq / SIM_LEVER_TOP * 2 - 1)));
@@ -61,7 +67,7 @@ export async function run(page, t) {
       simAcc = 0; S.vs = 0; simVsAcc = 0; simNr = 100; lev(tqRequired()); fly(3);
       simEng = 0; const A = {};
       lev(12); fly(14); A.l12 = { vs: S.vs, nr: simNr };
-      lev(0); fly(10); A.l0 = { vs: S.vs, nr: simNr };
+      lev(0); fly(12); A.l0 = { vs: S.vs, nr: simNr, chart: autoNrChart(), np: engParams().e1.np };
       lev(25); fly(10); A.l25 = { vs: S.vs, nr: simNr };
       lev(12); fly(10);
       // 플레어 20° — 강하율이 얼마나 줄어드나
@@ -116,11 +122,15 @@ export async function run(page, t) {
     t.ok(p25.dvs > 1200 && p25.dvs < 2100, `20kt 언저리면 약 1,700fpm 줄어 강하가 멎고 오른다 (+${p25.dvs.toFixed(0)}fpm)`);
     t.ok(f.dec === 2.4 && f.t20 > 5.5, `감속 시간은 종전의 120% (Vy → 20kt ${f.t20}초)`); }
   { const A = r.auto;
-    t.ok(A.l12.vs < -1600 && A.l12.vs > -2200 && Math.abs(A.l12.nr - 100) < 1.5, `오토로테이션 80kt — 약 1,900fpm · NR 100% (${A.l12.vs.toFixed(0)}fpm · ${A.l12.nr.toFixed(1)}%)`);
-    t.ok(A.l0.nr > 104 && A.l25.nr < 95, `레버로 NR 을 다룬다 — 내리면 과속(${A.l0.nr.toFixed(1)}%) · 조금 올리면 견제(${A.l25.nr.toFixed(1)}%)`);
+    t.ok(A.l12.vs < -1600 && A.l12.vs > -2200, `오토로테이션 80kt — 약 1,900fpm (${A.l12.vs.toFixed(0)}fpm)`);
+    t.ok(Math.abs(A.l0.nr - A.l0.chart) < 1.5, `컬렉티브 최하단이면 NR 이 자동회전 RPM 수정표 값으로 간다 (${A.l0.nr.toFixed(1)} · 표 ${A.l0.chart.toFixed(1)}%)`);
+    t.ok(A.l12.nr < A.l0.nr - 5 && A.l25.nr < A.l12.nr - 5, `레버를 올리면 NR 이 내려간다 — 과속 견제 (0% ${A.l0.nr.toFixed(1)} · 12% ${A.l12.nr.toFixed(1)} · 25% ${A.l25.nr.toFixed(1)}%)`);
     t.ok(Math.abs(A.l25.vs - A.l12.vs) < 250 && A.l0.vs > -2300, `NR 이 90% 위면 레버를 조금 써도 강하율이 크게 늘지 않는다 (12% ${A.l12.vs.toFixed(0)} · 0% ${A.l0.vs.toFixed(0)} · 25% ${A.l25.vs.toFixed(0)}fpm — 종전 −4,000)`);
     t.ok(A.flare.best - A.flare.v0 > 1500, `플레어 20° — 강하율을 1,500fpm 넘게 줄인다 (${A.flare.v0.toFixed(0)} → ${A.flare.best.toFixed(0)}fpm)`);
     t.ok(A.cush.cMax - A.cush.c0 > 800 && A.cush.cMax < 600 && A.cush.nr1 < A.cush.nr0 - 5,
       `쿠션 — 레버를 당기면 NR 을 강하와 맞바꿔 1초 안에 크게 준다(떠오르지는 않는다) (${A.cush.c0.toFixed(0)} → ${A.cush.cMax.toFixed(0)}fpm · NR ${A.cush.nr0.toFixed(0)} → ${A.cush.nr1.toFixed(0)}%)`); }
+  t.ok(Math.abs(r.chart.a - 98.7) < 0.2 && Math.abs(r.chart.b - 107.3) < 0.2 && r.chart.c > r.chart.b,
+    `자동회전 RPM 수정표 — GW 15,000lb · DA 0 = ${r.chart.a.toFixed(1)}% · GW 17,000lb · DA 4,000ft = ${r.chart.b.toFixed(1)}% · 높을수록 크다`);
+  t.ok(r.np.pw === 100 && r.np.nr > 100, `엔진이 돌면 레버를 내려 NR 이 넘쳐도 NP 는 100% (NR ${r.np.nr.toFixed(1)} · NP ${r.np.pw})`);
   t.ok(r.tf40.tf === 0 && r.tf5.tf === 0, `전이양력 지대 밖(5kt · 40kt)에서는 없다 (${r.tf5.tf.toFixed(2)}@${r.tf5.spd.toFixed(0)}kt · ${r.tf40.tf.toFixed(2)}@${r.tf40.spd.toFixed(0)}kt)`);
 }
