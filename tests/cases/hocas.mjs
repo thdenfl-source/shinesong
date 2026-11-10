@@ -42,6 +42,9 @@ export async function run(page, t) {
     btn('toggleHocas').click(); o.after = hocasOn; o.offAgain = shot().some(x => x[0] === 'HOCAS');
     CDU_ACT.switchMode('HOME');
     toggleSimMode(false);
+    // SIM 을 켜기 전(레버 배정 없이)에도 컬렉티브 막대가 보인다 — 지금 토크를 레버 자리로
+    const keep = joyAxes.coll; delete joyAxes.coll; S.tq = 62; hocasOn = true;
+    o.nsCol = shot().find(x => x[0].startsWith('COL')); hocasOn = false; if (keep) joyAxes.coll = keep;
     return o;
   })()`);
   t.ok(r.lbls.includes('HOVER') && !r.fcpBtn, `FCP 는 HOVER 글씨로 돌아오고 HOCAS · CTR 버튼은 CDU 로 옮겼다 (${r.lbls.join(' · ')})`);
@@ -58,4 +61,5 @@ export async function run(page, t) {
   t.ok(r.cleared && /없음\(기본값\)/.test(r.clearedTxt), 'DEFAULT 는 저장한 가운데를 지운다(칸에 "없음(기본값)")');
   t.ok(r.col0 && r.col0[0] === `COL ${Math.round(r.col0v)}%`, `컬렉티브 막대 — 레버가 요구하는 토크를 함께 보인다 (${r.col0 && r.col0[0]})`);
   t.ok(!r.after && !r.offAgain, '다시 누르면 꺼진다');
+  t.ok(r.nsCol && r.nsCol[0] === 'COL 62%', `SIM 을 켜기 전에도 컬렉티브가 보인다 — 지금 토크 (${r.nsCol && r.nsCol[0]})`);
 }

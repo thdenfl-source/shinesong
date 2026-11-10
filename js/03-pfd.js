@@ -332,8 +332,12 @@ function hocasAxes() {
   let coll = null;
   try {
     const cfg = (typeof joyAxes === 'object' && joyAxes) ? joyAxes.coll : null;
-    if (simModeOn && typeof simTqCmd === 'number') coll = { frac: simTqCmd / SIM_LEVER_TOP, tq: simTqCmd, hov: hoverTqRef() / SIM_LEVER_TOP };
+    const hov = () => { try { return hoverTqRef() / SIM_LEVER_TOP; } catch (e) { return null; } };
+    if (simModeOn && typeof simTqCmd === 'number') coll = { frac: simTqCmd / SIM_LEVER_TOP, tq: simTqCmd, hov: hov() };
     else if (cfg) coll = { frac: cfg.abs ? (joyAxRaw('coll') + 1) / 2 : ((a.coll || 0) + 1) / 2, tq: null, hov: null };
+    // SIM 조종을 켜기 전(레버 배정도 없을 때)에도 막대가 비지 않게 — 지금 걸린 토크를 레버 자리로 보인다
+    // (종전에는 3D Only 에서 FLY 로 SIM 을 켠 뒤에야 컬렉티브가 나타났다)
+    else { const tq = Math.max(0, +S.tq || 0); coll = { frac: tq / SIM_LEVER_TOP, tq, hov: hov() }; }
   } catch (e) { _swallow(e); }
   return { roll: a.roll || 0, pitch: a.pitch || 0, yaw: a.yaw || 0, trim, coll };
 }
