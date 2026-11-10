@@ -1990,7 +1990,13 @@ const SK_MENUS = {
     { lbl: 'PFD Map<br>Settings', go: 'MAPSET' },
     { lbl: 'Traffic<br>Map', on: () => skState.tfcMap, act: _skTog('tfcMap') },
     { lbl: 'PFD<br>Settings', go: 'PFDSET' },
-    { lbl: 'OBS', on: () => obsOn, dim: () => _skDis('obs-btn'), act: () => toggleObs() },
+    // OBS — 홀딩 · 오비트 · 미스드어프로치처럼 다음 지점으로 넘어갈지 정할 자리면 SUSP 로 바뀐다(suspSoftkey)
+    //   SUSP 는 옛 FCP 의 SUSP 와 같다(toggleSusp). 손으로 켜면 녹색 바, 홀딩으로 저절로 걸리면 흰 바
+    { lbl: () => suspSoftkey() ? 'SUSP' : 'OBS',
+      on: () => suspSoftkey() ? suspOn : obsOn,
+      auto: () => suspSoftkey() && navSuspAuto() && !suspOn,
+      dim: () => !suspSoftkey() && _skDis('obs-btn'),
+      act: () => { if (suspSoftkey()) toggleSusp(); else toggleObs(); } },
     { lbl: 'Active NAV', sub: () => ({ FMS: 'FMS', NAV1: 'VOR1', NAV2: 'VOR2' })[navSrc] || navSrc, act: () => pfdSkNavCycle() },
     { lbl: 'Sensors', go: 'SENS' },
     // Hover Display — 80kt 아래(또는 켜져 있을 때)만 · FCP 의 HOVER PAGE · HOVER POS 버튼은 없앴다
@@ -2071,12 +2077,12 @@ function pfdSkRender() {
   sk.dataset.menu = skMenu;
   [...sk.children].forEach((el, i) => {
     const it = M[i] || {};
-    const lbl = it.lbl || '';
+    const lbl = (typeof it.lbl === 'function' ? it.lbl() : it.lbl) || '';
     const span = el.firstElementChild, em = span.nextElementSibling;
     if (span.innerHTML !== lbl) span.innerHTML = lbl;
     const sub = it.sub ? it.sub() : '';
     if (em.textContent !== sub) em.textContent = sub;
-    const flags = { none: !it.lbl, on: !!(it.on && it.on()), off: !!(it.dim && it.dim()), go: !!it.go };
+    const flags = { none: !it.lbl, on: !!(it.on && it.on()), auto: !!(it.auto && it.auto()), off: !!(it.dim && it.dim()), go: !!it.go };
     Object.entries(flags).forEach(([c, v]) => { if (el.classList.contains(c) !== v) el.classList.toggle(c, v); });
   });
 }

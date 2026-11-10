@@ -340,7 +340,19 @@ function gsCaptureCheck() {
 let suspOn = false;
 function navSuspAuto() { return !!(typeof holdOn !== 'undefined' && holdOn); }
 function navSuspended() { return suspOn || navSuspAuto(); }
+// PFD 소프트키의 OBS 칸이 SUSP 로 바뀌는 때 — 다음 지점으로 넘어갈지 정해야 하는 자리(FCP 의 SUSP 버튼은 없앴다)
+//   · 이미 보류 중(손으로 켬 · 홀딩으로 저절로)
+//   · NAV(FMS)로 날며 활성 지점에 홀딩이 걸려 있다(홀딩 · 오비트처럼 그 자리를 돌 곳)
+//   · NAV(FMS)로 날며 활성 지점이 비행계획의 마지막 — 계기접근 끝(MAPt)에서 미스드어프로치로 이어 갈지
+function suspSoftkey() {
+  if (navSuspended()) return true;
+  if (!navApOn || navSrc !== 'FMS' || obsOn) return false;
+  const wp = (S.awp >= 0 && S.awp < S.wps.length) ? S.wps[S.awp] : null;
+  if (!wp) return false;
+  return !!wp.hold || S.awp === S.wps.length - 1;
+}
 function updateSuspBtn() {
+  try { if (typeof pfdSkRender === 'function') pfdSkRender(); } catch (e) { _swallow(e); }
   const b = document.getElementById('susp-btn');
   if (!b) return;
   const auto = navSuspAuto() && !suspOn;
