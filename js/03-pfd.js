@@ -184,10 +184,10 @@ function drawRaBox(x, y, w, h) {
   else { ctx.fillStyle = '#7fd4ff'; ctx.fillText(String(Math.round(ra * A_CV())) + (unitAlt === 'm' ? 'M' : 'FT'), x + w - 3, y + h / 2 + 1); }
   ctx.restore();
 }
-// 기압 설정 — METAR 의 QNH(없으면 표준 1013)
+// 기압 설정 — METAR 의 QNH(없으면 표준 1013.25 hPa = 29.92 inHg)
 function drawBaroBox(x, y, w, h) {
   if (!(w > 10) || !(h > 8)) return;
-  const q = (typeof window._qnhHpa === 'number' && Number.isFinite(window._qnhHpa)) ? window._qnhHpa : 1013;
+  const q = (typeof window._qnhHpa === 'number' && Number.isFinite(window._qnhHpa)) ? window._qnhHpa : 1013.25;   // 표준 29.92 inHg
   ctx.save(); _pfdSmallBox(x, y, w, h);
   ctx.textBaseline = 'middle';
   ctx.font = `bold ${Math.max(10, h * 0.55)}px Helvetica Neue, Arial, sans-serif`;

@@ -404,21 +404,22 @@ function brgSrcCycle(n) {
   const order = ['OFF', 'NAV1', 'NAV2', 'FMS'];
   const next = order[(order.indexOf(brgSrcLabel(n)) + 1) % order.length];
   const vis = next !== 'OFF';
-  if (n === 1) { brg1Src = vis ? next : brg1Src; if (brg1Visible !== vis) toggleBrg1(); }
-  else { brg2Src = vis ? next : brg2Src; if (brg2Visible !== vis) toggleBrg2(); }
+  // 지도 BRG 선·방위·거리(옛 #1BDP · #2BDP)도 소프트키로 고른 국을 따른다 — 처음(고르기 전)은 지도에 없음, OFF 면 없음
+  if (n === 1) { brg1Src = vis ? next : brg1Src; brg1LblOn = vis; if (brg1Visible !== vis) toggleBrg1(); }
+  else { brg2Src = vis ? next : brg2Src; brg2LblOn = vis; if (brg2Visible !== vis) toggleBrg2(); }
   if (typeof updateBrgLines === 'function') updateBrgLines();
   try { drawPFD(); } catch (e) { _swallow(e); }
 }
 function toggleBrg1() {
   brg1Visible = !brg1Visible;
-  const btn = document.getElementById('brg1-tog');
-  btn.classList.toggle('brg1-on', brg1Visible);
+  const btn = document.getElementById('brg1-tog');   // FCP 버튼은 없앴다(소프트키 Bearing1) — 있으면만
+  if (btn) btn.classList.toggle('brg1-on', brg1Visible);
   if (typeof updateBrgLines === 'function') updateBrgLines();   // 지도 BRG 라인 즉시 반영
 }
 function toggleBrg2() {
   brg2Visible = !brg2Visible;
   const btn = document.getElementById('brg2-tog');
-  btn.classList.toggle('brg2-on', brg2Visible);
+  if (btn) btn.classList.toggle('brg2-on', brg2Visible);
   if (typeof updateBrgLines === 'function') updateBrgLines();
 }
 
