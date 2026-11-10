@@ -68,8 +68,9 @@ export async function run(page, t) {
     localStorage.removeItem('ovhdState'); ovhdReset();
     selectPanel('right', 'sysp', true); await new Promise(res => setTimeout(res, 150));
     sysPageSet('asys_elec');
-    const pick = st => ({ gen1: st.gen1, gen2: st.gen2, apu: st.apu, ac: st.ac, tru1: st.tru1, tru2: st.tru2, dc: st.dc,
-                          tie: st.tie, genA: Math.round(st.genA), truA: Math.round(st.truA), bat: st.bat.a + '/' + st.bat.v });
+    const pick = st => ({ gen1: st.gen1, gen2: st.gen2, apu: st.apu, apuConn: st.apuConn, ac: st.ac, tru1: st.tru1, tru2: st.tru2, dc: st.dc,
+                          dcNess: st.dcNess, tie: st.tie, dropL: st.dropL, dropR: st.dropR,
+                          genA: Math.round(st.genA), truA: Math.round(st.truA), bat: st.bat.a + '/' + st.bat.v });
     const o = { norm: pick(elecState()) };
     const proto = CanvasRenderingContext2D.prototype, orig = proto.fillText, seen = [];
     proto.fillText = function (x, ...a) { seen.push(String(x)); return orig.call(this, x, ...a); };
@@ -78,8 +79,10 @@ export async function run(page, t) {
                  'BATT', 'BATT BUS', 'TRU 1', 'TRU 2', 'DC 1', 'DC 2', 'SEC 1', 'SEC 2', '115A', '60A', '28V', '25.0°C'].filter(x => !seen.includes(x));
     ovhdSet('gen2', 'OFF'); o.oneGen = pick(elecState());
     ovhdSet('tru1', 'OFF'); ovhdSet('tru2', 'OFF'); o.noTru = pick(elecState());
-    ovhdSet('apuContr', 'ON'); ovhdSet('apuGen', 'APU GEN'); o.apu = pick(elecState());
-    ovhdSet('gen1', 'OFF'); ovhdSet('apuContr', 'OFF'); o.noGen = pick(elecState());
+    ovhdSet('apuContr', 'ON'); ovhdSet('apuGen', 'APU GEN'); o.apu = pick(elecState());          // GEN 1 이 살아 있다 → APU 는 대기
+    ovhdSet('gen1', 'OFF'); ovhdSet('tru1', 'ON'); ovhdSet('tru2', 'ON'); o.apuOnly = pick(elecState());   // 주 발전기 없음 → APU 가 맡는다
+    ovhdSet('tru1', 'OFF'); ovhdSet('tru2', 'OFF');
+    ovhdSet('apuContr', 'OFF'); o.noGen = pick(elecState());
     ovhdSet('batt', 'OFF'); o.dead = pick(elecState());
     ovhdReset(); localStorage.removeItem('ovhdState'); sysPageSet('asys_fuel');
     selectPanel('right', 'map', true);
@@ -92,7 +95,13 @@ export async function run(page, t) {
   t.ok(!e.oneGen.gen2 && e.oneGen.ac && e.oneGen.tie && e.oneGen.genA === 230,
     `GEN 2 OFF — GEN 1 이 230A 로 두 버스를 맡고 가운데 연결선이 켜진다`);
   t.ok(e.noTru.dc && e.noTru.bat === '-45/24', 'TRU 둘 다 OFF — DC 는 배터리가 맡는다(방전 −45A · 24V)');
-  t.ok(e.apu.apu && e.apu.genA === 115, 'APU GEN 이 들어오면 부하를 나눈다');
+  t.ok(!e.norm.tie && !e.norm.dropL && !e.norm.dropR && e.norm.dcNess, '두 주 발전기면 연결선·내려가는 선이 회색, DC N-ESS 살아 있음');
+  t.ok(e.apu.apu && !e.apu.apuConn && e.apu.genA === 230 && e.apu.tie && !e.apu.dropL && e.apu.dropR,
+    `주 발전기(GEN 1)가 살아 있으면 APU GEN 이 돌아도 버스에서 끊긴다(대기) — GEN 1 이 230A, 연결선은 AC 2 로만 (${JSON.stringify(e.apu)})`);
+  t.ok(e.apuOnly.apuConn && e.apuOnly.ac && e.apuOnly.tie && e.apuOnly.dropL && e.apuOnly.dropR && e.apuOnly.genA === 230,
+    '주 발전기가 없으면 APU GEN 이 붙어 연결선으로 AC 1·2 를 맡는다');
+  t.ok(e.apuOnly.dc && !e.apuOnly.dcNess && e.apuOnly.truA === 50,
+    `APU 로만 맡을 때 DC N-ESS 는 끊는다(불필요 전기 줄임 — TRU 부하 ${e.apuOnly.truA}A)`);
   t.ok(!e.noGen.ac && !e.noGen.tru1 && e.noGen.dc, '발전기가 다 없으면 AC 가 죽고 DC 는 배터리로');
   t.ok(!e.dead.dc, 'BATT 까지 OFF 면 DC 도 죽는다');
 

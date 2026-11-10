@@ -392,7 +392,7 @@ function _fuelCduRefresh() {
 //   AC 1·2 버스 — 발전기 하나라도 있으면 둘 다(한쪽이 멎으면 가운데 연결선으로 넘겨 준다)
 //   TRU n   — 제 AC 버스가 살아 있고 TRU n ON 이면 28V DC
 //   DC 1·2 버스 — TRU 하나라도 있으면 둘 다(DC 연결), 없으면 BATT ON 일 때 배터리가 맡는다(방전)
-const ELEC_AC_LOAD = 230, ELEC_DC_LOAD = 120;       // 버스 부하(A) — 살아 있는 발전기·TRU 가 나눠 진다
+const ELEC_AC_LOAD = 230, ELEC_DC_LOAD = 120, ELEC_DC_NESS = 20;   // DC N-ESS 몫(A) — APU 로만 맡을 때 끊는다       // 버스 부하(A) — 살아 있는 발전기·TRU 가 나눠 진다
 function elecState() {
   let P = null;
   try { P = engParams(); } catch (e) { P = null; }
@@ -403,16 +403,26 @@ function elecState() {
   let onGnd = false;
   try { onGnd = (typeof radarAltFt === 'function' ? radarAltFt() : S.alt) < 5; } catch (e) { _swallow(e); }
   const gpu = sw('apuGen', 'GPU') && onGnd;                 // 지상 전원 — 땅 위에서만 꽂혀 있다
-  const nGen = (gen1 ? 1 : 0) + (gen2 ? 1 : 0) + (apu ? 1 : 0) + (gpu ? 1 : 0);
+  // 주 발전기(GEN 1·2)가 하나라도 살아 있으면 APU GEN · AC GPU 는 버스에서 떨어진다(돌고 있어도 대기)
+  const mainGen = gen1 || gen2;
+  const apuConn = apu && !mainGen, gpuConn = gpu && !mainGen;
+  const nGen = mainGen ? (gen1 ? 1 : 0) + (gen2 ? 1 : 0) : (apuConn ? 1 : 0) + (gpuConn ? 1 : 0);
   const ac = nGen > 0;
+  // 가운데 연결선 — 주 발전기 하나가 두 버스를 맡을 때, 또는 주 발전기 없이 APU/GPU 가 맡을 때
+  const tie = mainGen ? gen1 !== gen2 : (apuConn || gpuConn);
+  // 연결선에서 각 AC 버스로 내려가는 몫 — 그 버스를 제 발전기가 맡지 않을 때만 전기가 온다
+  const dropL = ac && !gen1, dropR = ac && !gen2;
   const tru1 = ac && sw('tru1', 'ON'), tru2 = ac && sw('tru2', 'ON');
   const nTru = (tru1 ? 1 : 0) + (tru2 ? 1 : 0);
   const batt = sw('batt', 'ON');
   const dc = nTru > 0 || batt;
-  const genA = nGen ? ELEC_AC_LOAD / nGen : 0, truA = nTru ? ELEC_DC_LOAD / nTru : 0;
+  // 주 발전기 없이 APU GEN 이 맡으면 DC N-ESS(비필수)를 끊어 쓸데없는 전기를 줄인다
+  const dcNess = dc && !apuConn;
+  const dcLoad = ELEC_DC_LOAD - (dc && !dcNess ? ELEC_DC_NESS : 0);
+  const genA = nGen ? ELEC_AC_LOAD / nGen : 0, truA = nTru ? dcLoad / nTru : 0;
   const bat = !batt ? { a: 0, v: 25 } : nTru ? { a: 5, v: 28 } : { a: -45, v: 24 };
-  return { gen1, gen2, apu, gpu, ac, tru1, tru2, dc, batt, battBus: batt || dc, nGen, genA, truA, bat,
-           tie: apu || gpu || (gen1 !== gen2) };
+  return { gen1, gen2, apu, gpu, apuConn, gpuConn, mainGen, ac, tru1, tru2, dc, dcNess, batt, battBus: batt || dc, nGen, genA, truA, bat,
+           tie, dropL, dropR };
 }
 // 둥근 계기(270° 호) — 값 → 바늘, 색 띠
 function _sysGauge(g, cx, cy, r, frac, bands) {
@@ -449,9 +459,12 @@ function _sysElecPage(g) {
   const txt = (x, y, s, sz, col) => { g.fillStyle = col || '#fff'; g.textAlign = 'center'; g.font = _f(sz || 26, false); g.fillText(s, x, y); };
   // 배선
   ln([[496, 442], [536, 442], [536, 627]], E.gen1);
-  ln([[766, 442], [733, 442], [733, 627]], E.apu);
+  // APU GEN · AC GPU — 원천에서 연결선까지는 버스에 붙었을 때만(주 발전기가 있으면 끊긴다)
+  ln([[766, 442], [733, 442], [733, 577]], E.apuConn);
+  ln([[1310, 442], [1345, 442], [1345, 577]], E.gpuConn);
   ln([[733, 577], [1345, 577]], E.tie);
-  ln([[1310, 442], [1345, 442], [1345, 627]], E.gpu);
+  ln([[733, 577], [733, 627]], E.dropL);                   // 연결선 → AC 1
+  ln([[1345, 577], [1345, 627]], E.dropR);                 // 연결선 → AC 2
   ln([[1580, 442], [1540, 442], [1540, 627]], E.gen2);
   [[438, 'DIC 1'], [634, 'ESS 1']].forEach(([x]) => ln([[x, 692], [x, 742]], E.ac));
   [[1248], [1443], [1638]].forEach(([x]) => ln([[x, 692], [x, 742]], E.ac));
@@ -462,7 +475,8 @@ function _sysElecPage(g) {
   ln([[496, 920], [536, 920], [536, 1104]], E.batt);
   ln([[536, 1036], [573, 1036]], E.battBus);
   ln([[890, 1137], [1188, 1137]], E.dc);
-  [438, 634, 1248, 1443, 1638].forEach(x => ln([[x, 1170], [x, 1220]], E.dc));
+  [438, 634, 1248, 1443].forEach(x => ln([[x, 1170], [x, 1220]], E.dc));
+  ln([[1638, 1170], [1638, 1220]], E.dcNess);              // DC N-ESS — APU 로만 맡을 때는 끊는다
   // 버스
   box(378, 627, 890, 692, 'AC 1', 'Primary Bus', E.ac);
   box(1188, 627, 1698, 692, 'AC 2', 'Primary Bus', E.ac);
@@ -472,7 +486,7 @@ function _sysElecPage(g) {
   box(378, 1104, 890, 1170, 'DC 1', 'Primary Bus', E.dc);
   box(1188, 1104, 1698, 1170, 'DC 2', 'Primary Bus', E.dc);
   box(378, 1220, 498, 1260, 'SEC 1', '', E.dc); box(573, 1220, 694, 1260, 'ESS 1', '', E.dc);
-  box(1188, 1220, 1308, 1260, 'SEC 2', '', E.dc); box(1383, 1220, 1503, 1260, 'ESS 2', '', E.dc); box(1578, 1220, 1698, 1260, 'N-ESS', '', E.dc);
+  box(1188, 1220, 1308, 1260, 'SEC 2', '', E.dc); box(1383, 1220, 1503, 1260, 'ESS 2', '', E.dc); box(1578, 1220, 1698, 1260, 'N-ESS', '', E.dcNess);
   // APU GEN · AC GPU
   const src = (x, y, s, on) => {
     g.fillStyle = '#000'; g.beginPath(); g.arc(x, y, 62, 0, Math.PI * 2); g.fill();
@@ -768,11 +782,12 @@ function _elecCduRefresh() {
   const h = `<div style="color:#567;font-size:10px;margin-bottom:6px">전원 상태 — 스위치는 UPPER 창(GEN · APU · TRU · BATT)</div>` +
     row('GEN 1', E.gen1, E.gen1 ? `ON · ${Math.round(E.genA)}A` : 'OFF') +
     row('GEN 2', E.gen2, E.gen2 ? `ON · ${Math.round(E.genA)}A` : 'OFF') +
-    row('APU GEN', E.apu, E.apu ? `ON · ${Math.round(E.genA)}A` : 'OFF') +
+    row('APU GEN', E.apuConn, E.apuConn ? `ON · ${Math.round(E.genA)}A` : E.apu ? 'STBY(주 발전기 있음)' : 'OFF') +
     row('AC 1 · AC 2 BUS', E.ac, E.ac ? (E.tie ? 'ON (TIE)' : 'ON') : 'OFF') +
     row('TRU 1', E.tru1, E.tru1 ? `ON · ${Math.round(E.truA)}A` : 'OFF') +
     row('TRU 2', E.tru2, E.tru2 ? `ON · ${Math.round(E.truA)}A` : 'OFF') +
     row('DC 1 · DC 2 BUS', E.dc, E.dc ? (E.tru1 || E.tru2 ? 'ON' : 'ON (BATT)') : 'OFF') +
+    row('DC N-ESS', E.dcNess, E.dcNess ? 'ON' : E.dc ? 'SHED(APU 전원)' : 'OFF') +
     row('BATT', E.batt, `${E.bat.a}A · ${E.bat.v}V`) +
     `<div style="color:#567;font-size:10px;margin-top:12px">SYSTEM 창(탭 'SYSTEM')에 Electrical 계통도가 보입니다.</div>`;
   if (el.innerHTML !== h) el.innerHTML = h;
