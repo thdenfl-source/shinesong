@@ -122,6 +122,8 @@ const _ovhdFns = [];
                         : d.t === 'th' ? ['IN', 'PULLED'].includes(s[k]) : d.pos.includes(s[k])) ovhdState[k] = s[k];
     });
   } catch (e) { _swallow(e); }
+  // 덮개 스위치가 올라간 채 저장돼 있으면 덮개는 열려 있다(닫힌 덮개는 스위치를 내려 둔다)
+  Object.values(_ovhdDefs).forEach(d => { if (d.t === 'guard' && ovhdState[d.id] !== d.pos[0]) _ovhdGuard[d.id] = true; });
 })();
 function _ovhdSave() {
   try {
@@ -307,3 +309,9 @@ try {
   const w = document.getElementById('ovhd-wrap');
   if (w && !w.classList.contains('page-hidden')) ovhdShow();
 } catch (e) { _swallow(e); }
+
+// ── 시뮬레이터 연동 ──
+// TRAINING NO1/NO2 ENG TRNG → SIM 의 OEI 훈련(14-simmode.js simTrngApply)
+ovhdOn(id => {
+  if ((id === 'trng1' || id === 'trng2') && typeof simTrngApply === 'function') simTrngApply();
+});
