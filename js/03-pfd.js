@@ -294,6 +294,30 @@ function drawNpNr(x, y, w, h, P) {
   });
 }
 
+// ── PFD 메시지 시현창(HSI 오른쪽 위 바람 정보 아래) ──
+// UPPER · LOWER 콘솔 스위치와 엔진 상태를 따라 켜진다. 황색은 주의, 녹색은 상태 알림.
+//   PITOT OFF(황) — PITOT HEAT 가 OFF 일 때(AUTO · ON 이면 없음)
+//   PARKING BRAKE SET(녹) — 파킹 브레이크 SET
+//   1 · 2 ENG A/I ON(녹) — 그 엔진 ANTI ICE 스위치 ON, 또는 NgR 87.5 % 이하면 늘
+//   NLG LOCK(녹) — NOSE WHEEL LOCK
+//   EMER FLOATS ARMED(녹) — 비상부주 FLOATS 스위치 ARMED
+const PFD_MSG_AMBER = '#ffb000', PFD_MSG_GREEN = '#22e022', PFD_AI_NGR = 87.5;
+function pfdMsgs() {
+  const ov = (id, d) => { try { const v = typeof ovhdGet === 'function' ? ovhdGet(id) : undefined; return v === undefined ? d : v; } catch (e) { return d; } };
+  let P = null;
+  try { P = engParams(); } catch (e) { _swallow(e); }
+  const out = [];
+  if (ov('pitotHeat', 'AUTO') === 'OFF') out.push({ t: 'PITOT OFF', c: PFD_MSG_AMBER });
+  if (ov('parkBrake', 'RELEASE') === 'SET') out.push({ t: 'PARKING BRAKE SET', c: PFD_MSG_GREEN });
+  [1, 2].forEach(n => {
+    const ng = P ? (n === 1 ? P.e1 : P.e2).ng : 100;
+    if (ov('engAi' + n, 'OFF') === 'ON' || ng <= PFD_AI_NGR) out.push({ t: `${n} ENG A/I ON`, c: PFD_MSG_GREEN });
+  });
+  if (ov('noseLock', 'UNLOCK') === 'LOCK') out.push({ t: 'NLG LOCK', c: PFD_MSG_GREEN });
+  if (ov('fltArmSw', 'OFF') === 'ARMED') out.push({ t: 'EMER FLOATS ARMED', c: PFD_MSG_GREEN });
+  return out;
+}
+
 // ── HOCAS 표시 ── FCP 의 HOCAS 버튼으로 켠다. HSI 왼쪽(바람 표시와 TAS 줄 사이)에
 // 사이클릭(전후·좌우)과 페달이 가운데(중립)인지, 한쪽으로 얼마나 치우쳤는지 보여 준다.
 //   ● 조종 장치(조이스틱·화면 조종간)가 지금 밀려 있는 자리 — 가운데면 초록, 치우치면 호박색
@@ -1346,6 +1370,20 @@ function drawHSI(x, y, w, h, cxC) {
     ctx.lineTo(wdX + ax + Math.sin(ba - 0.45)*hs, wdY + ay - Math.cos(ba - 0.45)*hs);
     ctx.closePath(); ctx.fillStyle = '#ffffff'; ctx.fill();
     ctx.restore();
+    // ── 메시지 시현창(바람 정보 아래) ── 콘솔 스위치 · 엔진 상태를 따른다(pfdMsgs)
+    const msgs = pfdMsgs();
+    if (msgs.length) {
+      ctx.save();
+      const mx0 = rightX, mw = Math.max(20, x + w - 4 - rightX);
+      let mfs = Math.max(7, Math.min(10, r * 0.085));
+      ctx.font = `bold ${mfs}px Helvetica Neue, Arial, sans-serif`;
+      const widest = Math.max(...msgs.map(m => ctx.measureText(m.t).width));
+      if (widest > mw - 4) { mfs = Math.max(6, mfs * (mw - 4) / widest); ctx.font = `bold ${mfs}px Helvetica Neue, Arial, sans-serif`; }
+      ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+      let my = wdY + fs * 1.1 + 6 + mfs * 1.25;
+      msgs.forEach(m => { ctx.fillStyle = m.c; ctx.fillText(m.t, mx0 + 2, my); my += mfs * 1.3; });
+      ctx.restore();
+    }
   }
 
   // (FMS · NAV1 · NAV2 목적지 줄은 오른쪽 아래 칸으로 옮겼다 — drawNavSrcBox · HSI 와 겹치지 않게)

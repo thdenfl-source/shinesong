@@ -166,6 +166,8 @@ ovhdOn((id, v) => {
   if (id === 'bFltTst' && v === 'IN' && !_lconQuiet) { try { afcsTestStart(); } catch (e) { _swallow(e); } }
   // FUEL 패널 · AFCAU AP1/AP2 → SYSTEM 창(Fuel · Aircraft Status · AFCS) 다시 그리기
   try { if (typeof sysDraw === 'function') sysDraw(); } catch (e) { _swallow(e); }
+  // PFD 메시지 시현창(03-pfd.js pfdMsgs — PITOT · PARKING BRAKE · ENG A/I · NLG LOCK · EMER FLOATS)도 곧바로
+  try { if (typeof drawPFD === 'function') drawPFD(); } catch (e) { _swallow(e); }
 });
 lconSyncPark();
 
