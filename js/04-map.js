@@ -748,8 +748,8 @@ function _init3dMap() {
 // (창 하나가 너비 약 1/3 · 높이 2/9 · index.html). CHIN 창은 같은 바탕(위성·지형·함정)을 그리는 작은 3D 지도
 // 두 장이다 — 카메라는 같은 눈 자리에서 기체를 따라 앞아래를 본다(05-gps.js 의
 // _ml3dChinCamera). SIM 1인칭에서만 쓰고, 나오면 지도를 지워 그래픽 자원을 돌려준다.
-let chinL = true, chinR = true;   // L CHIN · R CHIN — 왼쪽만·오른쪽만·둘 다·모두 끔
-let chinViewOn = true;            // 둘 중 하나라도 켜져 있는가(chinL || chinR)
+let chinL = false, chinR = false;   // L CHIN · R CHIN — 왼쪽만·오른쪽만·둘 다·모두 끔(처음에는 꺼 둔다)
+let chinViewOn = false;            // 둘 중 하나라도 켜져 있는가(chinL || chinR)
 let _chinMaps = [];               // [{ map, side: -1 왼쪽 · +1 오른쪽, ship: 함정 레이어를 얹었나 }]
 function _chinWanted() {
   // 외부 시점(15-heli3d.js)에서는 조종석 창이 뜻이 없다 — 닫는다
