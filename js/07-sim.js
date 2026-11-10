@@ -241,6 +241,7 @@ document.addEventListener('pointercancel', stopAllHolds);
 
 Object.entries(btnMap).forEach(([id,[f,d]])=>{
   const el=document.getElementById(id);
+  if (!el) return;   // FCP 1행(IAS · HDG · CRS · VS · ALT · CRHT · HHT ▲▼)은 없앴다 — SIMPLE 패널 노브가 같은 일을 한다
   let timer=null, interval=null, guard=null;
   function start(e){
     e.preventDefault();
@@ -1894,7 +1895,9 @@ function _fcpsBuild() {
       _fcpsBtn('tdown', 'T-DOWN', 'tdownSet') + _fcpsBtn('tdh', 'T.D.HOV', 'tdhEngage') + _fcpsKnob('hht') +
     `</div><div class="fks-div"></div><div class="fks-r">` +
       _fcpsKnob('baro') + _fcpsKnob('uplim') + _fcpsKnob('crs') + _fcpsKnob('dh') + `</div>`;
-  bar.appendChild(p);
+  // 옛 FCP 1행 자리 — 소프트키 바로 아래, 나머지 줄 위
+  const firstRow = bar.querySelector(':scope > .ctrl-sub-row');
+  if (firstRow) bar.insertBefore(p, firstRow); else bar.appendChild(p);
   // 노브 돌리기 — 누르고 있으면 계속(지금 FCP ▲▼ 와 같은 빠르기)
   p.querySelectorAll('[data-rot]').forEach(el => {
     const [f, dStr] = el.dataset.rot.split(','), d = +dStr;
@@ -1926,7 +1929,7 @@ function fcpsBaroStd() { window._qnhHpa = QNH_STD; try { drawPFD(); } catch (e) 
 // 노브 아래 작은 값 · 걸린 모드는 노브 테·버튼이 녹색
 function fcpsSync() {
   const p = document.getElementById('fcp-simple');
-  if (!p || !fcpSimpleOn) return;
+  if (!p) return;
   const set = (id, txt) => { const e = document.getElementById('fks-' + id); if (e && e.textContent !== txt) e.textContent = txt; };
   const on = (k, v) => { const c = p.querySelector(`[data-k="${k}"]`) || document.getElementById('fks-' + k); if (c && c.classList.contains('on') !== !!v) c.classList.toggle('on', !!v); };
   const g = (f, d) => { try { return f(); } catch (e) { return d; } };

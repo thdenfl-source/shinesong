@@ -1,4 +1,4 @@
-// FCP SIMPLE — 실기 AFCS 조작 패널 모양으로 간추린 FCP(07-sim.js). 왼쪽 세로 탭 하나로 지금 FCP ⇄ SIMPLE.
+// FCP SIMPLE — 실기 AFCS 조작 패널 모양 FCP(07-sim.js). 옛 FCP 1행을 대신해 늘 보이고, 왼쪽 세로 탭이 나머지 줄(FULL)을 보이고 감춘다.
 export const name = 'FCP SIMPLE';
 
 export async function run(page, t) {
@@ -9,10 +9,12 @@ export async function run(page, t) {
     const turn = (k, side) => { const el = document.querySelector(`#fcp-simple [data-k="${k}"] .fks-${side}`); el.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })); el.dispatchEvent(new PointerEvent('pointerup', { bubbles: true })); };
     const o = {};
     if (fcpSimpleOn) toggleFcpSimple();
-    o.fullRows = vis(bar.querySelector('.ctrl-sub-row')) && !vis(document.getElementById('fcp-simple'));
+    // FULL — SIMPLE 패널(옛 FCP 1행을 대신)은 늘 보이고, 그 아래 나머지 줄도 보인다
+    o.fullRows = vis(bar.querySelector('.ctrl-sub-row')) && vis(document.getElementById('fcp-simple'))
+      && !document.getElementById('spd-up') && !document.getElementById('sw-display');
     const h0 = bar.offsetHeight;
     document.getElementById('fcps-tog').click(); await wait(80);
-    o.simple = fcpSimpleOn && vis(document.getElementById('fcp-simple')) && !vis(bar.querySelector('.ctrl-sub-row'));
+    o.simple = fcpSimpleOn && vis(document.getElementById('fcp-simple')) && !vis(bar.querySelector('.ctrl-sub-row'));   // SIMPLE — 패널만
     o.tog = document.getElementById('fcps-tog').textContent;
     o.lbls = [...document.querySelectorAll('#fcp-simple .fks-lbl')].map(e => e.textContent.trim()).filter(x => x && x !== ' ').join(',');
     o.saved = localStorage.getItem('fcpSimple') === '1';
@@ -42,7 +44,7 @@ export async function run(page, t) {
     localStorage.removeItem('fcpSimple'); window._qnhHpa = 1013;
     return o;
   });
-  t.ok(r.fullRows, '처음에는 지금 FCP');
+  t.ok(r.fullRows, 'FULL — SIMPLE 패널(옛 1행 대신 · 늘 보임) + 나머지 줄 · 옛 1행 ▲▼ 와 STOP WATCH 는 없앴다');
   t.ok(r.simple && r.tog === 'FULL' && r.saved, `왼쪽 세로 탭을 누르면 SIMPLE — 탭 글씨는 FULL, 고른 것은 기억한다`);
   t.eq(r.lbls, 'IAS,HDG,VS,ALT.A,ALT,CR.HT,NAVD CPL,T-DOWN,T.D.HOV,H.HT,BARO,UPLIM,CRS,DH', '사진의 배치(위 · 아래 · 오른쪽 BARO/UPLIM · CRS/DH)');
   t.ok(r.hdg === 1 && r.alt === 100 && r.crht === -10 && r.hht === 10, `노브를 돌리면 HDG +1 · ALT.A +100 · CR.HT −10 · H.HT +10 (${r.hdg} · ${r.alt} · ${r.crht} · ${r.hht})`);

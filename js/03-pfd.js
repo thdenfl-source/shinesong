@@ -100,6 +100,7 @@ function drawPFD() {
   ctx.beginPath(); ctx.moveTo(L.hsi.x + 0.5, L.aiH); ctx.lineTo(L.hsi.x + 0.5, L.usableH); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(L.crht.x + 0.5, L.aiH); ctx.lineTo(L.crht.x + 0.5, L.usableH); ctx.stroke();
   if (hocasOn) drawHocas(L.hsi.x, L.hsi.y, L.hsi.w, L.hsi.h, W / 2);
+  drawStopwatch(L.hsi.x, L.hsi.y, L.hsi.w, L.hsi.h, W / 2);
 }
 
 // ── FMS · NAV1 · NAV2 목적지(명칭·방위·거리) ── 오른쪽 아래, CRHT 계기 밑 칸(높이 1/3).
@@ -296,6 +297,54 @@ function drawNpNr(x, y, w, h, P) {
   });
 }
 
+// ── 스톱워치(HSI 오른쪽 아래 — 메시지 시현창 · HOCAS 창 아래, HOCAS 와 같은 폭) ── FCP 의 STOP WATCH 를 옮겼다
+// 시계 모드: 현재 시각 + [STOP WATCH] · 스톱워치 모드: 경과 시간 + [GO/STP] [RST] [TIME]. 칸을 누르면 그 동작(_swHit · onPfdTap)
+let _swHit = [];
+function drawStopwatch(x, y, w, h, cxC) {
+  if (!(w >= 40) || !(h >= 40)) return;
+  const RC = hsiRightCol(x, y, w, h, cxC);
+  const bx = RC.left, bw = RC.width, by = RC.swY, bh = RC.swH, fs = RC.fs;
+  const sw = typeof _swMode !== 'undefined' && _swMode === 'sw';
+  const run = sw && typeof SW !== 'undefined' && SW.running;
+  ctx.save();
+  ctx.fillStyle = 'rgba(0,0,0,0.72)'; ctx.fillRect(bx, by, bw, bh);
+  ctx.strokeStyle = '#446688'; ctx.lineWidth = 1; ctx.strokeRect(bx + 0.5, by + 0.5, bw - 1, bh - 1);
+  // 윗줄 — 이름표 · 시각
+  ctx.textBaseline = 'alphabetic';
+  ctx.font = `bold ${fs * 0.8}px Helvetica Neue, Arial, sans-serif`;
+  ctx.fillStyle = '#8ac6ff'; ctx.textAlign = 'left';
+  ctx.fillText(sw ? 'SW' : 'TIME', bx + 4, by + fs * 1.45);
+  ctx.font = `bold ${fs * 1.25}px Helvetica Neue, Arial, sans-serif`;
+  ctx.fillStyle = sw ? (run ? '#22e022' : '#ffffff') : '#ffffff'; ctx.textAlign = 'right';
+  ctx.fillText(typeof swText === 'function' ? swText() : '', bx + bw - 4, by + fs * 1.55);
+  // 아랫줄 — 버튼
+  const btns = sw ? [[run ? 'STP' : 'GO', 'swToggle', run], ['RST', 'swReset', false], ['TIME', 'swSetMode:clock', false]]
+                  : [['STOP WATCH', 'swSetMode:sw', false]];
+  const gy = by + fs * 2.0, gh = bh - fs * 2.0 - 4, gap = 3, gw = (bw - 8 - gap * (btns.length - 1)) / btns.length;
+  const hits = [];
+  btns.forEach(([t, act, on], i) => {
+    const gx = bx + 4 + i * (gw + gap);
+    ctx.fillStyle = on ? '#14451a' : '#1c232b'; ctx.fillRect(gx, gy, gw, gh);
+    ctx.strokeStyle = on ? '#22e022' : '#5a6672'; ctx.strokeRect(gx + 0.5, gy + 0.5, gw - 1, gh - 1);
+    ctx.fillStyle = on ? '#7fffb0' : '#cfd6dc'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font = `bold ${Math.min(fs * 0.85, gw / Math.max(3, t.length) * 1.6)}px Helvetica Neue, Arial, sans-serif`;
+    ctx.fillText(t, gx + gw / 2, gy + gh / 2 + 1);
+    hits.push({ x: gx, y: gy, w: gw, h: gh, act });
+  });
+  ctx.restore();
+  // 본 PFD 캔버스에서만 누름 자리를 기억한다(3D 에 겹친 계기는 그림만)
+  if (!cvs.dataset.noFcp) _swHit = hits;
+}
+// PFD 를 누른 자리(캔버스 px)가 스톱워치 버튼이면 그 동작 — 09-cdu.js onPfdTap 이 먼저 묻는다
+function swHitTest(px, py) {
+  const b = _swHit.find(r => px >= r.x && px <= r.x + r.w && py >= r.y && py <= r.y + r.h);
+  if (!b) return false;
+  if (b.act === 'swToggle') swToggle();
+  else if (b.act === 'swReset') swReset();
+  else if (b.act.startsWith('swSetMode:')) swSetMode(b.act.split(':')[1]);
+  return true;
+}
+
 // ── PFD 메시지 시현창(HSI 오른쪽 위 바람 정보 아래) ──
 // UPPER · LOWER 콘솔 스위치와 엔진 상태를 따라 켜진다. 황색은 주의, 녹색은 상태 알림.
 //   PITOT OFF(황) — PITOT HEAT 가 OFF 일 때(AUTO · ON 이면 없음)
@@ -379,19 +428,26 @@ function hocasAxes() {
   } catch (e) { _swallow(e); }
   return { roll: a.roll || 0, pitch: a.pitch || 0, yaw: a.yaw || 0, trim, coll };
 }
-function drawHocas(x, y, w, h, cxC) {
-  if (!(w >= 40) || !(h >= 40)) return;
-  // HSI 오른쪽 아래 — 왼쪽은 바람·TAS/OAT 등과 겹쳐 오른쪽 아래 빈자리로 옮겼다
+// HSI 오른쪽 아래 칸의 자리 — HOCAS 창과 그 아래 스톱워치가 같은 왼쪽 · 폭으로 선다
+function hsiRightCol(x, y, w, h, cxC) {
   const G = hsiGeom(x, y, w, h, cxC);
   const sideW = Math.max(60, G.rightW);
+  const fs = Math.max(8, Math.min(11, sideW * 0.10));
+  const colW = 8, colGap = 6;                      // HOCAS 오른쪽에 컬렉티브 막대
+  const box = Math.min(sideW - 8 - colW - colGap, h * 0.40);
+  const bx = Math.min(x + w - 8 - box - colW - colGap, G.cx + G.r + 4 + (sideW - box - colW - colGap) / 2);
+  const swH = Math.round(fs * 3.6 + 8);            // 스톱워치 칸 높이(시각 한 줄 + 버튼 한 줄)
+  return { G, sideW, fs, colW, colGap, box, bx, left: bx - 4, width: box + colW + colGap + 8, swH, swY: y + h - 6 - swH };
+}
+function drawHocas(x, y, w, h, cxC) {
+  if (!(w >= 40) || !(h >= 40)) return;
+  // HSI 오른쪽 아래 — 왼쪽은 바람·TAS/OAT 등과 겹쳐 오른쪽 아래 빈자리로 옮겼다. 그 아래에는 스톱워치(drawStopwatch)
+  const RC = hsiRightCol(x, y, w, h, cxC);
+  const { G, sideW, fs, colW, colGap, box, bx } = RC;
   const ax = hocasAxes();
   const clamp = v => Math.max(-1, Math.min(1, v));
   const col = v => Math.abs(v) <= HOCAS_DEAD ? '#00ff88' : '#ffb74d';
-  const fs = Math.max(8, Math.min(11, sideW * 0.10));
-  const colW = 8, colGap = 6;                      // 오른쪽에 컬렉티브 막대
-  const box = Math.min(sideW - 8 - colW - colGap, h * 0.40);
-  const bx = Math.min(x + w - 8 - box - colW - colGap, G.cx + G.r + 4 + (sideW - box - colW - colGap) / 2);
-  const by = y + h - 6 - (box + fs * 3.8 + 12);   // 바탕 아래끝이 HSI 아래에서 6px
+  const by = RC.swY - 4 - (box + fs * 3.8 + 12);   // 바탕 아래끝이 스톱워치 칸 위에서 4px
   ctx.save();
   // 바탕
   ctx.fillStyle = 'rgba(0,0,0,0.72)';

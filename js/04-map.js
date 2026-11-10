@@ -863,7 +863,12 @@ function _fcpSplit() {
   const bar = document.querySelector('#pfd-wrap .ctrl-bar');
   if (!bar) return [];
   _fcpParts = [];
-  [...bar.querySelectorAll(':scope > .ctrl-sub-row')].forEach((row, ri) => {
+  // 옛 FCP 1행 대신 늘 보이는 SIMPLE 패널(07-sim.js)을 3D 창 FCP 의 첫 줄로
+  const simple = bar.querySelector(':scope > #fcp-simple');
+  if (simple) _fcpParts.push({ el: simple, side: 'L', row: 0, ph: null });
+  const off = simple ? 1 : 0;
+  [...bar.querySelectorAll(':scope > .ctrl-sub-row')].forEach((row, r0) => {
+    const ri = r0 + off;
     // 칸(무리)만 세어 반으로 가르고, 칸 사이 구분선(.ctrl-div)은 뒤 칸을 따라간다(반의 맨 앞 구분선은 두고 간다)
     const kids = [...row.children];
     const items = kids.filter(e => !e.classList.contains('ctrl-div'));
