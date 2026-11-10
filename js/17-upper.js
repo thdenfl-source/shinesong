@@ -7,11 +7,11 @@
 //   ovhdOn(fn)           바뀔 때마다 fn(id, value, prev) — 연동은 여기에 건다
 //   window 'ovhd' 이벤트  같은 내용(detail: { id, value, prev })
 //
-// 화면은 1000×950 의 설계 크기로 그리고 창에 맞춰 통째로 줄이고 키운다(사진의 비율 그대로).
+// 화면은 1000×1240 의 설계 크기로(아래 TQS 포함) 그리고 창에 맞춰 통째로 줄이고 키운다(사진의 비율 그대로).
 // 조작: 토글은 레버 위쪽을 누르면 한 칸 위로, 아래쪽은 아래로 · 노브는 왼쪽 절반을 누르면
 // 반시계, 오른쪽 절반은 시계 방향(마우스 휠도 된다) · 덮개 스위치는 덮개를 먼저 연다.
 
-const OVHD_W = 1000, OVHD_H = 950;
+const OVHD_W = 1000, OVHD_H = 1240;
 const OVHD_KEY = 'ovhdState';
 
 // 연속 노브(밝기 · 온도) — 0~10, 양 끝만 글자
@@ -32,8 +32,8 @@ const OVHD_PLATES = [
     { t: 'lbl', x: 85, y: 88, text: 'OFF', small: true },
     { t: 'mom', id: 'chipTest', x: 85, y: 228, title: 'CHIP DETECTOR', pos: ['NORM', 'TEST'], def: 'NORM', red: true, topLbl: '' },
     { t: 'br', x: 172, y: 42, w: 145, text: 'TRAINING' },
-    { t: 'guard', id: 'trng1', x: 208, y: 165, title: 'NO1 ENG', sub: 'TRNG', num: '1', pos: ['OFF', 'TRNG'], def: 'OFF' },
-    { t: 'guard', id: 'trng2', x: 282, y: 165, title: 'NO2 ENG', sub: 'TRNG', num: '2', pos: ['OFF', 'TRNG'], def: 'OFF' },
+    { t: 'guard', id: 'trng1', x: 208, y: 165, title: 'NO1 ENG', sub: 'TRNG', num: '1', pos: ['NORM', 'TRNG'], def: 'NORM' },
+    { t: 'guard', id: 'trng2', x: 282, y: 165, title: 'NO2 ENG', sub: 'TRNG', num: '2', pos: ['NORM', 'TRNG'], def: 'NORM' },
   ]},
   { x: 650, y: 10, w: 340, h: 300, items: [
     { t: 'br', x: 20, y: 30, w: 300, text: 'ECS' },
@@ -52,10 +52,10 @@ const OVHD_PLATES = [
     { t: 'tg', id: 'cabinLts', x: 170, y: 228, title: 'CABIN LTS', pos: ['OFF', 'ON'], def: 'OFF' },
     { t: 'tg', id: 'heels', x: 265, y: 228, title: 'HEELS', pos: ['OFF', 'ARM', 'ON'], side: true, def: 'OFF' },
     { t: 'tg', id: 'stowSel', x: 55, y: 332, title: 'STOW SEL', pos: ['LDG', 'SRCH'], def: 'LDG' },
-    { t: 'tg', id: 'srchLt', x: 160, y: 332, title: 'SRCH LT', pos: ['NORM', 'OFF'], def: 'NORM' },
-    { t: 'tg', id: 'navLts', x: 265, y: 332, title: 'NAV LTS', pos: ['NORM', 'OFF'], def: 'NORM' },
+    { t: 'tg', id: 'srchLt', x: 160, y: 332, title: 'SRCH LT', pos: ['NORM', 'IR'], def: 'NORM' },
+    { t: 'tg', id: 'navLts', x: 265, y: 332, title: 'NAV LTS', pos: ['NORM', 'IR'], def: 'NORM' },
     { t: 'br', x: 105, y: 388, w: 175, text: 'POSITION LTS' },
-    { t: 'tg', id: 'display', x: 50, y: 445, title: 'DISPLAY', pos: ['DAY', 'NIGHT'], def: 'DAY' },
+    { t: 'tg', id: 'display', x: 50, y: 445, title: 'DISPLAY', pos: ['DAY', 'NIGHT', 'NVG'], side: true, def: 'DAY' },
     { t: 'rot', id: 'posLts', x: 160, y: 450, small: true, pos: ['1', '2', '3', '4', '5'],
       ang: [-80, -40, 0, 40, 80], def: '3' },
     { t: 'tg', id: 'posMode', x: 265, y: 445, pos: ['STEADY', 'OFF', 'FLASH'], side: true, red: true, def: 'STEADY' },
@@ -70,7 +70,7 @@ const OVHD_PLATES = [
     { t: 'th', id: 'apuFire', x: 200, y: 128, title: 'FIRE EXTGH' },
     { t: 'tg', id: 'gen1', x: 60, y: 248, title: 'GEN1', pos: ['OFF', 'ON'], def: 'ON' },
     { t: 'tg', id: 'gen2', x: 155, y: 248, title: 'GEN2', pos: ['OFF', 'ON'], def: 'ON' },
-    { t: 'tg', id: 'apuGen', x: 250, y: 248, title: 'APU GEN', pos: ['OFF', 'APU GEN'], def: 'OFF' },
+    { t: 'tg', id: 'apuGen', x: 250, y: 248, title: 'APU/GPU', pos: ['GPU', 'OFF', 'APU GEN'], side: true, def: 'OFF' },
     { t: 'tg', id: 'tru1', x: 60, y: 350, title: 'TRU1', pos: ['OFF', 'ON'], def: 'ON' },
     { t: 'tg', id: 'tru2', x: 155, y: 350, title: 'TRU2', pos: ['OFF', 'ON'], def: 'ON' },
     { t: 'tg', id: 'batt', x: 250, y: 350, title: 'BATT', pos: ['OFF', 'ON'], def: 'ON' },
@@ -98,6 +98,21 @@ const OVHD_PLATES = [
     { t: 'tg', id: 'emergPump', x: 65, y: 580, title: 'EMERG\nPUMP', pos: ['OFF', 'AUTO', 'ON'], side: true, red: true, def: 'AUTO', tiny: true },
     { t: 'tg', id: 'pitotHeat', x: 170, y: 580, title: 'PITOT\nHEAT', pos: ['OFF', 'AUTO', 'ON'], side: true, paddle: true, def: 'AUTO', tiny: true },
     { t: 'tg', id: 'battHeat', x: 275, y: 580, title: 'BATT\nHEAT', pos: ['OFF', 'AUTO', 'ON'], side: true, red: true, def: 'AUTO', tiny: true },
+  ]},
+  // ── TQS(엔진 출력 조절장치 · 그림 7) ── PCD 레버 둘(OFF · IDLE · FLY), 모터링 버튼, 엔진마다 연료차단·화재소화 레버.
+  // PCD 는 FLY 에서 내리면 IDLE 에서 한 번 멈춘다(누름쇠 — 한 번 더 눌러야 OFF).
+  { x: 290, y: 950, w: 420, h: 285, items: [
+    { t: 'br', x: 20, y: 18, w: 380, text: 'TQS' },
+    { t: 'pb', id: 'mtr1', x: 150, y: 58, title: 'MTRING 1' },
+    { t: 'pb', id: 'mtr2', x: 270, y: 58, title: 'MTRING 2' },
+    { t: 'lbl', x: 210, y: 112, text: 'OFF' }, { t: 'lbl', x: 210, y: 167, text: 'IDLE' }, { t: 'lbl', x: 210, y: 222, text: 'FLY' },
+    { t: 'lv', id: 'pcd1', x: 150, y: 112, ys: [0, 55, 110], pos: ['OFF', 'IDLE', 'FLY'], def: 'FLY' },
+    { t: 'lv', id: 'pcd2', x: 270, y: 112, ys: [0, 55, 110], pos: ['OFF', 'IDLE', 'FLY'], def: 'FLY' },
+    { t: 'lbl', x: 150, y: 266, text: 'No.1 PCD', small: true }, { t: 'lbl', x: 270, y: 266, text: 'No.2 PCD', small: true },
+    { t: 'tg', id: 'fuel1', x: 55, y: 125, title: 'ENG1 FUEL', pos: ['OPEN', 'SHUT'], def: 'OPEN' },
+    { t: 'tg', id: 'fuel2', x: 365, y: 125, title: 'ENG2 FUEL', pos: ['OPEN', 'SHUT'], def: 'OPEN' },
+    { t: 'tg', id: 'fire1', x: 55, y: 232, title: 'ENG1 FIRE', pos: ['NORM', 'ARM', 'DISCH'], side: true, red: true, def: 'NORM' },
+    { t: 'tg', id: 'fire2', x: 365, y: 232, title: 'ENG2 FIRE', pos: ['NORM', 'ARM', 'DISCH'], side: true, red: true, def: 'NORM' },
   ]},
 ];
 
@@ -189,6 +204,13 @@ function _ovhdItemHtml(it) {
       return `<div class="ov-rot${it.small ? ' sm' : ''}${it.t === 'dim' ? ' dim' : ''}" data-ov="${it.id}" style="${at}">${title}` +
         `<div class="ov-knob"><div class="ov-ptr"></div></div>${lbls}</div>`;
     }
+    case 'lv': {                                       // 미끄럼 레버(TQS PCD) — 위치마다 터치 칸
+      const h = it.ys[it.ys.length - 1];
+      return `<div class="ov-lv" data-ov="${it.id}" style="${at}">` +
+        `<div class="ov-slot" style="height:${h + 30}px"></div><div class="ov-lvh"><i></i></div>` +
+        it.ys.map((y, i) => `<div class="ov-hit" data-hz="p${i}" style="left:-34px;top:${y - 27}px;width:68px;height:54px"></div>`).join('') +
+        `</div>`;
+    }
     case 'pb':
       return `<div class="ov-pb" data-ov="${it.id}" style="${at}">${title}<div class="ov-btn"></div>` +
         `<div class="ov-hit" style="left:-36px;top:-40px;width:72px;height:62px"></div></div>`;
@@ -259,6 +281,9 @@ function _ovhdPaint(id) {
     el.querySelector('.ov-knob').style.transform = `rotate(${d.ang[Math.max(0, d.pos.indexOf(v))]}deg)`;
   } else if (d.t === 'dim') {
     el.querySelector('.ov-knob').style.transform = `rotate(${DIM.from + (DIM.to - DIM.from) * v / (DIM.steps - 1)}deg)`;
+  } else if (d.t === 'lv') {
+    el.querySelector('.ov-lvh').style.top = `${d.ys[Math.max(0, d.pos.indexOf(v))] - 18}px`;
+    el.dataset.p = v;
   } else if (d.t === 'pb') {
     el.classList.toggle('pressed', !!v);
   } else if (d.t === 'th') {
@@ -299,6 +324,13 @@ function _ovhdDown(e) {
     if (d.t === 'mom' && j === 0) return;               // 스프링 스위치는 아래(TEST)로만 누른다
     ovhdSet(id, d.pos[j]);
     if (d.t === 'mom') _ovhdMom = id;
+  } else if (d.t === 'lv') {
+    const m = /^p(\d)$/.exec((e.target.dataset && e.target.dataset.hz) || '');
+    if (!m) return;
+    let j = Number(m[1]);
+    const i = d.pos.indexOf(v);
+    if (i === d.pos.length - 1 && j === 0) j = 1;       // 누름쇠 — FLY 에서 한 번에 OFF 로 가지 않고 IDLE 에서 멈춘다
+    ovhdSet(id, d.pos[j]);
   } else if ((d.t === 'rot' || d.t === 'dim') && e.target.closest('[data-ov-pos]')) {
     const pv = e.target.closest('[data-ov-pos]').dataset.ovPos;   // 위치 글자를 누르면 그 위치로 바로
     ovhdSet(id, d.t === 'dim' ? Number(pv) : pv);
@@ -341,7 +373,10 @@ try {
 } catch (e) { _swallow(e); }
 
 // ── 시뮬레이터 연동 ──
-// TRAINING NO1/NO2 ENG TRNG → SIM 의 OEI 훈련(14-simmode.js simTrngApply)
+// TRAINING NO1/NO2 ENG TRNG → SIM 의 OEI 훈련
+// TQS PCD · 연료차단 · 화재소화 레버 → 엔진마다의 상태(14-simmode.js simEngApply)
+const OVHD_ENG_IDS = ['trng1', 'trng2', 'pcd1', 'pcd2', 'fuel1', 'fuel2', 'fire1', 'fire2'];
 ovhdOn(id => {
-  if ((id === 'trng1' || id === 'trng2') && typeof simTrngApply === 'function') simTrngApply();
+  if (OVHD_ENG_IDS.includes(id) && typeof simEngApply === 'function') simEngApply();
 });
+try { if (typeof simEngApply === 'function') simEngApply(true); } catch (e) { _swallow(e); }   // 저장된 위치대로 처음 상태

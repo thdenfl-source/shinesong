@@ -484,29 +484,50 @@ const OEI_25_FRAC = 0.73, OEI_CONT_FRAC = 0.64, OEI_25_SEC = 150;
 let simEng = 2, simOeiT = 0;
 // OEI 일 때 멎은(또는 훈련으로 줄인) 엔진 번호 · 상부 콘솔 TRAINING 스위치로 든 훈련인가
 let simEngFail = 2, simEngTrng = false;
-// ── 상부 콘솔 TRAINING NO1/NO2 ENG TRNG(17-upper.js) → OEI 훈련 ──
-// 한쪽을 TRNG 로 올리면 그 엔진을 줄인 OEI 훈련이 된다(남은 엔진이 2.5분 → 연속 정격까지).
-// 둘 다 올리면 훈련이 걸리지 않는다(AEO). 둘 다 내리면 AEO 로 돌아온다.
-function simTrngApply(quiet) {
-  let t1 = false, t2 = false;
-  try { t1 = ovhdGet('trng1') === 'TRNG'; t2 = ovhdGet('trng2') === 'TRNG'; } catch (e) { return; }
-  const want = (t1 && !t2) ? 1 : (t2 && !t1) ? 2 : 0;          // 훈련으로 줄일 엔진(0: 없음)
-  const was = simEngTrng ? simEngFail : 0;
-  if (want === was && !(t1 && t2)) return;
-  if (want) {
-    if (!(simEngTrng && simEngFail === want)) simOeiT = 0;
-    simEng = 1; simEngFail = want; simEngTrng = true;
-  } else if (simEngTrng) {
-    simEng = 2; simOeiT = 0; simEngFail = 2; simEngTrng = false;
-  }
+// ── 엔진마다의 상태 ── 'FLY'(출력을 낸다) · 'IDLE' · 'TRNG'(훈련으로 줄임 — IDLE 로 보인다) · 'OFF'(멎음)
+// 상부 콘솔(17-upper.js)의 조작으로 정한다:
+//   TQS PCD — OFF · IDLE · FLY        · 연료차단 레버 SHUT · 화재소화 레버 ARM/DISCH → 그 엔진 OFF
+//   TRAINING NO1/NO2 ENG TRNG — 한쪽만 올리면 그 엔진을 줄인 OEI 훈련(둘 다면 걸리지 않는다)
+//   3D 의 ENG 버튼 — AEO · OEI(2번 고장) · IDLE(두 엔진)
+// 출력을 내는 엔진 수가 simEng(2 AEO · 1 OEI · 0 동력 없음)다 — 남은 엔진은 2.5분 → 연속 정격까지.
+const simEngSt = { 1: 'FLY', 2: 'FLY' };
+let _simEngBtn = 2;
+function simEngApply(quiet) {
+  const g = id => { try { return typeof ovhdGet === 'function' ? ovhdGet(id) : undefined; } catch (e) { return undefined; } };
+  const prev = { eng: simEng, s1: simEngSt[1], s2: simEngSt[2], trng: simEngTrng ? simEngFail : 0 };
+  const st = {};
+  [1, 2].forEach(n => {
+    const pcd = g('pcd' + n), fire = g('fire' + n);
+    let v = pcd === 'OFF' ? 'OFF' : pcd === 'IDLE' ? 'IDLE' : 'FLY';
+    if (g('fuel' + n) === 'SHUT' || fire === 'ARM' || fire === 'DISCH') v = 'OFF';
+    st[n] = v;
+  });
+  if (_simEngBtn === 1) st[2] = 'OFF';                                   // ENG 버튼 OEI — 2번 고장
+  if (_simEngBtn === 0) [1, 2].forEach(n => { if (st[n] === 'FLY') st[n] = 'IDLE'; });
+  const t1 = g('trng1') === 'TRNG', t2 = g('trng2') === 'TRNG';
+  const tn = (t1 && !t2) ? 1 : (t2 && !t1) ? 2 : 0;
+  let trng = false;
+  if (tn && st[1] === 'FLY' && st[2] === 'FLY') { st[tn] = 'TRNG'; trng = true; }   // 훈련은 두 엔진이 다 돌 때만
+  simEngSt[1] = st[1]; simEngSt[2] = st[2];
+  simEng = (st[1] === 'FLY' ? 1 : 0) + (st[2] === 'FLY' ? 1 : 0);
+  simEngTrng = trng;
+  simEngFail = simEng === 1 ? (st[1] === 'FLY' ? 2 : 1) : 2;
+  if (simEng !== prev.eng || (trng ? simEngFail : 0) !== prev.trng) simOeiT = 0;
   updateEngBtn();
   if (quiet) return;
-  try {
-    uiToast(t1 && t2 ? 'TRNG 두 스위치가 다 올라가 있어 훈련이 걸리지 않습니다(AEO)'
-          : want ? `ENG ${want} TRNG — OEI 훈련(ENG ${want === 1 ? 2 : 1} 이 2.5분 정격)`
-          : '훈련 해제 — 두 엔진 정상(AEO)', want ? 'err' : '', 2500);
-  } catch (e) { _swallow(e); }
+  const changed = simEng !== prev.eng || st[1] !== prev.s1 || st[2] !== prev.s2;
+  let msg = null, kind = 'err';
+  if (t1 && t2 && !changed) msg = 'TRNG 두 스위치가 다 올라가 있어 훈련이 걸리지 않습니다(AEO)';
+  else if (changed) {
+    if (trng) msg = `ENG ${simEngFail} TRNG — OEI 훈련(ENG ${simEngFail === 1 ? 2 : 1} 이 2.5분 정격)`;
+    else if (simEng === 2) { msg = '두 엔진 정상(AEO)'; kind = ''; }
+    else if (simEng === 1) msg = `ENG ${simEngFail} ${st[simEngFail]} — OEI(2.5분 정격)`;
+    else msg = (st[1] === 'OFF' && st[2] === 'OFF') ? '두 엔진 OFF — 동력 없는 오토로테이션' : '두 엔진 IDLE — 동력 없는 오토로테이션';
+  }
+  if (msg) { try { uiToast(msg, kind, 2500); } catch (e) { _swallow(e); } }
 }
+// 종전 이름(TRAINING 연동) — 이제는 모든 엔진 조작을 한 번에 본다
+function simTrngApply(quiet) { simEngApply(quiet); }
 function simEngAvail() {
   const m = mtaNow();
   if (simEng >= 2) return m;
@@ -514,15 +535,14 @@ function simEngAvail() {
   return 0;
 }
 function cycleSimEng() {
-  simEng = simEng === 2 ? 1 : simEng === 1 ? 0 : 2; simOeiT = 0;
-  simEngFail = 2; simEngTrng = false;          // 버튼의 OEI 는 2번 고장(훈련 스위치와 따로)
-  updateEngBtn();
-  try { uiToast(simEng === 2 ? '두 엔진 정상(AEO)' : simEng === 1 ? 'ENG 2 고장 — OEI(2.5분 정격)' : '두 엔진 IDLE — 동력 없는 오토로테이션', simEng === 2 ? '' : 'err', 2500); } catch (e) { _swallow(e); }
+  _simEngBtn = _simEngBtn === 2 ? 1 : _simEngBtn === 1 ? 0 : 2;
+  simEngApply();
 }
 function updateEngBtn() {
   try {
     const b = document.getElementById('eng-3d'); if (!b) return;
-    b.textContent = simEng === 2 ? 'ENG AEO' : simEng === 1 ? (simEngTrng ? `ENG${simEngFail} TRNG` : 'ENG OEI') : 'ENG IDLE';
+    b.textContent = simEng === 2 ? 'ENG AEO' : simEng === 1 ? (simEngTrng ? `ENG${simEngFail} TRNG` : 'ENG OEI')
+                  : (simEngSt[1] === 'OFF' && simEngSt[2] === 'OFF') ? 'ENG OFF' : 'ENG IDLE';
     b.classList.toggle('warn', simEng === 1); b.classList.toggle('fail', simEng === 0);
   } catch (e) { _swallow(e); }
 }
@@ -1352,8 +1372,8 @@ function toggleSimMode(on, opt) {
     try { if (gsOn) toggleGs(); } catch (e) { _swallow(e); }
     hdgSelOn = false; rollApOn = false; altHoldOn = false; crhtOn = false; simIasOn = false; _rcLevPrev = null; simYawRate = 0; _simKePowered = false; _simKeVsF = 0; _rcYawBuf = []; _rcT = 0;
     _simOnDeck = false; _simOnGnd = false;
-    simEng = 2; simOeiT = 0; simEngFail = 2; simEngTrng = false; simVrs = 0; simNrRel = 0; simNr = 100; simRbs = { r: 0, p: 0 }; updateEngBtn();
-    try { simTrngApply(true); } catch (e) { _swallow(e); }   // 상부 콘솔 TRAINING 이 올라가 있으면 그대로 훈련으로
+    _simEngBtn = 2; simOeiT = 0; simVrs = 0; simNrRel = 0; simNr = 100; simRbs = { r: 0, p: 0 };
+    try { simEngApply(true); } catch (e) { _swallow(e); }    // 상부 콘솔(TQS · 레버 · TRAINING)대로 엔진 상태
     try { updateHoverBtns(); } catch (e) { _swallow(e); }
     // 손을 떼면 그 자리에서 날던 대로 — 지금 자세를 그대로 이어받는다
     bankTarget = S.bnk;

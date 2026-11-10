@@ -85,6 +85,13 @@ function sysTick() {
   if (w && !w.classList.contains('page-hidden')) sysDraw();
   _fuelCduRefresh();
   _elecCduRefresh();
+  const ac = document.getElementById('afcsc');
+  if (ac) {
+    const P = afcsPhase();
+    const v = P ? (P.ap1 ? 'AP1 TEST OK · AP2 TEST OK' : P.ap2 ? 'AP1 TEST RUNNING · AP2 TEST OK' : 'AP1 · AP2 TEST RUNNING') : (afcsLast || '');
+    if (ac.textContent !== v) ac.textContent = v;
+    ac.style.color = P && !P.ap1 ? '#fff' : '#22e022';
+  }
 }
 setInterval(sysTick, 250);
 
@@ -125,6 +132,9 @@ function sysDraw() {
   g.fillStyle = '#fff'; g.textAlign = 'center'; g.fillText(name, 605, 44);
   if (sysPage === 'asys_fuel') _sysFuelPage(g, F);
   else if (sysPage === 'asys_elec') _sysElecPage(g, F);
+  else if (sysPage === 'asys_afcs') _sysAfcsPage(g);
+  else if (sysPage === 'asys_eng') _sysEnginePage(g, F);
+  else if (sysPage === 'asys_status') _sysStatusPage(g, F);
   else {
     g.fillStyle = '#4a6a7a'; g.font = 'bold 26px Helvetica Neue, Arial, sans-serif';
     g.fillText(name.toUpperCase(), 610, 310);
@@ -388,7 +398,9 @@ function elecState() {
   const ng = i => P ? (i === 1 ? P.e1.ng : P.e2.ng) : 0;
   const gen1 = ng(1) > 50 && sw('gen1', 'ON'), gen2 = ng(2) > 50 && sw('gen2', 'ON');
   const apu = sw('apuContr', 'ON') && sw('apuGen', 'APU GEN');
-  const gpu = false;
+  let onGnd = false;
+  try { onGnd = (typeof radarAltFt === 'function' ? radarAltFt() : S.alt) < 5; } catch (e) { _swallow(e); }
+  const gpu = sw('apuGen', 'GPU') && onGnd;                 // 지상 전원 — 땅 위에서만 꽂혀 있다
   const nGen = (gen1 ? 1 : 0) + (gen2 ? 1 : 0) + (apu ? 1 : 0) + (gpu ? 1 : 0);
   const ac = nGen > 0;
   const tru1 = ac && sw('tru1', 'ON'), tru2 = ac && sw('tru2', 'ON');
@@ -485,10 +497,254 @@ function _sysElecPage(g) {
   g.restore();
 }
 
+// ── 공용 — 상부 콘솔 값 · 로터 · 바깥 기온 ──
+const _ov = (id, dflt) => { try { const v = typeof ovhdGet === 'function' ? ovhdGet(id) : undefined; return v === undefined ? dflt : v; } catch (e) { return dflt; } };
+function _sysRotor() { try { return engParams().nr > 50; } catch (e) { return true; } }
+function _sysOatC() {
+  let t0 = 15;
+  try { if (Number.isFinite(window._oatSurfaceC)) t0 = window._oatSurfaceC; } catch (e) { _swallow(e); }
+  return Math.round(t0 - 2 * (S.alt || 0) / 1000);
+}
+function _sysEngSt(n) { try { return simEngSt[n]; } catch (e) { return 'FLY'; } }
+// 노란 X — 값을 읽을 수 없음(엔진이 멎어 신호가 없다)
+function _sysX(g, x, y) {
+  g.strokeStyle = '#e8d000'; g.lineWidth = 2;
+  g.beginPath(); g.moveTo(x - 6, y - 12); g.lineTo(x + 6, y); g.moveTo(x + 6, y - 12); g.lineTo(x - 6, y); g.stroke();
+  g.strokeRect(x - 7, y - 13, 14, 14);
+}
+
+// ── AFCS — AP1·AP2 레인 상태와 AFCS 시험(TEST) ──
+// CDU 의 AFCS 칸에서 TEST 를 누르면: 두 AP 가 함께 시험을 시작해 AP2 가 먼저 끝나고(AP2 TEST OK),
+// AP1 은 C · YR · P(사이클릭 · 요/롤 · 피치) 액추에이터를 차례로 돌린 뒤 AP1 TEST OK — 잠시 뒤 처음 화면으로.
+const AFCS_AP2_SEC = 3, AFCS_AP1_SEC = 7, AFCS_HOLD_SEC = 3;
+let afcsTest = null;          // { t0 } — 시험 중이면
+let afcsLast = '';            // 마지막 시험 결과
+function afcsTestStart() {
+  afcsTest = { t0: performance.now() };
+  afcsLast = '';
+  try { sysPageSet('asys_afcs'); } catch (e) { _swallow(e); }
+}
+function afcsPhase() {
+  if (!afcsTest) return null;
+  const t = (performance.now() - afcsTest.t0) / 1000;
+  if (t >= AFCS_AP1_SEC + AFCS_HOLD_SEC) { afcsTest = null; afcsLast = 'AFCS TEST OK'; return null; }
+  return { t, ap2: t >= AFCS_AP2_SEC, ap1: t >= AFCS_AP1_SEC, act: Math.floor(t / 1.2) % 3 };
+}
+function _sysAfcsPage(g) {
+  const P = afcsPhase();
+  let ase = false;
+  try { ase = !!aseOn; } catch (e) { _swallow(e); }
+  const lane = (n, y, numX) => {
+    g.strokeStyle = '#e8d000'; g.lineWidth = 2; g.strokeRect(numX - 11, y - 14, 22, 24);
+    g.fillStyle = '#fff'; g.textAlign = 'center'; g.font = _f(13, false); g.fillText(String(n), numX, y + 4);
+    const done = P && (n === 1 ? P.ap1 : P.ap2), running = P && !done;
+    if (P) {
+      g.font = _f(14, false); g.fillStyle = done ? '#22e022' : '#fff';
+      g.fillText(`AP${n} TEST ${done ? 'OK' : 'RUNNING'}`, 610, y - 52);
+    }
+    const cols = [[490, 'SEMA1 OK', 'C'], [610, 'SEMA2 OK', 'YR'], [730, 'TRIM OK', 'P']];
+    cols.forEach(([x, lbl, act], i) => {
+      if (running) {                                   // 시험 중 — 액추에이터 칸이 붉게(차례로 밝게)
+        const hot = P.act === i;
+        g.fillStyle = hot ? '#ff2020' : '#c01010'; g.fillRect(x - 24, y - 26, 48, 26);
+        g.fillStyle = '#fff'; g.font = _f(13, false); g.fillText(act, x, y - 8);
+      } else if (!P) {
+        g.fillStyle = ase ? '#22e022' : '#e8d000'; g.font = _f(13, false); g.fillText(ase ? 'ON' : 'OFF', x, y - 8);
+      }
+      g.fillStyle = '#fff'; g.font = _f(13, false); g.fillText(lbl, x, y + 20);
+    });
+    if (!P) {
+      g.fillStyle = '#e8d000'; g.textAlign = 'left'; g.font = _f(12, false);
+      g.fillText('AFCS MAINTENANCE MODE', 444, y + 46);
+      g.strokeStyle = '#e8d000'; g.lineWidth = 1; g.beginPath(); g.moveTo(444, y + 49); g.lineTo(612, y + 49); g.stroke();
+      g.strokeRect(444, y + 54, 50, 14);
+      g.strokeStyle = '#ff3030'; g.strokeRect(444, y + 70, 50, 16);
+      g.fillStyle = '#fff'; g.font = _f(11, false); g.fillText('NOM DEF', 447, y + 82);
+    }
+  };
+  lane(1, 170, 330);
+  lane(2, 420, 900);
+  if (!P && afcsLast) { g.fillStyle = '#22e022'; g.textAlign = 'center'; g.font = _f(14); g.fillText(afcsLast, 610, 590); }
+}
+
+// ── Engine — 엔진 제어기(EHC) 자료 · 기어박스 온도 ──
+function _sysEnginePage(g, F) {
+  const P = F.P || engParams();
+  const rot = _sysRotor(), oat = _sysOatC();
+  g.save();
+  const k = 0.7425;
+  g.translate(224 + (772 - 960 * k) / 2, 32); g.scale(k, k);
+  const panel = (x0, y0, x1, y1, title) => _sysBox(g, x0, y0, x1 - x0, y1 - y0, title, '');
+  const row = (x0, x1, y, lbl, val, unit, isX) => {
+    g.fillStyle = '#fff'; g.textAlign = 'left'; g.font = _f(15, false); g.fillText(lbl, x0 + 8, y);
+    if (isX) { _sysX(g, x1 - 30, y); }
+    else { g.textAlign = 'right'; g.font = _f(17); g.fillText(val, x1 - (unit ? 26 : 22), y); }
+    if (unit) { g.textAlign = 'left'; g.font = _f(10, false); g.fillText(unit, x1 - 22, y); }
+  };
+  const eng = (n, x0, x1) => {
+    const st = _sysEngSt(n), run = st !== 'OFF', e = n === 1 ? P.e1 : P.e2;
+    const pcd = _ov('pcd' + n, 'FLY');
+    panel(x0, 140, x1, 684, `Engine ${n}`);
+    const p0 = 14.7 * Math.pow(1 - 6.87535e-6 * Math.max(0, S.alt || 0), 5.2559);
+    const rows = [
+      ['Anti-Ice', _ov('engAi' + n, 'OFF') === 'ON' ? 'On' : 'Off'], ['In Control', 'B'],
+      ['EHC LCF 1', '0'], ['EHC LCF 2', '0'], ['EHC TT1', '0'], ['EHC Hours', String(Math.floor(sysFltSec / 3600))],
+      ['LCH Health', '0'], ['T45 Margin', run ? String(Math.max(0, Math.round(80 - 0.5 * e.tq))) : '0'],
+      ['ETF', '1.00', '', !run], ['T2', String(oat), '°C'], ['PS3', String(Math.round(60 + 1.2 * e.tq)), 'PSI', !run],
+      ['P0', p0.toFixed(1), '', !run], ['LDS', run && e.tq > 0 ? (Math.abs(P.e1.tq - P.e2.tq) / 2).toFixed(1) : '0.0', '%'],
+      ['PCD Position', pcd === 'OFF' ? 'Stop' : pcd === 'IDLE' ? 'Idle' : 'Fly'],
+    ];
+    rows.forEach((r, i) => row(x0, x1, 166 + i * 25.7, r[0], r[1], r[2], r[3]));
+    panel(x0 + 6, 520, x1 - 6, 680, 'Power Check');
+    g.fillStyle = '#fff'; g.textAlign = 'center'; g.font = _f(15, false); g.fillText('Incomplete', (x0 + x1) / 2, 546);
+    [['OAT', 'ALT UNS'], ['TQ', 'T45 UNS'], ['NP', 'IAS UNS'], ['IAS', '']].forEach(([a, b], i) => {
+      const yy = 556 + i * 31;
+      [[a, x0 + 14], [b, x0 + 102]].forEach(([t, bx]) => {
+        if (!t) return;
+        g.strokeStyle = '#8a9096'; g.lineWidth = 1.2; g.strokeRect(bx, yy, 82, 22);
+        g.fillStyle = '#fff'; g.font = _f(13, false); g.textAlign = 'center'; g.fillText(t, bx + 41, yy + 16);
+      });
+    });
+  };
+  eng(1, 168, 366); eng(2, 590, 789);
+  const gb = (y, title, lbl, val, isX) => {
+    panel(378, y, 577, y + 34, title);
+    row(378, 577, y + 24, lbl, val, '°C', isX);
+  };
+  gb(140, 'MGB', 'RB Temp', '91', !rot);
+  gb(194, 'IGB', 'Oil Temp', rot ? '68' : '0', false);
+  gb(248, 'TGB', 'Oil Temp', rot ? '72' : '0', false);
+  g.restore();
+}
+
+// ── Aircraft Status — 유압 · 연료(FQMS) · 화재 탐지/소화 · ADS 가열 · 기타 · 방빙 ──
+function _sysDial(g, cx, cy, r, min, max, val, bands, ticks, fmt) {
+  const a0 = Math.PI * 0.75, span = Math.PI * 1.5, A = v => a0 + span * (Math.max(min, Math.min(max, v)) - min) / (max - min);
+  bands.forEach(([v0, v1, col]) => { g.strokeStyle = col; g.lineWidth = 12; g.beginPath(); g.arc(cx, cy, r, A(v0), A(v1)); g.stroke(); });
+  g.strokeStyle = '#ddd'; g.lineWidth = 1.5;
+  ticks.forEach(v => {
+    const a = A(v);
+    g.beginPath(); g.moveTo(cx + Math.cos(a) * (r - 6), cy + Math.sin(a) * (r - 6)); g.lineTo(cx + Math.cos(a) * (r + 6), cy + Math.sin(a) * (r + 6)); g.stroke();
+    g.fillStyle = '#fff'; g.textAlign = 'center'; g.font = _f(12, false);
+    g.fillText(fmt ? fmt(v) : String(v), cx + Math.cos(a) * (r - 22), cy + Math.sin(a) * (r - 22) + 4);
+  });
+  if (Number.isFinite(val)) {
+    const a = A(val);
+    g.strokeStyle = '#fff'; g.lineWidth = 6; g.lineCap = 'round';
+    g.beginPath(); g.moveTo(cx, cy); g.lineTo(cx + Math.cos(a) * (r - 4), cy + Math.sin(a) * (r - 4)); g.stroke(); g.lineCap = 'butt';
+  }
+  g.fillStyle = '#333'; g.beginPath(); g.arc(cx, cy, 14, 0, Math.PI * 2); g.fill();
+}
+function _sysStatusPage(g, F) {
+  const rot = _sysRotor(), oat = _sysOatC();
+  const R = '#e02020', Y = '#e8d000', G = '#22c822';
+  g.save();
+  const k = 0.886;
+  g.translate(224 + (772 - 802 * k) / 2, 32 + 4); g.scale(k, k);
+  const panel = (x0, y0, x1, y1, title) => _sysBox(g, x0, y0, x1 - x0, y1 - y0, title, '');
+  const kv = (x0, x1, y, l, v, col) => {
+    g.textAlign = 'left'; g.font = _f(12, false); g.fillStyle = '#fff'; g.fillText(l, x0, y);
+    g.textAlign = 'right'; g.font = _f(13); g.fillStyle = col || '#fff'; g.fillText(v, x1, y);
+  };
+  // 유압 1 · 2
+  [[1, 0, rot ? 2960 : 0, rot ? 91 : oat, 4.6], [2, 173, rot ? 3060 : 0, rot ? 87 : oat, 4.4]].forEach(([n, x0, psi, tc, lit]) => {
+    panel(x0 + 2, 30, x0 + 170, 668, `Hydraulic ${n}`);
+    const cx = x0 + 86;
+    _sysDial(g, cx, 128, 74, 0, 5000, psi, [[0, 1500, R], [1500, 2600, Y], [2600, 3300, G], [3300, 4000, Y], [4000, 5000, R]], [0, 1000, 2000, 3000, 4000]);
+    g.fillStyle = '#fff'; g.textAlign = 'right'; g.font = _f(15, false); g.fillText('PSI', x0 + 160, 178); g.font = _f(24); g.fillText(String(psi), x0 + 160, 208);
+    _sysDial(g, cx, 330, 74, -70, 280, tc, [[-70, -20, R], [-20, 30, Y], [30, 180, G], [180, 230, Y], [230, 280, R]], [-70, -20, 30, 80, 130, 180, 230, 280]);
+    g.fillStyle = '#fff'; g.textAlign = 'right'; g.font = _f(15, false); g.fillText('°C', x0 + 160, 380); g.font = _f(24); g.fillText(String(tc), x0 + 160, 412);
+    _sysDial(g, cx, 515, 74, 0, 6, lit, [[0, 1.5, R], [1.5, 3, Y], [3, 6, G]], [1, 2, 3, 4, 5, 6]);
+    g.fillStyle = '#fff'; g.textAlign = 'right'; g.font = _f(15, false); g.fillText('Liters', x0 + 160, 560); g.font = _f(24); g.fillText(lit.toFixed(1), x0 + 160, 592);
+    kv(x0 + 8, x0 + 164, 628, 'MRA PRESS WARN', 'Off'); kv(x0 + 8, x0 + 164, 650, 'TRA PRESS WARN', 'Off');
+  });
+  // 연료(FQMS 두 계통이 같은 값 → Delta 0)
+  const M = fuelMainSplit();
+  panel(347, 30, 610, 334, 'Fuel');
+  g.textAlign = 'left'; g.font = _f(12, false); g.fillStyle = '#fff'; g.fillText('Signal Name', 357, 60);
+  g.textAlign = 'center'; g.fillText('FQMS1', 496, 56); g.fillText('(lb)', 496, 70); g.fillText('FQMS2', 545, 56); g.fillText('(lb)', 545, 70); g.fillText('Delta', 592, 60);
+  const lowFt = n => (n === 1 ? fuel.ft1 : fuel.ft2) < FUEL_LOW_LBS;
+  const frow = (y, name, v, red) => {
+    const s = String(Math.round(v));
+    g.textAlign = 'left'; g.font = _f(12, false); g.fillStyle = '#fff'; g.fillText(name, 357, y);
+    [496, 545].forEach(x => {
+      g.font = _f(13); g.textAlign = 'center';
+      if (red) { const w = g.measureText(s).width + 6; g.fillStyle = R; g.fillRect(x - w / 2, y - 12, w, 15); }
+      g.fillStyle = '#fff'; g.fillText(s, x, y);
+    });
+    g.fillStyle = '#fff'; g.fillText('0', 592, y);
+  };
+  [['FWD Fuel', M.fwd], ['FT1 Fuel', fuel.ft1, lowFt(1)], ['FT2 Fuel', fuel.ft2, lowFt(2)], ['AFT Fuel', M.aft], ['FT5 Fuel', M.f5],
+   ['I-AUX Fuel', 0], ['E-AUX1 Fuel', 0], ['E-AUX2 Fuel', 0]].forEach((r, i) => frow(92 + i * 15.2, r[0], r[1], r[2]));
+  frow(248, 'R-Fuel', fuelRight(), lowFt(2)); frow(263, 'L-Fuel', fuelLeft(), lowFt(1)); frow(279, 'AUX Fuel', fuel.aux);
+  frow(316, 'Total Fuel', fuelTotal(), fuelTotal() < 2 * FUEL_LOW_LBS);
+  panel(347, 341, 610, 465, '');
+  g.textAlign = 'center'; g.font = _f(12, false); g.fillStyle = '#fff'; g.fillText('Left', 520, 356); g.fillText('Right', 585, 356);
+  const lr = (y, name, a, b) => {
+    g.textAlign = 'left'; g.font = _f(12, false); g.fillStyle = '#fff'; g.fillText(name, 357, y);
+    [[a, 520], [b, 585]].forEach(([v, x]) => { g.textAlign = 'center'; g.font = _f(12); g.fillStyle = v[1] || '#fff'; g.fillText(v[0], x, y); });
+  };
+  const fp = [F.f1 > 0 ? 17 : 0, F.f2 > 0 ? 18 : 0];
+  const mfsov = n => _ov('fuel' + n, 'OPEN') === 'OPEN' && _ov('pcd' + n, 'FLY') !== 'OFF' ? ['Open'] : ['Closed', Y];
+  lr(376, 'Feed PRESS', [`${fp[0]} PSI`], [`${fp[1]} PSI`]);
+  lr(395, 'Filter Clog State', ['OK'], ['OK']);
+  lr(414, 'Fuel PRESS Low', fp[0] ? ['OK'] : ['LOW', Y], fp[1] ? ['OK'] : ['LOW', Y]);
+  lr(433, 'FT Fuel State', lowFt(1) ? ['LOW', Y] : ['OK'], lowFt(2) ? ['LOW', Y] : ['OK']);
+  lr(452, 'MFSOV State', mfsov(1), mfsov(2));
+  panel(347, 472, 610, 514, '');
+  kv(357, 600, 490, 'AFT (LH) Fuel High', 'OK'); kv(357, 600, 507, 'FWD (RH) Fuel High', 'OK');
+  panel(347, 532, 610, 668, '');
+  const eng = F.f1 > 0 || F.f2 > 0, mainLeft = (fuel.mainL + fuel.mainR) > 0;
+  [['Crossfeed Valve Position', 'Closed', Y], ['Transfer Pump State', eng ? 'On' : 'Off', eng ? '#fff' : Y],
+   ['F5 Transfer Pump Flow', eng && mainLeft ? 'On' : 'Off', eng && mainLeft ? '#fff' : Y], ['I-AUX Fuel Pump Control', 'Off', Y],
+   ['E-AUX1 Fuel Pump Control', 'Off', Y], ['E-AUX2 Fuel Pump Control', 'Off', Y]].forEach((r, i) => kv(357, 600, 551 + i * 19, r[0], r[1], r[2]));
+  // 화재 탐지 — FIRE DETECTOR 노브를 시험 자리로 돌리면 그 항목이 FIRE(붉게)
+  const det = _ov('fireDet', 'OPER');
+  panel(615, 30, 800, 136, 'Fire Detection');
+  ['ENG1', 'ENG2', 'APU', 'MGB'].forEach((n, i) => kv(625, 790, 58 + i * 20, n, det === n ? 'FIRE' : 'OK', det === n ? R : '#fff'));
+  // 화재 소화 — TQS 화재소화 레버(ARM/DISCH) · APU T-핸들 · RESERVE 스위치
+  const f1 = _ov('fire1', 'NORM'), f2 = _ov('fire2', 'NORM'), res = _ov('fireExtRes', 'OFF');
+  const on = (b, c) => [b ? 'On' : 'Off', b ? (c || R) : '#fff'];
+  const main = f1 === 'DISCH' || f2 === 'DISCH', rsrv = res !== 'OFF';
+  panel(615, 158, 800, 386, 'Fire Extinguishing');
+  [[186, 'ENG1 CMD', on(f1 !== 'NORM', Y)], [205, 'ENG2 CMD', on(f2 !== 'NORM', Y)], [224, 'APU CMD', on(_ov('apuFire', 'IN') === 'PULLED', Y)],
+   [279, 'MAIN DISCHRG', on(main)], [299, 'RSRV DISCHRG', on(rsrv)],
+   [342, 'MAIN Switch Position', main ? ['Disch', R] : ['Off', '#fff']], [365, 'RSRV Switch Position', rsrv ? [res, R] : ['Off', '#fff']]]
+    .forEach(([y, l, v]) => kv(625, 790, y, l, v[0], v[1]));
+  // ADS 가열 — PITOT HEAT 스위치
+  const ph = _ov('pitotHeat', 'AUTO');
+  const phv = ph === 'OFF' ? ['Off', Y] : ph === 'ON' ? ['On', '#fff'] : ['Normal', '#fff'];
+  panel(615, 412, 800, 470, 'ADS Heat Status');
+  kv(625, 790, 437, 'Left Pitot', phv[0], phv[1]); kv(625, 790, 457, 'Right Pitot', phv[0], phv[1]);
+  panel(615, 497, 800, 546, 'Misc');
+  g.textAlign = 'left'; g.font = _f(12, false); g.fillStyle = '#fff'; g.fillText('ACC PRESS', 625, 531);
+  const acc = rot ? '2837' : '62';
+  g.font = _f(14); const aw = g.measureText(acc).width + 6;
+  if (!rot) { g.fillStyle = R; g.fillRect(760 - aw, 518, aw, 17); }
+  g.fillStyle = '#fff'; g.textAlign = 'right'; g.fillText(acc, 758, 531); g.font = _f(9, false); g.textAlign = 'left'; g.fillText('PSI', 764, 531);
+  panel(615, 566, 800, 668, 'Anti-Ice');
+  g.fillStyle = '#fff'; g.textAlign = 'center'; g.font = _f(12, false); g.fillText('CMD', 700, 588); g.fillText('State', 770, 588);
+  [1, 2].forEach(n => {
+    const y = 588 + n * 20, c = _ov('engAi' + n, 'OFF') === 'ON';
+    g.textAlign = 'left'; g.fillStyle = '#fff'; g.font = _f(12, false); g.fillText(`Inlet${n}`, 625, y);
+    g.textAlign = 'center'; g.font = _f(12); g.fillStyle = c ? '#fff' : Y; g.fillText(c ? 'On' : 'Off', 700, y);
+    g.fillStyle = '#fff'; g.fillText('OK', 770, y);
+  });
+  g.restore();
+}
+
 // ── CDU 의 계통 칸 — Fuel 은 연료 조정, Electrical 은 전원 상태(스위치는 UPPER 창) ──
 function sysCduHtml(id) {
   if (id === 'asys_fuel') return fuelCduHtml();
   if (id === 'asys_elec') return `<div id="elecc" style="padding:10px 8px;color:#cde;font-size:12px"></div>`;
+  if (id === 'asys_afcs') return `<div style="padding:12px 8px;color:#cde;font-size:12px">` +
+    `<div style="color:#567;font-size:10px;margin-bottom:8px">AFCS 시험 — AP1 · AP2 액추에이터(C · YR · P)를 차례로 시험합니다(약 10초).</div>` +
+    `<div class="nav-btn" data-act="afcsTestStart" style="width:100%;margin-bottom:10px">AFCS TEST</div>` +
+    `<div id="afcsc" style="text-align:center;font-size:15px;font-weight:bold;color:#fff;min-height:22px"></div>` +
+    `<div style="color:#567;font-size:10px;margin-top:12px">SYSTEM 창(탭 'SYSTEM')에 AFCS 화면이 보입니다.</div></div>`;
+  if (id === 'asys_eng' || id === 'asys_status') return `<div style="padding:12px 8px;color:#cde;font-size:12px">` +
+    `<div style="margin-bottom:8px">${id === 'asys_eng' ? 'Engine — 엔진 제어기(EHC) 자료 · PCD 위치 · MGB/IGB/TGB 온도' : 'Aircraft Status — 유압 · 연료(FQMS) · 화재 탐지/소화 · ADS 가열 · 방빙'}</div>` +
+    `<div style="color:#567;font-size:10px">SYSTEM 창(탭 'SYSTEM')에 이 화면이 보입니다. 엔진은 UPPER 창 아래 TQS(PCD · 연료차단 · 화재소화 레버)로 조작합니다.</div></div>`;
   return '';
 }
 function _elecCduRefresh() {
@@ -512,7 +768,7 @@ function _elecCduRefresh() {
 
 // 창이 보일 때(applyPanels 가 부른다)
 function sysShow() { sysDraw(); }
-try { appRegister({ fuelAdjust, fuelSetTotal, fuelReset, sysPageSet }); } catch (e) { _swallow(e); }
+try { appRegister({ fuelAdjust, fuelSetTotal, fuelReset, sysPageSet, afcsTestStart }); } catch (e) { _swallow(e); }
 try { window.addEventListener('resize', () => { try { sysDraw(); } catch (e) { _swallow(e); } }); } catch (e) { _swallow(e); }
 // 상부 콘솔 스위치가 바뀌면 곧바로 다시 그린다(발전기·TRU·배터리 → Electrical)
 try { if (typeof ovhdOn === 'function') ovhdOn(() => { try { sysDraw(); } catch (e) { _swallow(e); } }); } catch (e) { _swallow(e); }

@@ -95,4 +95,52 @@ export async function run(page, t) {
   t.ok(e.apu.apu && e.apu.genA === 115, 'APU GEN 이 들어오면 부하를 나눈다');
   t.ok(!e.noGen.ac && !e.noGen.tru1 && e.noGen.dc, '발전기가 다 없으면 AC 가 죽고 DC 는 배터리로');
   t.ok(!e.dead.dc, 'BATT 까지 OFF 면 DC 도 죽는다');
+
+  // ── AFCS · Engine · Aircraft Status ──
+  const q = await page.evaluate(async () => {
+    localStorage.removeItem('ovhdState'); ovhdReset();
+    selectPanel('right', 'sysp', true); await new Promise(res => setTimeout(res, 150));
+    const texts = () => {
+      const proto = CanvasRenderingContext2D.prototype, orig = proto.fillText, seen = [];
+      proto.fillText = function (x, ...a) { seen.push(String(x).trim()); return orig.call(this, x, ...a); };
+      try { sysDraw(); } finally { proto.fillText = orig; }
+      return seen;
+    };
+    const o = {};
+    sysPageSet('asys_afcs'); const a0 = texts();
+    o.afcsIdle = ['SEMA1 OK', 'SEMA2 OK', 'TRIM OK', 'AFCS MAINTENANCE MODE', 'NOM DEF'].every(x => a0.includes(x)) && a0.filter(x => x === 'OFF').length === 6;
+    // 시험 — 시간을 앞당겨 단계를 본다
+    afcsTestStart();
+    const at = sec => { afcsTest.t0 = performance.now() - sec * 1000; return texts(); };
+    const t1 = at(1), t4 = at(4), t8 = at(8);
+    o.run = t1.includes('AP1 TEST RUNNING') && t1.includes('AP2 TEST RUNNING') && t1.includes('C') && t1.includes('YR') && t1.includes('P');
+    o.ap2 = t4.includes('AP1 TEST RUNNING') && t4.includes('AP2 TEST OK');
+    o.both = t8.includes('AP1 TEST OK') && t8.includes('AP2 TEST OK');
+    at(11); o.after = afcsTest === null && afcsLast === 'AFCS TEST OK';
+    sysPageSet('asys_eng'); const e0 = texts();
+    o.eng = ['Engine 1', 'Engine 2', 'MGB', 'IGB', 'TGB', 'Anti-Ice', 'EHC LCF 1', 'T45 Margin', 'PCD Position', 'Power Check', 'Incomplete', 'ALT UNS'].filter(x => !e0.includes(x));
+    o.pcdFly = e0.filter(x => x === 'Fly').length === 2;
+    ovhdSet('pcd1', 'IDLE'); ovhdSet('engAi2', 'ON'); const e1 = texts();
+    o.pcdIdle = e1.includes('Idle') && e1.includes('On');
+    ovhdSet('pcd1', 'FLY'); ovhdSet('engAi2', 'OFF');
+    sysPageSet('asys_status'); const s0 = texts();
+    o.status = ['Hydraulic 1', 'Hydraulic 2', 'Fuel', 'Signal Name', 'FQMS1', 'Total Fuel', 'Feed PRESS', 'MFSOV State', 'Crossfeed Valve Position',
+                'Fire Detection', 'Fire Extinguishing', 'ADS Heat Status', 'Misc', 'ACC PRESS', 'Anti-Ice', 'Inlet1'].filter(x => !s0.includes(x));
+    o.fireOk = s0.filter(x => x === 'FIRE').length === 0;
+    ovhdSet('fireDet', 'ENG2'); ovhdSet('fire1', 'DISCH'); ovhdSet('pitotHeat', 'OFF'); const s1 = texts();
+    o.fireTest = s1.includes('FIRE');
+    o.disch = s1.includes('Disch') && s1.filter(x => x === 'On').length >= 2;   // ENG1 CMD · MAIN DISCHRG
+    o.pitotOff = s0.filter(x => x === 'Normal').length === 2 && !s1.includes('Normal');   // PITOT HEAT AUTO → Normal · OFF → Off
+    ovhdReset(); localStorage.removeItem('ovhdState'); sysPageSet('asys_fuel');
+    selectPanel('right', 'map', true);
+    return o;
+  });
+  t.ok(q.afcsIdle, 'AFCS — 두 레인에 OFF · SEMA1/SEMA2/TRIM OK · AFCS MAINTENANCE MODE · NOM DEF');
+  t.ok(q.run && q.ap2 && q.both && q.after,
+    `AFCS TEST — 두 AP 시험 시작(C · YR · P) → AP2 TEST OK → AP1 TEST OK → 처음 화면(AFCS TEST OK) (${[q.run, q.ap2, q.both, q.after].join(' · ')})`);
+  t.eq(q.eng.length, 0, `Engine 화면의 글자가 다 있다${q.eng.length ? ' (없음: ' + q.eng.join(', ') + ')' : ''}`);
+  t.ok(q.pcdFly && q.pcdIdle, 'Engine — PCD Position 은 TQS 레버(Fly/Idle), Anti-Ice 는 ENG ANTI ICE 스위치를 따른다');
+  t.eq(q.status.length, 0, `Aircraft Status 화면의 글자가 다 있다${q.status.length ? ' (없음: ' + q.status.join(', ') + ')' : ''}`);
+  t.ok(q.fireOk && q.fireTest, 'Fire Detection — FIRE DETECTOR 노브를 시험 자리로 돌리면 그 항목이 FIRE');
+  t.ok(q.disch && q.pitotOff, 'Fire Extinguishing 은 TQS 화재소화 레버(DISCH)를, ADS Heat 는 PITOT HEAT 스위치를 따른다');
 }
