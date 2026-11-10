@@ -17,7 +17,7 @@
      CDN 을 쓰면 한 번이라도 못 받는 순간 앱이 통째로 죽는다 — 비행 중에는
      그럴 여지를 두지 않는다. -->
 <!-- 패널 새 창(다중 모니터) — 라이브러리가 거는 이벤트까지 받아 적어야 하므로 맨 먼저 -->
-<script src="js/00-popout.js?v=539"></script>
+<script src="js/00-popout.js?v=540"></script>
 <link rel="stylesheet" href="vendor/leaflet.css"/>
 <script src="vendor/leaflet.js"></script>
 <link rel="stylesheet" href="vendor/leaflet-velocity.min.css"/>
@@ -1959,6 +1959,9 @@ body.gate-open #gate-overlay { display: none; }
 
 /* ── UPPER CONSOLE(상부 콘솔 · js/17-upper.js) — 1000×950 설계 크기를 창에 맞춰 통째로 줄이고 키운다 ── */
 #ovhd-wrap { position: relative; overflow: hidden; background: #15171a; }
+/* SYSTEM 창(js/18-system.js) — 캔버스 하나에 MFD 계통 화면 */
+#sysp-wrap { position: relative; overflow: hidden; background: #000; }
+#sysp-wrap canvas { display: block; }
 #ovhd-stage { position: absolute; left: 0; top: 0; transform-origin: 0 0; user-select: none; -webkit-user-select: none; touch-action: none;
   font-family: 'Helvetica Neue', Arial, sans-serif; color: #eef0f2; }
 #ovhd-reset { position: absolute; right: 6px; bottom: 6px; z-index: 2; background: #22262b; color: #9ab; border: 1px solid #3a4250;
@@ -2058,7 +2061,7 @@ body.gate-open #gate-overlay { display: none; }
     </div>
   </form>
 </div>
-<script src="js/00-gate.js?v=539"></script>
+<script src="js/00-gate.js?v=540"></script>
 <!-- ── 단일화면 선택 바 (기본 숨김) ── -->
 <!-- ── 시작 안내(사용법/키보드) 오버레이 ── -->
 <div id="help-overlay" style="display:none;">
@@ -2628,7 +2631,13 @@ body.gate-open #gate-overlay { display: none; }
       <ul>
         <li><b>기상</b>: 홈의 <b>Weather</b> 버튼을 누르면 <b>Windy · 저고도 날씨 · CCTV · METAR/TAF</b> 네 버튼이 나옵니다(CCTV 의 Back 은 Weather 로). Tide forecast 는 홈에 그대로 있습니다.</li>
         <li><b>Aircraft Systems</b>(홈 둘째 버튼): 누르면 <b>AFCS · Aircraft Status · Electrical · Engines · Fuel · HOCAS · System Tests · Video · Maintenance</b>
-            아홉 버튼이 나옵니다. 각 계통 화면은 차차 갖추며(지금은 '준비 중'), Back 은 Aircraft Systems 로 돌아옵니다.</li>
+            아홉 버튼이 나옵니다. 누른 버튼이 <b>SYSTEM 창</b>(창 탭의 SYSTEM)의 화면도 고릅니다. Back 은 Aircraft Systems 로 돌아옵니다.</li>
+        <li><b>SYSTEM 창</b>(창 탭 — CDU · MAP · 3D · UPPER 옆): 실기 MFD 계통 화면. 왼쪽 띠에 TGT · NG · EOT · EOP · MGB · Fuel F · Fuel P · HYD P ·
+            Fuel QTY · Battery · ACCP, 위 줄에 END(남은 연료 ÷ 연료 흐름) · FLT(비행 시간) · DNALT. 지금 갖춘 화면은 <b>Fuel</b> —
+            Left · Total · Right · AUX, 탱크(FWD · FT1 · FT2 · AFT · F5)의 양과 채움, 엔진마다 PPH · 연료 압력, 경고 칸(PRESS LOW · FUEL LOW ·
+            FUEL IMBALANCE 는 걸리면 호박색). 연료는 시뮬 시계가 돌 때 엔진 토크를 따라 줄고(배속 반영), 집합 탱크(FT1 · FT2)는 주 탱크에서
+            채워 둡니다. CDU 의 <b>Aircraft Systems → Fuel</b> 에서 −100 · +100 · 합계 정하기(1000 · 1500 · 2000 · 2500) · RESET(1914) 로 연료를 조정합니다.
+            나머지 화면은 '준비 중'입니다.</li>
         <li><b>정보</b>: CCTV · Charts · NOTAM · <b>INFO</b>(비행장) · Services · SkyVector · ER availability · Wildfire status</li>
         <li><b>항법</b>: Flight Plan · PROC · <b>VNAV</b> · Track &amp; Point · MAP</li>
         <li><b>운영</b>: PERF · Checklist · Utilities · Setting</li>
@@ -3016,6 +3025,7 @@ body.gate-open #gate-overlay { display: none; }
       <button class="page-tab" data-sel="map" data-act="selectPanel" data-arg='["mid", "map"]'>MAP</button>
       <button class="page-tab" data-sel="m3d" data-act="selectPanel" data-arg='["mid", "m3d"]' title="3D — SIM 이 꺼져 있으면 지형 정찰(우하단 조작 버튼), SIM 이면 조종석 시야">3D</button>
       <button class="page-tab" data-sel="ovhd" data-act="selectPanel" data-arg='["mid", "ovhd"]' title="UPPER CONSOLE — 상부 콘솔 스위치(시뮬레이터 연동 예정)">UPPER</button>
+      <button class="page-tab" data-sel="sysp" data-act="selectPanel" data-arg='["mid", "sysp"]' title="SYSTEM — MFD 계통 화면(CDU 의 Aircraft Systems 버튼으로 화면을 고른다)">SYSTEM</button>
       <button class="page-tab split-tab" id="map-solo-btn" data-act="panelSolo" data-arg='["map"]' title="MAP 단독 — 지도만 화면 가득(한 번 더 누르면 원래 배치)">⛶ MAP 단독</button>
       <button class="page-tab po-btn" data-act="popoutToggle" data-arg='["mid"]' title="이 패널을 새 창으로 띄운다(다중 모니터에 따로 배치)">⧉ POP UP</button>
       <button class="page-tab po-top-btn" data-act="popoutTop" data-arg='["mid", "$el"]' title="Top — 이 창을 다른 창들보다 늘 위에 띄운다(한 번 더 누르면 본 창으로)">📌 Top</button>
@@ -3030,6 +3040,7 @@ body.gate-open #gate-overlay { display: none; }
       <button class="page-tab active" data-sel="map" data-act="selectPanel" data-arg='["right", "map"]'>MAP</button>
       <button class="page-tab" data-sel="m3d" data-act="selectPanel" data-arg='["right", "m3d"]' title="3D — SIM 이 꺼져 있으면 지형 정찰(우하단 조작 버튼), SIM 이면 조종석 시야">3D</button>
       <button class="page-tab" data-sel="ovhd" data-act="selectPanel" data-arg='["right", "ovhd"]' title="UPPER CONSOLE — 상부 콘솔 스위치(시뮬레이터 연동 예정)">UPPER</button>
+      <button class="page-tab" data-sel="sysp" data-act="selectPanel" data-arg='["right", "sysp"]' title="SYSTEM — MFD 계통 화면(CDU 의 Aircraft Systems 버튼으로 화면을 고른다)">SYSTEM</button>
       <button class="page-tab split-tab" id="m3d-only-btn" data-act="panelSolo" data-arg='["m3d"]' title="3D Only — 3D 지도를 화면 가득, PFD(계기)를 왼쪽 위에 겹쳐(한 번 더 누르면 원래 배치)">⛶ 3D Only</button>
       <button class="page-tab split-tab" id="cdu-solo-btn" data-act="panelSolo" data-arg='["cdu"]' title="CDU 단독 — CDU 만 화면 가득(한 번 더 누르면 원래 배치)">⛶ CDU 단독</button>
       <button class="page-tab po-btn" data-act="popoutToggle" data-arg='["right"]' title="이 패널을 새 창으로 띄운다(다중 모니터에 따로 배치)">⧉ POP UP</button>
@@ -3042,6 +3053,8 @@ body.gate-open #gate-overlay { display: none; }
     <div id="map3d-wrap" class="page-content page-hidden"></div>
     <!-- UPPER CONSOLE — 상부 콘솔(js/17-upper.js) -->
     <div id="ovhd-wrap" class="page-content page-hidden"></div>
+    <!-- SYSTEM — MFD 계통 화면(js/18-system.js) -->
+    <div id="sysp-wrap" class="page-content page-hidden"></div>
 
     <!-- Page 1: Map -->
     <div id="map-wrap" class="page-content tcut-off">
@@ -3434,6 +3447,7 @@ body.gate-open #gate-overlay { display: none; }
       <button class="page-tab" data-sel="map" data-act="selectPanel" data-arg='["bot", "map"]'>MAP</button>
       <button class="page-tab" data-sel="m3d" data-act="selectPanel" data-arg='["bot", "m3d"]' title="3D — SIM 이 꺼져 있으면 지형 정찰(우하단 조작 버튼), SIM 이면 조종석 시야">3D</button>
       <button class="page-tab" data-sel="ovhd" data-act="selectPanel" data-arg='["bot", "ovhd"]' title="UPPER CONSOLE — 상부 콘솔 스위치(시뮬레이터 연동 예정)">UPPER</button>
+      <button class="page-tab" data-sel="sysp" data-act="selectPanel" data-arg='["bot", "sysp"]' title="SYSTEM — MFD 계통 화면(CDU 의 Aircraft Systems 버튼으로 화면을 고른다)">SYSTEM</button>
       <button class="page-tab po-btn" data-act="popoutToggle" data-arg='["bot"]' title="이 패널을 새 창으로 띄운다(다중 모니터에 따로 배치)">⧉ POP UP</button>
       <button class="page-tab po-top-btn" data-act="popoutTop" data-arg='["bot", "$el"]' title="Top — 이 창을 다른 창들보다 늘 위에 띄운다(한 번 더 누르면 본 창으로)">📌 Top</button>
     </div>
@@ -3447,34 +3461,35 @@ body.gate-open #gate-overlay { display: none; }
 <!-- 앱 코드 — 클래식 스크립트(모듈 아님)라 전역 스코프를 공유한다.
      순서가 곧 실행 순서이므로 임의로 바꾸지 말 것. -->
   <!-- AIP 데이터 — 코드보다 먼저 로드한다 -->
-  <script src="js/data/terminal-fixes.js?v=539"></script>
-  <script src="js/data/ifr-fixes.js?v=539"></script>
-  <script src="js/data/ifr-procedures.js?v=539"></script>
-  <script src="js/data/airfield-info.js?v=539"></script>
-  <script src="js/data/enr-vors.js?v=539"></script>
-  <script src="js/data/loc-stations.js?v=539"></script>
-  <script src="js/data/enr-routes.js?v=539"></script>
-  <script src="js/data/airspace.js?v=539"></script>
-  <script src="js/data/runways.js?v=539"></script>
+  <script src="js/data/terminal-fixes.js?v=540"></script>
+  <script src="js/data/ifr-fixes.js?v=540"></script>
+  <script src="js/data/ifr-procedures.js?v=540"></script>
+  <script src="js/data/airfield-info.js?v=540"></script>
+  <script src="js/data/enr-vors.js?v=540"></script>
+  <script src="js/data/loc-stations.js?v=540"></script>
+  <script src="js/data/enr-routes.js?v=540"></script>
+  <script src="js/data/airspace.js?v=540"></script>
+  <script src="js/data/runways.js?v=540"></script>
   <!-- 앱 코드 -->
-  <script src="js/00-ui.js?v=539"></script>
-  <script src="js/01-state.js?v=539"></script>
-  <script src="js/02-math.js?v=539"></script>
-  <script src="js/03-pfd.js?v=539"></script>
-  <script src="js/04-map.js?v=539"></script>
-  <script src="js/05-gps.js?v=539"></script>
-  <script src="js/06-nav.js?v=539"></script>
-  <script src="js/07-sim.js?v=539"></script>
-  <script src="js/08-ifrdb.js?v=539"></script>
-  <script src="js/09-cdu.js?v=539"></script>
-  <script src="js/10-tools.js?v=539"></script>
-  <script src="js/11-charts.js?v=539"></script>
-  <script src="js/12-joystick.js?v=539"></script>
-  <script src="js/13-joyhid.js?v=539"></script>
-  <script src="js/14-simmode.js?v=539"></script>
-  <script src="js/15-heli3d.js?v=539"></script>
-  <script src="js/16-sound.js?v=539"></script>
-  <script src="js/17-upper.js?v=539"></script>
+  <script src="js/00-ui.js?v=540"></script>
+  <script src="js/01-state.js?v=540"></script>
+  <script src="js/02-math.js?v=540"></script>
+  <script src="js/03-pfd.js?v=540"></script>
+  <script src="js/04-map.js?v=540"></script>
+  <script src="js/05-gps.js?v=540"></script>
+  <script src="js/06-nav.js?v=540"></script>
+  <script src="js/07-sim.js?v=540"></script>
+  <script src="js/08-ifrdb.js?v=540"></script>
+  <script src="js/09-cdu.js?v=540"></script>
+  <script src="js/10-tools.js?v=540"></script>
+  <script src="js/11-charts.js?v=540"></script>
+  <script src="js/12-joystick.js?v=540"></script>
+  <script src="js/13-joyhid.js?v=540"></script>
+  <script src="js/14-simmode.js?v=540"></script>
+  <script src="js/15-heli3d.js?v=540"></script>
+  <script src="js/16-sound.js?v=540"></script>
+  <script src="js/17-upper.js?v=540"></script>
+  <script src="js/18-system.js?v=540"></script>
 
 <input type="file" id="zipFileInput" accept=".zip,application/zip,application/x-zip-compressed,application/octet-stream" style="display:none" onchange="handleZipFile(this.files[0]); this.value='';"></body>
 </html>

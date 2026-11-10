@@ -1967,12 +1967,24 @@ function act(name, ...args) {
         container.innerHTML = homeGridHtml(AC_SYS_BTNS);
         footer.innerHTML = cduFooter("switchMode('HOME')");
     }
-    function acSysOpen(id) { _acSysPage = id; switchMode('ACSYS_PAGE'); }
+    // 계통 버튼은 SYSTEM 창(18-system.js)의 화면도 고른다
+    function acSysOpen(id) {
+        _acSysPage = id;
+        try { if (typeof sysPageSet === 'function') sysPageSet(id); } catch (e) { _swallow(e); }
+        switchMode('ACSYS_PAGE');
+    }
     // 계통 화면(아직 비어 있음) — 제목·아이콘과 '준비 중' 만
     function renderAcSysPage(container, footer, title) {
         const b = AC_SYS_BTNS.find(x => x.id === _acSysPage) || AC_SYS_BTNS[0];
         const name = b.text.replace(/<br>/g, ' ');
         title.innerText = name;
+        // Fuel — 연료를 넣고 빼는 칸(18-system.js). 나머지는 아직 '준비 중'
+        if (b.id === 'asys_fuel' && typeof fuelCduHtml === 'function') {
+            container.innerHTML = `<div class="acsys-page" data-page="${b.id}">${fuelCduHtml()}</div>`;
+            footer.innerHTML = cduFooter("switchMode('ACSYS')");
+            try { _fuelCduRefresh(); } catch (e) { _swallow(e); }
+            return;
+        }
         container.innerHTML = `<div class="acsys-page" data-page="${b.id}" style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:14px;color:#567;">` +
             `<div style="width:84px;height:84px;opacity:.55">${b.icon}</div>` +
             `<div style="color:#00cfff;font-size:16px;font-weight:bold;letter-spacing:1px;">${name.toUpperCase()}</div>` +

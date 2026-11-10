@@ -53,8 +53,9 @@ import * as apptune from './cases/apptune.mjs';
 import * as lock from './cases/lock.mjs';
 import * as popout from './cases/popout.mjs';
 import * as upper from './cases/upper.mjs';
+import * as system from './cases/system.mjs';
 
-const SUITES0 = [smoke, actions, coords, chartcal, hold, nav, gspd, dialog, chartview, procdata, simspd, tascalc, brg, fpwpt, maprot, map3d, dmearc, dme, fporder, wptcrs, brglbl, directto, crssync, locsta, susp, layout, gslope, joystick, geosearch, simmode, ga, tdown, bbtrim, physics2, hocas, joycenter, ship3d, heli3d, ralt, startapt, hdgref, sound, view3d, runway, apptune, lock, popout, upper];
+const SUITES0 = [smoke, actions, coords, chartcal, hold, nav, gspd, dialog, chartview, procdata, simspd, tascalc, brg, fpwpt, maprot, map3d, dmearc, dme, fporder, wptcrs, brglbl, directto, crssync, locsta, susp, layout, gslope, joystick, geosearch, simmode, ga, tdown, bbtrim, physics2, hocas, joycenter, ship3d, heli3d, ralt, startapt, hdgref, sound, view3d, runway, apptune, lock, popout, upper, system];
 // 여러 묶음으로 나뉜 검사(suites 를 내보내는 파일)는 펼친다
 const SUITES = SUITES0.flatMap(m => m.suites ? m.suites : [m]);
 const filter = process.argv.slice(2);
