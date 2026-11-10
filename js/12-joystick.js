@@ -447,9 +447,24 @@ function joyRecenter() {
   const p = pads.find(q => q.index === joyActiveIdx) || pads[0];
   if (!p) { try { uiToast('조종 장치가 없습니다', 'err', 2000); } catch (e) { _swallow(e); } return false; }
   _joyNeutral[p.index] = Array.prototype.slice.call(p.axes || []);
-  for (const k in _joyRest) delete _joyRest[k];
-  try { uiToast('조종간 중립을 지금 자리로 맞췄습니다', '', 2000); } catch (e) { _swallow(e); }
+  joyNeutralSave(p);
+  try { uiToast('조종간 중립을 지금 자리로 맞췄습니다(이 장치에 저장)', '', 2000); } catch (e) { _swallow(e); }
   return true;
+}
+// ── 맞춘 가운데를 기기에 저장 ── 장치 이름마다 따로 둔다. 다음에 열어도(장치를 다시 꽂아도) 처음 읽은 값 대신 이것을 쓴다.
+const JOY_NEU_KEY = 'joyNeutral';
+function _joyNeuStore() { try { return JSON.parse(localStorage.getItem(JOY_NEU_KEY) || '{}') || {}; } catch (e) { return {}; } }
+function joyNeutralSave(p) {
+  if (!p || !p.id) return;
+  const st = _joyNeuStore();
+  st[p.id] = Array.prototype.slice.call(_joyNeutral[p.index] || p.axes || []).map(v => +(+v).toFixed(4));
+  try { localStorage.setItem(JOY_NEU_KEY, JSON.stringify(st)); } catch (e) { _swallow(e); }
+}
+// 저장해 둔 가운데(축 수가 같을 때만) — 없으면 null
+function joyNeutralSaved(p) {
+  if (!p || !p.id) return null;
+  const v = _joyNeuStore()[p.id];
+  return (Array.isArray(v) && v.length === (p.axes || []).length && v.every(Number.isFinite)) ? v.slice() : null;
 }
 // SIM 을 켤 때 — 사이클릭·페달(가운데로 돌아오는 축)의 가운데를 지금 자리로 다시 잡는다.
 // 크롬은 조종 장치를 한 번 움직여야 보여 주므로, 처음 잡은 가운데가 그때 밀려 있던 자리일 수 있다
@@ -458,6 +473,7 @@ function joyRecenterCyclic() {
   const pads = joyPads();
   const p = pads.find(q => q.index === joyActiveIdx) || pads[0];
   if (!p) return;
+  if (joyNeutralSaved(p)) return;   // 조종사가 CTR 로 맞춰 저장한 가운데가 있으면 그것을 믿는다
   const neu = _joyNeutral[p.index] || (_joyNeutral[p.index] = Array.prototype.slice.call(p.axes || []));
   for (const role of ['roll', 'pitch', 'yaw']) {
     const a = joyAxes[role];
@@ -468,7 +484,6 @@ function joyRecenterCyclic() {
 }
 // (가운데를 저절로 맞추던 것은 뺐다 — 스프링이 없는 조종간은 일부러 민 자리에 그대로 서 있을 수 있어 조종 입력을
 //  지워 버릴 위험이 있다. 작은 어긋남은 데드존(JOY_AX_DEAD)이 흡수하고, 큰 어긋남은 SIM 을 켤 때·CTR 로 맞춘다)
-const _joyRest = {};
 // 레버식(절대값) 축 — 중립을 빼지 않고 자리 그대로 -1…1 로 읽는다.
 // 스로틀·컬렉티브처럼 민 자리에 서 있는 레버에 쓴다.
 function joyAxRaw(role) {
@@ -519,7 +534,7 @@ function joyPoll(now) {
   if (!pads.length) { joyPadName = ''; joyActiveIdx = -1; joyReleaseAll(); return; }
   // 축 중립은 패드마다 따로 — 나중에 고르는 패드도 제 중립을 갖고 있어야 한다
   pads.forEach(q => {
-    if (!_joyNeutral[q.index]) _joyNeutral[q.index] = Array.prototype.slice.call(q.axes || []);
+    if (!_joyNeutral[q.index]) _joyNeutral[q.index] = joyNeutralSaved(q) || Array.prototype.slice.call(q.axes || []);   // CTR 로 맞춰 저장해 둔 가운데가 있으면 그것
   });
   // ── 쓸 패드 고르기 ──
   // 조종 장치 하나가 여러 대로 올라오는 기종이 있다(허브·복합 장치). 그때

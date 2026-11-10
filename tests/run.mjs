@@ -53,7 +53,9 @@ import * as apptune from './cases/apptune.mjs';
 import * as lock from './cases/lock.mjs';
 import * as popout from './cases/popout.mjs';
 
-const SUITES = [smoke, actions, coords, chartcal, hold, nav, gspd, dialog, chartview, procdata, simspd, tascalc, brg, fpwpt, maprot, map3d, dmearc, dme, fporder, wptcrs, brglbl, directto, crssync, locsta, susp, layout, gslope, joystick, geosearch, simmode, ga, tdown, bbtrim, physics2, hocas, joycenter, ship3d, heli3d, ralt, startapt, hdgref, sound, view3d, runway, apptune, lock, popout];
+const SUITES0 = [smoke, actions, coords, chartcal, hold, nav, gspd, dialog, chartview, procdata, simspd, tascalc, brg, fpwpt, maprot, map3d, dmearc, dme, fporder, wptcrs, brglbl, directto, crssync, locsta, susp, layout, gslope, joystick, geosearch, simmode, ga, tdown, bbtrim, physics2, hocas, joycenter, ship3d, heli3d, ralt, startapt, hdgref, sound, view3d, runway, apptune, lock, popout];
+// 여러 묶음으로 나뉜 검사(suites 를 내보내는 파일)는 펼친다
+const SUITES = SUITES0.flatMap(m => m.suites ? m.suites : [m]);
 const filter = process.argv.slice(2);
 
 function makeT() {
@@ -74,21 +76,26 @@ const browser = await chromium.launch({
 let total = 0, failed = 0;
 try {
   buildEnv();   // Leaflet 등 사전 점검(문제가 있으면 여기서 명확히 실패)
-  for (const s of SUITES) {
-    if (filter.length && !filter.some(f => s.name.includes(f))) continue;
+  // JOBS=n 이면 n 개 묶음을 함께 돌린다(페이지가 따로라 서로 간섭하지 않는다 · 기본 1)
+  const picked = SUITES.filter(s => !filter.length || filter.some(f => s.name.includes(f)));
+  const jobs = Math.max(1, parseInt(process.env.JOBS || '1', 10) || 1);
+  const runOne = async s => {
     const page = await openApp(browser, {});
     const [T, rows] = makeT();
     let err = null;
     try { await s.run(page, T); } catch (e) { err = e; }
     await page.close();
-
     const bad = rows.filter(r => !r.pass).length + (err ? 1 : 0);
     total += rows.length + (err ? 1 : 0); failed += bad;
     console.log(`\n${bad ? '✗' : '✓'} ${s.name}  (${rows.length - rows.filter(r => !r.pass).length}/${rows.length})`);
     rows.forEach(r => { if (!r.pass) console.log(`    ✗ ${r.msg}`); });
     if (process.env.VERBOSE) rows.forEach(r => { if (r.pass) console.log(`    ✓ ${r.msg}`); });
     if (err) console.log(`    ✗ 예외: ${err.message}`);
-  }
+  };
+  let next = 0;
+  await Promise.all(Array.from({ length: Math.min(jobs, picked.length || 1) }, async () => {
+    while (next < picked.length) await runOne(picked[next++]);
+  }));
 } finally {
   await browser.close();
 }

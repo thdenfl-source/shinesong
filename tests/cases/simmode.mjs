@@ -4,6 +4,8 @@
 // 나타나는가" 다. 실제 조이스틱이 없으므로 가짜 패드를 깔고 축 값을 손으로
 // 움직인 뒤, 시뮬 루프를 프레임 단위로 돌려 상태 변화를 잰다.
 export const name = 'SIM 모드';
+// 한 덩어리로는 30분 넘게 걸려 주제별 다섯 묶음으로 나눈다(각각 새 페이지에서 돈다 · 'SIM 모드' 로 다섯 다 고른다).
+// 아래 suites 가 run.mjs 에 실린다.
 
 // 가짜 패드 + 네 축 배정(0:롤 1:피치 2:요 3:컬렉티브)
 const SETUP = () => {
@@ -58,7 +60,18 @@ const hoverSide = (v) => Math.abs(v);
 const known2 = (v) => !!v;
 const normAS0 = (d) => ((d % 360) + 540) % 360 - 180;
 
-export async function run(page, t) {
+// 3D 카메라를 그대로 읽는다 — 자리·높이·방위·기울기·롤.
+// (maplibre 5 는 카메라를 헬기 자리에 직접 놓으므로 화면을 돌리거나 미는
+//  흉내가 없다. 그래서 카메라 값을 곧바로 잰다.)
+const CAM = `() => {
+  const tr = _ml3d.transform, ll = tr.getCameraLngLat();
+  return { lat: ll.lat, lon: ll.lng, alt: tr.getCameraAltitude(),
+           pitch: _ml3d.getPitch(), roll: _ml3d.getRoll(),
+           bearing: Math.round(normA(_ml3d.getBearing())) % 360,
+           tf: document.getElementById('map3d').style.transform };
+}`;
+
+async function part1(page, t) {
   // ── 버튼이 1행 ALT 유지 버튼 무리(ALT·CRHT·G/S) 오른쪽에 있다 ──
   // 스톱워치는 2행으로 내려갔다(ALT 무리와 자리를 맞바꿨다).
   const btn = await page.evaluate(async () => {
@@ -444,6 +457,8 @@ export async function run(page, t) {
   t.ok(gnd.lifted > gnd.onGnd.gndFt + 50 && gnd.liftTq.tq < gnd.liftTq.mta,
     `레버를 올리면 지면 위로 뜬다 (${gnd.lifted.toFixed(0)}ft · 토크 ${gnd.liftTq.tq.toFixed(0)}% < MTA ${gnd.liftTq.mta.toFixed(0)}%)`);
 
+}
+async function part2(page, t) {
   // ── 컬렉티브 → 토크 → 오르내린다 ──
   // 컬렉티브는 '상승률 레버' 가 아니라 '출력 레버' 다. 올린 만큼 토크가 오르고,
   // 지금 필요한 토크보다 남는 만큼이 상승률이 된다.
@@ -878,16 +893,6 @@ export async function run(page, t) {
   })()`);
   t.ok(inv < -30, `반전으로 잡아 두면 반대로 선다 (${inv.toFixed(1)}°)`);
 
-  // 3D 카메라를 그대로 읽는다 — 자리·높이·방위·기울기·롤.
-  // (maplibre 5 는 카메라를 헬기 자리에 직접 놓으므로 화면을 돌리거나 미는
-  //  흉내가 없다. 그래서 카메라 값을 곧바로 잰다.)
-  const CAM = `() => {
-    const tr = _ml3d.transform, ll = tr.getCameraLngLat();
-    return { lat: ll.lat, lon: ll.lng, alt: tr.getCameraAltitude(),
-             pitch: _ml3d.getPitch(), roll: _ml3d.getRoll(),
-             bearing: Math.round(normA(_ml3d.getBearing())) % 360,
-             tf: document.getElementById('map3d').style.transform };
-  }`;
 
   // ── PFD 와 지도가 함께 움직인다 ──
   // 같은 상태(S)를 두 화면이 읽으므로, 조종한 결과가 둘 다에 나타나야 한다.
@@ -1010,11 +1015,8 @@ export async function run(page, t) {
     S.bnk = 30;
     proto.rotate = function (a) { if (adi === null) adi = a; return orig.call(this, a); };
     drawPFD(); proto.rotate = orig;
-    const marker = _ml3dMarker ? _ml3dMarker.getElement().isConnected : null;
     toggleSimMode(false);
-    _update3dMarker();
-    const markerAfter = _ml3dMarker ? _ml3dMarker.getElement().isConnected : null;
-    return { H, lvl, up10, up20, up40, dn20, bank45, marker, markerAfter, right30, left30, adi };
+    return { H, lvl, up10, up20, up40, dn20, bank45, right30, left30, adi };
   })()`);
   const fr = (r) => (r.horizonY / lookUp.H).toFixed(2);
   t.ok(lookUp.lvl.horizonY < lookUp.H / 2 - lookUp.H * 0.05 && lookUp.lvl.horizonY > lookUp.H * 0.25,
@@ -1038,9 +1040,9 @@ export async function run(page, t) {
   // ADI 는 캔버스를 rotate(−뱅크) 로 돌린다 — 음수(반시계)면 지평선 오른쪽이 올라간다
   t.ok(lookUp.adi < 0,
     `PFD 의 ADI 도 같은 쪽으로 기운다 (회전 ${lookUp.adi === null ? '없음' : lookUp.adi.toFixed(2)}rad · 오른쪽 뱅크 30°)`);
-  t.eq(lookUp.marker, false, '1인칭에서는 제 마커를 지도에서 뗀다(눈이 곧 헬기 자리)');
-  t.eq(lookUp.markerAfter, true, '끄면 마커가 다시 붙는다');
 
+}
+async function part3(page, t) {
   // ── 카메라가 움직여도 GPU 에서 화면을 읽어 오지 않는다(버벅거림) ──
   // readPixels 는 GPU 가 그리기를 다 끝낼 때까지 기다리게 한다. 종전에는 3D 축척이
   // 매 프레임 unproject()(지형을 켜면 readPixels)를 불렀고, 숨긴 마커도 지형에
@@ -1098,6 +1100,23 @@ export async function run(page, t) {
     const r = scale[k], err = Math.abs(r.calc / r.ref - 1);
     t.ok(err < 0.06, `3D 축척(${k.slice(1)}°)이 실제 땅 위 거리와 맞는다 (${r.calc.toFixed(2)} · 실측 ${r.ref.toFixed(2)} m/px)`);
   }
+
+  // 1인칭(SIM)에서는 3D 지도의 제 마커를 뗀다(눈이 곧 헬기 자리) — 마커는 지도 모양을 다 읽은 뒤(비동기) 생기므로 기다렸다 잰다
+  const mk = await page.evaluate(`(async () => {
+    (${SETUP.toString()})();
+    const wait = ms => new Promise(r => setTimeout(r, ms));
+    toggleSimMode(false);
+    if (!_view3dOn) toggle3dMap();
+    let n = 0; while (!_ml3dMarker && n < 200) { await wait(50); n++; }
+    toggleSimMode(true); _update3dMarker();
+    const on = _ml3dMarker ? _ml3dMarker.getElement().isConnected : null;
+    toggleSimMode(false); _update3dMarker();
+    const off = _ml3dMarker ? _ml3dMarker.getElement().isConnected : null;
+    if (_view3dOn) toggle3dMap();
+    return { on, off };
+  })()`);
+  t.eq(mk.on, false, '1인칭에서는 제 마커를 지도에서 뗀다(눈이 곧 헬기 자리)');
+  t.eq(mk.off, true, '끄면 마커가 다시 붙는다');
 
   // ── 땅 위에서는 고도계만큼, 앉아 있으면 눈높이만큼 떠 있다 ──
   // 지면 위 높이(AGL)는 비행 모델의 땅에서 재고, 카메라는 '화면에 그려진 땅' 위에
@@ -1630,6 +1649,8 @@ export async function run(page, t) {
   t.ok(accel.spd[10] > 18 && accel.spd[20] > 50,   // 증감속 ×2/3
     `제자리에서 10초 ${accel.spd[10].toFixed(0)}kt · 20초 ${accel.spd[20].toFixed(0)}kt (가속이 점점 붙는다)`);
 
+}
+async function part4(page, t) {
   // ── 상위모드가 잡은 축은 조종간을 무시한다 ──
   // HDG SEL·NAV 는 좌우(뱅크)·페달을, ALT(선택 고도로 가는 것 포함)·CRHT 는 컬렉티브를 가져간다.
   const upper = await page.evaluate(`(() => {
@@ -2244,6 +2265,8 @@ export async function run(page, t) {
   t.ok(altCap.sel2 === 1300 && altCap.acq, `ALT ▲ 로 기준을 옮기면 그 고도로 가는 동안 ALT.A (${altCap.sel2}ft)`);
   t.eq(altCap.recap, 1234, '풀었다 다시 누르면 다시 그 순간의 고도');
 
+}
+async function part5(page, t) {
   // ── 오토로테이션 플레어 ──
   // 80kt 에서 컬렉티브를 끝까지 내리고 내려오다 기수를 들면 강하가 빠르게 멎는다.
   // 100ft 에서 20° 로 들면 30ft 언저리에서 거의 멎고, 더 들면 더 높이서 멎는다.
@@ -2712,3 +2735,5 @@ export async function run(page, t) {
     try { localStorage.removeItem('joyAxes'); } catch (e) {}
   });
 }
+
+export const suites = [part1, part2, part3, part4, part5].map((run, i) => ({ name: `SIM 모드 · ${["1 기본 조종·자세·속도", "2 동력·토크·계기", "3 3D 시야·트림·GSPD·레버", "4 AFCS·설정·볼·바퀴·지면효과", "5 오토로테이션·회전익 특성·공력"][i]}`, run }));

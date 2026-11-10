@@ -107,7 +107,14 @@ function hocasAxes() {
   try { if (typeof simModeAxes === 'function') a = simModeAxes(); } catch (e) { _swallow(e); }
   const trim = (simModeOn && typeof simTrimAct !== 'undefined')
     ? { roll: simTrimAct.roll / SIM_BANK_MAX, pitch: simTrimAct.pitch / SIM_PITCH_MAX } : null;
-  return { roll: a.roll || 0, pitch: a.pitch || 0, yaw: a.yaw || 0, trim };
+  // 컬렉티브 — SIM 에서는 레버가 요구하는 토크(%, 0…140 · AFCS 가 몰면 그 값), 아니면 레버 자리
+  let coll = null;
+  try {
+    const cfg = (typeof joyAxes === 'object' && joyAxes) ? joyAxes.coll : null;
+    if (simModeOn && typeof simTqCmd === 'number') coll = { frac: simTqCmd / SIM_LEVER_TOP, tq: simTqCmd, hov: hoverTqRef() / SIM_LEVER_TOP };
+    else if (cfg) coll = { frac: cfg.abs ? (joyAxRaw('coll') + 1) / 2 : ((a.coll || 0) + 1) / 2, tq: null, hov: null };
+  } catch (e) { _swallow(e); }
+  return { roll: a.roll || 0, pitch: a.pitch || 0, yaw: a.yaw || 0, trim, coll };
 }
 function drawHocas(x, y, w, h) {
   if (!(w >= 40) || !(h >= 40)) return;
@@ -117,14 +124,15 @@ function drawHocas(x, y, w, h) {
   const clamp = v => Math.max(-1, Math.min(1, v));
   const col = v => Math.abs(v) <= HOCAS_DEAD ? '#00ff88' : '#ffb74d';
   const fs = Math.max(8, Math.min(11, sideW * 0.10));
-  const box = Math.min(sideW - 8, h * 0.40);
-  const bx = x + 4 + (sideW - box) / 2, by = y + h * 0.24;
+  const colW = 8, colGap = 6;                      // 오른쪽에 컬렉티브 막대
+  const box = Math.min(sideW - 8 - colW - colGap, h * 0.40);
+  const bx = x + 4 + (sideW - box - colW - colGap) / 2, by = y + h * 0.24;
   ctx.save();
   // 바탕
   ctx.fillStyle = 'rgba(0,0,0,0.72)';
-  ctx.fillRect(bx - 4, by - fs - 6, box + 8, box + fs * 3.6 + 18);
+  ctx.fillRect(bx - 4, by - fs - 6, box + colW + colGap + 8, box + fs * 4.8 + 18);
   ctx.strokeStyle = '#446688'; ctx.lineWidth = 1;
-  ctx.strokeRect(bx - 4 + 0.5, by - fs - 6 + 0.5, box + 7, box + fs * 3.6 + 17);
+  ctx.strokeRect(bx - 4 + 0.5, by - fs - 6 + 0.5, box + colW + colGap + 7, box + fs * 4.8 + 17);
   ctx.font = `bold ${fs}px Helvetica Neue, Arial, sans-serif`;
   ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
   ctx.fillStyle = '#8ac6ff';
@@ -156,6 +164,18 @@ function drawHocas(x, y, w, h) {
   ctx.fillStyle = col(ax.yaw);
   ctx.fillRect(cx + clamp(ax.yaw) * (pw / 2 - 3) - 3, py - 1, 6, 10);
   ctx.fillText(`PED ${pct(ax.yaw, 'R', 'L')}`, cx, py + 8 + fs * 1.15);
+  // ── 컬렉티브 막대 ── 아래가 0 · 위가 끝(SIM 140%). 흰 눈금은 호버 토크, 아래 숫자는 레버가 요구하는 토크(%)
+  if (ax.coll) {
+    const kx = bx + box + colGap, f = Math.max(0, Math.min(1, ax.coll.frac));
+    ctx.strokeStyle = '#555'; ctx.strokeRect(kx + 0.5, by + 0.5, colW - 1, box - 1);
+    ctx.fillStyle = '#8ac6ff'; ctx.fillRect(kx + 1, by + box - 1 - f * (box - 2), colW - 2, f * (box - 2));
+    if (ax.coll.hov != null) {
+      const hy = by + box - 1 - Math.max(0, Math.min(1, ax.coll.hov)) * (box - 2);
+      ctx.strokeStyle = '#ffffff'; ctx.beginPath(); ctx.moveTo(kx - 2, hy); ctx.lineTo(kx + colW + 2, hy); ctx.stroke();
+    }
+    ctx.fillStyle = '#8ac6ff'; ctx.textAlign = 'center';
+    ctx.fillText(`COL ${Math.round(ax.coll.tq != null ? ax.coll.tq : f * 100)}%`, bx + (box + colGap + colW) / 2, py + 8 + fs * 1.15 + fs * 1.15);
+  }
   ctx.restore();
 }
 

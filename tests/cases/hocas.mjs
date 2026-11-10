@@ -19,6 +19,7 @@ export async function run(page, t) {
     _ax(0, 0); _ax(1, 0); _ax(2, 0); joyPoll(2000);
     const c = shot(); o.title = c.some(x => x[0] === 'HOCAS');
     o.cyc0 = c.find(x => x[0].startsWith('CYC')); o.ped0 = c.find(x => x[0].startsWith('PED'));
+    o.col0 = c.find(x => x[0].startsWith('COL')); o.col0v = simTqCmd;
     _ax(1, 0.5); _ax(0, -0.3); _ax(2, 0.6); joyPoll(2100);
     const d = shot(); o.cyc1 = d.find(x => x[0].startsWith('CYC')); o.ped1 = d.find(x => x[0].startsWith('PED'));
     _ax(0, 0); _ax(1, 0); _ax(2, 0); joyPoll(2200);
@@ -26,6 +27,7 @@ export async function run(page, t) {
     const pi = joyAxes.pitch.i; _joyNeutral[_pad.index][pi] = 0.55; _ax(1, 0); joyPoll(2300);
     o.skew = shot().find(x => x[0].startsWith('CYC'));
     document.getElementById('hocas-ctr-btn').click(); joyPoll(2350);
+    localStorage.removeItem('joyNeutral');
     o.ctr = shot().find(x => x[0].startsWith('CYC'));
     b.click(); o.after = hocasOn; o.offAgain = shot().some(x => x[0] === 'HOCAS');
     toggleSimMode(false);
@@ -40,5 +42,6 @@ export async function run(page, t) {
   t.ok(r.ped1 && /^PED R\d+$/.test(r.ped1[0]), `오른 페달 (${r.ped1 && r.ped1[0]})`);
   t.ok(r.skew && /^CYC A\d+/.test(r.skew[0]), `가운데가 밀린 자리로 잡히면 손을 떼도 치우쳐 보인다 (${r.skew && r.skew[0]})`);
   t.ok(r.ctr && r.ctr[0] === 'CYC 0 · 0', `CTR 을 누르면 지금 자리가 가운데가 된다 (${r.ctr && r.ctr[0]})`);
+  t.ok(r.col0 && r.col0[0] === `COL ${Math.round(r.col0v)}%`, `컬렉티브 막대 — 레버가 요구하는 토크를 함께 보인다 (${r.col0 && r.col0[0]})`);
   t.ok(!r.after && !r.offAgain, '다시 누르면 꺼진다');
 }
