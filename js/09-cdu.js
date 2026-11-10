@@ -1976,7 +1976,40 @@ function act(name, ...args) {
     function wptOpen(id) {
         // Create Waypoint — Flight Plan 의 Add WPT 와 같은 화면(ADD WAYPOINT)을 연다
         if (id === 'wpt_create') { try { openFlightPlan(); fpGo('ADD'); } catch (e) { _swallow(e); } return; }
+        // VOR · NDB — GPX 에서 만든 목록(20-navaids.js)을 보이고, 고르면 Flight Plan 에 넣는다
+        if (id === 'wpt_vor' || id === 'wpt_ndb') { _navKind = id === 'wpt_vor' ? 'VOR' : 'NDB'; switchMode('NAVLIST'); return; }
         _wptPage = id; switchMode('WPT_PAGE');
+    }
+    let _navKind = 'VOR', _navSort = 'DIST';
+    function _navList() {
+        const L = _navKind === 'VOR' ? (typeof NAVAID_VOR !== 'undefined' ? NAVAID_VOR : []) : (typeof NAVAID_NDB !== 'undefined' ? NAVAID_NDB : []);
+        return L.map((n, i) => ({ n, i, d: distance(S.lat, S.lon, n.lat, n.lon), b: bearing(S.lat, S.lon, n.lat, n.lon) }));
+    }
+    function navSortToggle() { _navSort = _navSort === 'DIST' ? 'NAME' : 'DIST'; switchMode('NAVLIST'); }
+    // 목록에서 고른 시설을 Flight Plan 끝에 넣고 Flight Plan 을 보인다
+    function navaidAdd(kind, i) {
+        const L = kind === 'VOR' ? NAVAID_VOR : NAVAID_NDB, n = L && L[i];
+        if (!n) return;
+        try { pushWP({ ident: n.id, lat: n.lat, lon: n.lon, name: n.name, navaid: kind, freq: n.freq || '' }); } catch (e) { _swallow(e); }
+        try { openFlightPlan(); } catch (e) { _swallow(e); }
+    }
+    function renderNavList(container, footer, title) {
+        title.innerText = _navKind === 'VOR' ? 'VOR' : 'NDB';
+        const rows = _navList().sort((a, b) => _navSort === 'DIST' ? a.d - b.d : a.n.id.localeCompare(b.n.id));
+        const col = _navKind === 'VOR' ? '#2ab4f0' : '#d23aa8';
+        const html = rows.map(r => {
+            const sub = r.n.name !== r.n.id ? r.n.name : '';
+            return `<div class="nav-row" data-act="navaidAdd" data-arg='["${_navKind}", ${r.i}]' style="display:grid;grid-template-columns:1fr 62px 70px;align-items:center;gap:6px;padding:8px 10px;margin-bottom:5px;border:1px solid #234;border-radius:6px;cursor:pointer;">` +
+                `<span><b style="color:${col};font-size:13px;">${r.n.id}</b>${sub ? ` <span style="color:#9fb4c8;font-size:10px;">${sub}</span>` : ''}</span>` +
+                `<span style="color:#7fe0c0;font-size:10px;text-align:right;">${r.n.freq || ''}</span>` +
+                `<span style="color:#fff;font-size:11px;text-align:right;">${fmtA(toMag(r.b))}° ${r.d < 100 ? r.d.toFixed(1) : Math.round(r.d)}NM</span></div>`;
+        }).join('');
+        container.innerHTML = `<div style="padding:8px 6px;overflow-y:auto;height:100%;">` +
+            `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:8px;">` +
+            `<div style="color:#9fb4c8;font-size:10px;">${rows.length}곳 · 누르면 Flight Plan 끝에 넣습니다 · 방위/거리는 지금 자리에서</div>` +
+            `<div data-act="navSortToggle" style="cursor:pointer;padding:6px 10px;border-radius:6px;font-weight:bold;font-size:11px;border:1px solid #4a90d9;color:#7ab8f5;white-space:nowrap;">${_navSort === 'DIST' ? '거리순' : '이름순'}</div></div>` +
+            html + `</div>`;
+        footer.innerHTML = cduFooter("switchMode('WPTINFO')");
     }
     function renderWptPage(container, footer, title) {
         const b = WPT_SUB_BTNS.find(x => x.id === _wptPage) || WPT_SUB_BTNS[0];
@@ -4337,6 +4370,7 @@ function act(name, ...args) {
             case 'ACSYS': renderAcSysScreen(container, footer, title); break;
             case 'WPTINFO': renderWptInfoScreen(container, footer, title); break;
             case 'WPT_PAGE': renderWptPage(container, footer, title); break;
+            case 'NAVLIST': renderNavList(container, footer, title); break;
             case 'ACSYS_PAGE': renderAcSysPage(container, footer, title); break;
             case 'PERF': renderPerfScreen(container, footer, title); break;
             case 'PERF_INPUT': renderPerfInputScreen(container, footer, title); break;
@@ -4874,7 +4908,7 @@ switchMode('HOME');
       openNavSel,
       openProc: () => { if (_soloActive) setSolo('plan'); else goCduPage('plan'); fpGo('IFR'); },
       openUbikais,
-      acSysOpen, wptOpen,
+      acSysOpen, wptOpen, navaidAdd, navSortToggle,
       pickNavVor,
       prefetchTiles,
       pwaInstall,

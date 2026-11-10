@@ -1,6 +1,9 @@
 // 스모크 — 페이지 로드 오류, 주요 화면 렌더, 죽은 버튼(참조 불가 핸들러) 검출
 export const name = '스모크';
 
+import { readFileSync } from 'node:fs';
+const _navSrc = readFileSync(new URL('../../js/20-navaids.js', import.meta.url), 'utf8');
+const NAV_N = { vor: (_navSrc.split('const NAVAID_NDB')[0].match(/"id":/g) || []).length, ndb: (_navSrc.split('const NAVAID_NDB')[1].match(/"id":/g) || []).length };
 export async function run(page, t) {
   t.eq(page.errors.length, 0, `로드 시 페이지 오류 없음${page.errors.length ? ': ' + page.errors.join(' | ') : ''}`);
 
@@ -135,20 +138,38 @@ export async function runDegenerate(page, t) {
     const t2 = title();
     [...document.querySelectorAll('#footerNav .nav-btn')].pop().click(); await wait(60);
     const t3 = title();
-    document.querySelector('#mainContentArea [data-act="wptOpen"][data-arg=\'["wpt_vor"]\']').click(); await wait(60);
+    document.querySelector('#mainContentArea [data-act="wptOpen"][data-arg=\'["wpt_int"]\']').click(); await wait(60);
     const t4 = title(); [...document.querySelectorAll('#footerNav .nav-btn')].pop().click(); await wait(60);
     const t5 = title();
     document.querySelector('#mainContentArea [data-act="wptOpen"][data-arg=\'["wpt_create"]\']').click(); await wait(80);
     const fpw = document.getElementById('fp-wrap');
     const add = { title: document.getElementById('fp-mode-title').textContent.trim(), shown: !!fpw && !fpw.classList.contains('page-hidden') && fpw.offsetParent !== null };
     try { fpGo('LIST'); } catch (e) {}
+    // VOR · NDB 목록 — GPX 자료, 거리순 · 누르면 Flight Plan 끝에
+    const keep = JSON.stringify({ wps: S.wps, awp: S.awp });
+    S.wps = []; S.awp = -1; S.lat = 36.7; S.lon = 127.5;
+    const nav = {};
+    for (const k of ['vor', 'ndb']) {
+      CDU_ACT.switchMode('WPTINFO'); await wait(40);
+      document.querySelector(`#mainContentArea [data-act="wptOpen"][data-arg='["wpt_${k}"]']`).click(); await wait(60);
+      const rows = [...document.querySelectorAll('#mainContentArea .nav-row')];
+      nav[k] = { title: title(), n: rows.length, first: rows[0] && rows[0].querySelector('b').textContent };
+      rows[0].click(); await wait(80);
+      nav[k].wp = S.wps.length && S.wps[S.wps.length - 1].ident;
+      nav[k].fp = document.getElementById('fp-mode-title').textContent.trim();
+    }
+    const k0 = JSON.parse(keep); S.wps = k0.wps; S.awp = k0.awp; try { updateWpMarkers(); fpGo('LIST'); } catch (e) {}
     CDU_ACT.switchMode('HOME'); await wait(50);
-    return { t1, labels, t2, t3, t4, t5, add };
+    return { t1, labels, t2, t3, t4, t5, add, nav };
   });
   t.ok(wpt.t1 === 'Waypoint Info' && wpt.labels.join('|') === 'Airport|INT|VOR|NDB|VRP|UserWaypoint|CreateWaypoint|AirportINFO' && wpt.t2 === '비행장 정보' && wpt.t3 === 'Waypoint Info',
     `Waypoint Info → Airport·INT·VOR·NDB·VRP·User·Create·Airport INFO, Airport INFO 의 Back 은 Waypoint Info 로 (${wpt.t1} · ${wpt.labels.join(',')} · ${wpt.t2} → ${wpt.t3})`);
   t.ok(wpt.add.title === 'ADD WAYPOINT' && wpt.add.shown, `Create Waypoint 는 Flight Plan 의 ADD WAYPOINT 화면을 연다 (${wpt.add.title} · ${wpt.add.shown})`);
-  t.ok(wpt.t4 === 'VOR' && wpt.t5 === 'Waypoint Info', `VOR 등은 제 화면(준비 중) · Back 은 Waypoint Info 로 (${wpt.t4} → ${wpt.t5})`);
+  t.ok(wpt.nav.vor.title === 'VOR' && wpt.nav.vor.n === NAV_N.vor && wpt.nav.vor.first === 'CHJ' && wpt.nav.vor.wp === 'CHJ',
+    `VOR 목록 — ${wpt.nav.vor.n}곳, 거리순 첫째 ${wpt.nav.vor.first}(청주 근처), 누르면 Flight Plan 에 ${wpt.nav.vor.wp} (${wpt.nav.vor.fp})`);
+  t.ok(wpt.nav.ndb.title === 'NDB' && wpt.nav.ndb.n === NAV_N.ndb && wpt.nav.ndb.wp === wpt.nav.ndb.first,
+    `NDB 목록 — ${wpt.nav.ndb.n}곳, 첫째 ${wpt.nav.ndb.first} 를 누르면 Flight Plan 에 ${wpt.nav.ndb.wp}`);
+  t.ok(wpt.t4 === 'INT' && wpt.t5 === 'Waypoint Info', `INT 등은 제 화면(준비 중) · Back 은 Waypoint Info 로 (${wpt.t4} → ${wpt.t5})`);
   t.ok(!wx.home.some(l => /Windy|CCTV|METAR/.test(l)), '날씨 버튼 넷은 홈에서 Weather 안으로 들어갔다');
   t.ok(wx.wxTitle === 'Weather' && wx.wxLabels.join('|') === 'Windy|저고도날씨|CCTV|METAR/TAF',
     `Weather 를 누르면 넷이 나온다 (${wx.wxTitle}: ${wx.wxLabels.join(' · ')})`);
