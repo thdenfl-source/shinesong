@@ -99,7 +99,7 @@ const OVHD_PLATES = [
     { t: 'tg', id: 'pitotHeat', x: 170, y: 580, title: 'PITOT\nHEAT', pos: ['OFF', 'AUTO', 'ON'], side: true, paddle: true, def: 'AUTO', tiny: true },
     { t: 'tg', id: 'battHeat', x: 275, y: 580, title: 'BATT\nHEAT', pos: ['OFF', 'AUTO', 'ON'], side: true, red: true, def: 'AUTO', tiny: true },
   ]},
-  // ── TQS(엔진 출력 조절장치 · 그림 7) ── PCD 레버 둘(OFF · IDLE · FLY), 모터링 버튼, 엔진마다 연료차단·화재소화 레버.
+  // ── TQS(엔진 출력 조절장치 · 그림 7) ── PCD 레버 둘(OFF · IDLE · FLY), 모터링 버튼, 엔진마다 FUEL(OPEN · CLOSE)과 T HANDLE(UNARMED · ARM).
   // PCD 는 FLY 에서 내리면 IDLE 에서 한 번 멈춘다(누름쇠 — 한 번 더 눌러야 OFF).
   { x: 290, y: 950, w: 420, h: 285, items: [
     { t: 'br', x: 20, y: 18, w: 380, text: 'TQS' },
@@ -109,10 +109,10 @@ const OVHD_PLATES = [
     { t: 'lv', id: 'pcd1', x: 150, y: 112, ys: [0, 55, 110], pos: ['OFF', 'IDLE', 'FLY'], def: 'FLY' },
     { t: 'lv', id: 'pcd2', x: 270, y: 112, ys: [0, 55, 110], pos: ['OFF', 'IDLE', 'FLY'], def: 'FLY' },
     { t: 'lbl', x: 150, y: 266, text: 'No.1 PCD', small: true }, { t: 'lbl', x: 270, y: 266, text: 'No.2 PCD', small: true },
-    { t: 'tg', id: 'fuel1', x: 55, y: 125, title: 'ENG1 FUEL', pos: ['OPEN', 'SHUT'], def: 'OPEN' },
-    { t: 'tg', id: 'fuel2', x: 365, y: 125, title: 'ENG2 FUEL', pos: ['OPEN', 'SHUT'], def: 'OPEN' },
-    { t: 'tg', id: 'fire1', x: 55, y: 232, title: 'ENG1 FIRE', pos: ['NORM', 'ARM', 'DISCH'], side: true, red: true, def: 'NORM' },
-    { t: 'tg', id: 'fire2', x: 365, y: 232, title: 'ENG2 FIRE', pos: ['NORM', 'ARM', 'DISCH'], side: true, red: true, def: 'NORM' },
+    { t: 'tg', id: 'fuel1', x: 55, y: 108, title: 'ENG1 FUEL', pos: ['OPEN', 'CLOSE'], def: 'OPEN' },
+    { t: 'tg', id: 'fuel2', x: 365, y: 108, title: 'ENG2 FUEL', pos: ['OPEN', 'CLOSE'], def: 'OPEN' },
+    { t: 'tg', id: 'fire1', x: 55, y: 242, title: 'ENG1\nT HANDLE', pos: ['UNARMED', 'ARM'], red: true, tiny: true, def: 'UNARMED' },
+    { t: 'tg', id: 'fire2', x: 365, y: 242, title: 'ENG2\nT HANDLE', pos: ['UNARMED', 'ARM'], red: true, tiny: true, def: 'UNARMED' },
   ]},
 ];
 

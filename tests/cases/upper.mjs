@@ -148,8 +148,8 @@ export async function run(page, t) {
     ovhdSet('pcd1', 'OFF');  o.off1 = st();
     ovhdSet('pcd2', 'OFF');  o.offBoth = st();
     ovhdSet('pcd1', 'FLY'); ovhdSet('pcd2', 'FLY'); o.back = st();
-    ovhdSet('fuel2', 'SHUT'); o.fuel = st(); ovhdSet('fuel2', 'OPEN');
-    ovhdSet('fire1', 'ARM'); o.fire = st(); ovhdSet('fire1', 'NORM');
+    ovhdSet('fuel2', 'CLOSE'); o.fuel = st(); ovhdSet('fuel2', 'OPEN');
+    ovhdSet('fire1', 'ARM'); o.fire = st(); ovhdSet('fire1', 'UNARMED');
     ovhdSet('pcd2', 'IDLE'); ovhdSet('trng1', 'TRNG'); o.trngBlocked = st(); ovhdSet('trng1', 'NORM'); ovhdSet('pcd2', 'FLY');
     o.end = st();
     toggleSimMode(false);
@@ -160,8 +160,8 @@ export async function run(page, t) {
   t.ok(tq.off1.eng === 1 && tq.off1.ng1 === 0, 'PCD1 OFF — 1번 멎음(NG 0)');
   t.ok(tq.offBoth.eng === 0 && tq.offBoth.btn === 'ENG OFF', `두 PCD OFF — 동력 없음(${tq.offBoth.btn})`);
   t.ok(tq.back.eng === 2, 'PCD 를 FLY 로 올리면 AEO 로 돌아온다');
-  t.ok(tq.fuel.eng === 1 && tq.fuel.s === 'FLY/OFF', 'ENG2 FUEL SHUT — 2번 멎음');
-  t.ok(tq.fire.eng === 1 && tq.fire.s === 'OFF/FLY', 'ENG1 FIRE 레버 ARM — 연료가 끊겨 1번 멎음');
+  t.ok(tq.fuel.eng === 1 && tq.fuel.s === 'FLY/OFF', 'ENG2 FUEL CLOSE — 2번 멎음');
+  t.ok(tq.fire.eng === 1 && tq.fire.s === 'OFF/FLY', 'ENG1 T HANDLE ARM — 연료가 끊겨 1번 멎음');
   t.ok(tq.trngBlocked.eng === 1 && tq.trngBlocked.s === 'FLY/IDLE', '한쪽이 이미 IDLE 이면 TRAINING 은 걸리지 않는다');
   t.ok(tq.end.eng === 2, '모두 되돌리면 AEO');
   await page.evaluate(() => { selectPanel('right', 'map', true); localStorage.removeItem('ovhdState'); });

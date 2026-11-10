@@ -127,9 +127,9 @@ export async function run(page, t) {
     o.status = ['Hydraulic 1', 'Hydraulic 2', 'Fuel', 'Signal Name', 'FQMS1', 'Total Fuel', 'Feed PRESS', 'MFSOV State', 'Crossfeed Valve Position',
                 'Fire Detection', 'Fire Extinguishing', 'ADS Heat Status', 'Misc', 'ACC PRESS', 'Anti-Ice', 'Inlet1'].filter(x => !s0.includes(x));
     o.fireOk = s0.filter(x => x === 'FIRE').length === 0;
-    ovhdSet('fireDet', 'ENG2'); ovhdSet('fire1', 'DISCH'); ovhdSet('pitotHeat', 'OFF'); const s1 = texts();
+    ovhdSet('fireDet', 'ENG2'); ovhdSet('fire1', 'ARM'); ovhdSet('pitotHeat', 'OFF'); const s1 = texts();
     o.fireTest = s1.includes('FIRE');
-    o.disch = s1.includes('Disch') && s1.filter(x => x === 'On').length >= 2;   // ENG1 CMD · MAIN DISCHRG
+    o.disch = s1.filter(x => x === 'On').length > s0.filter(x => x === 'On').length;   // ENG1 CMD On(T HANDLE ARM)
     o.pitotOff = s0.filter(x => x === 'Normal').length === 2 && !s1.includes('Normal');   // PITOT HEAT AUTO → Normal · OFF → Off
     ovhdReset(); localStorage.removeItem('ovhdState'); sysPageSet('asys_fuel');
     selectPanel('right', 'map', true);
@@ -142,5 +142,5 @@ export async function run(page, t) {
   t.ok(q.pcdFly && q.pcdIdle, 'Engine — PCD Position 은 TQS 레버(Fly/Idle), Anti-Ice 는 ENG ANTI ICE 스위치를 따른다');
   t.eq(q.status.length, 0, `Aircraft Status 화면의 글자가 다 있다${q.status.length ? ' (없음: ' + q.status.join(', ') + ')' : ''}`);
   t.ok(q.fireOk && q.fireTest, 'Fire Detection — FIRE DETECTOR 노브를 시험 자리로 돌리면 그 항목이 FIRE');
-  t.ok(q.disch && q.pitotOff, 'Fire Extinguishing 은 TQS 화재소화 레버(DISCH)를, ADS Heat 는 PITOT HEAT 스위치를 따른다');
+  t.ok(q.disch && q.pitotOff, 'Fire Extinguishing 의 ENG CMD 는 TQS T HANDLE(ARM)을, ADS Heat 는 PITOT HEAT 스위치를 따른다');
 }

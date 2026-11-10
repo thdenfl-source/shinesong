@@ -486,7 +486,7 @@ let simEng = 2, simOeiT = 0;
 let simEngFail = 2, simEngTrng = false;
 // ── 엔진마다의 상태 ── 'FLY'(출력을 낸다) · 'IDLE' · 'TRNG'(훈련으로 줄임 — IDLE 로 보인다) · 'OFF'(멎음)
 // 상부 콘솔(17-upper.js)의 조작으로 정한다:
-//   TQS PCD — OFF · IDLE · FLY        · 연료차단 레버 SHUT · 화재소화 레버 ARM/DISCH → 그 엔진 OFF
+//   TQS PCD — OFF · IDLE · FLY        · FUEL CLOSE · T HANDLE ARM → 그 엔진 OFF
 //   TRAINING NO1/NO2 ENG TRNG — 한쪽만 올리면 그 엔진을 줄인 OEI 훈련(둘 다면 걸리지 않는다)
 //   3D 의 ENG 버튼 — AEO · OEI(2번 고장) · IDLE(두 엔진)
 // 출력을 내는 엔진 수가 simEng(2 AEO · 1 OEI · 0 동력 없음)다 — 남은 엔진은 2.5분 → 연속 정격까지.
@@ -499,7 +499,7 @@ function simEngApply(quiet) {
   [1, 2].forEach(n => {
     const pcd = g('pcd' + n), fire = g('fire' + n);
     let v = pcd === 'OFF' ? 'OFF' : pcd === 'IDLE' ? 'IDLE' : 'FLY';
-    if (g('fuel' + n) === 'SHUT' || fire === 'ARM' || fire === 'DISCH') v = 'OFF';
+    if (g('fuel' + n) === 'CLOSE' || fire === 'ARM') v = 'OFF';            // FUEL CLOSE · T HANDLE ARM → 연료가 끊긴다
     st[n] = v;
   });
   if (_simEngBtn === 1) st[2] = 'OFF';                                   // ENG 버튼 OEI — 2번 고장
