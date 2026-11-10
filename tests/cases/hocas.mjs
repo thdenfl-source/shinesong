@@ -5,8 +5,8 @@ export const name = 'HOCAS';
 export async function run(page, t) {
   const r = await page.evaluate(`(() => {
     (${SIM_SETUP_SRC})();
-    const grp = document.querySelector('.hover-group');
-    const o = { lbls: [...grp.querySelectorAll('.ctrl-lbl')].map(e => e.textContent.trim()) };
+    // FCP 의 HOVER 칸(HOVER PAGE · HOVER POS)은 PFD 소프트키로 옮겨 없앴다
+    const o = { hoverGone: !document.querySelector('.hover-group') && !document.getElementById('hover-btn') };
     const shot = () => {
       const proto = CanvasRenderingContext2D.prototype, orig = proto.fillText, seen = [];
       proto.fillText = function (tx, ...a) { seen.push([String(tx), String(this.fillStyle)]); return orig.call(this, tx, ...a); };
@@ -47,7 +47,7 @@ export async function run(page, t) {
     o.nsCol = shot().find(x => x[0].startsWith('COL')); hocasOn = false; if (keep) joyAxes.coll = keep;
     return o;
   })()`);
-  t.ok(r.lbls.includes('HOVER') && !r.fcpBtn, `FCP 는 HOVER 글씨로 돌아오고 HOCAS · CTR 버튼은 CDU 로 옮겼다 (${r.lbls.join(' · ')})`);
+  t.ok(r.hoverGone && !r.fcpBtn, 'FCP 에 HOCAS · CTR 버튼이 없다(CDU 로 옮겼다) — HOVER 칸도 소프트키로 옮겨 없앴다');
   t.ok(r.cduBtns, 'CDU Aircraft Systems → HOCAS 칸에 PFD 표시 · CTR · DEFAULT 버튼이 있다');
   t.eq(r.off, false, '평소에는 HSI 에 그리지 않는다');
   t.ok(r.on && r.cls && r.title, '누르면 켜지고 HSI 에 HOCAS 창이 뜬다');

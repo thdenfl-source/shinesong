@@ -1968,7 +1968,7 @@ setInterval(() => { try { fcpsSync(); } catch (e) { _swallow(e); } }, 250);
 // ══════════════════════════════════════════════════════
 // PFD 소프트키(터치바) — KUH-1CG FLM 그림 5~8 의 트리. PFD 바로 아래(FCP 맨 위 한 줄) 12칸.
 // 최상위: Map Range − · Map Range + · PFD Map Settings ▸ · Traffic Map · PFD Settings ▸ · OBS · Active NAV(VOR1→VOR2→FMS) ·
-//         Sensors ▸ · Hover Display · Hover Position · CAS · (빈칸)
+//         Sensors ▸ · Hover Display · Hover Position · CAS · SIM
 // 하위 메뉴(▸)는 Back 으로 한 단계 위로, 45초 동안 누르지 않으면 최상위로 돌아간다.
 // 켜진 기능은 칸 아래 녹색 바, 지금 쓸 수 없는 칸은 회색으로 흐려진다.
 // 아직 시뮬레이터와 잇지 않은 칸(Traffic · Terrain · WX · Detail · Map Layout · Meters · RA1/2 · CAS)은 고른 상태만 기억한다.
@@ -1993,10 +1993,12 @@ const SK_MENUS = {
     { lbl: 'OBS', on: () => obsOn, dim: () => _skDis('obs-btn'), act: () => toggleObs() },
     { lbl: 'Active NAV', sub: () => ({ FMS: 'FMS', NAV1: 'VOR1', NAV2: 'VOR2' })[navSrc] || navSrc, act: () => pfdSkNavCycle() },
     { lbl: 'Sensors', go: 'SENS' },
-    { lbl: 'Hover<br>Display', on: () => hoverPageOn, dim: () => _skDis('hover-btn'), act: () => toggleHoverPage() },
-    { lbl: 'Hover<br>Position', on: () => hoverPosOn, dim: () => _skDis('hover-pos-btn'), act: () => toggleHoverPosition() },
+    // Hover Display — 80kt 아래(또는 켜져 있을 때)만 · FCP 의 HOVER PAGE · HOVER POS 버튼은 없앴다
+    { lbl: 'Hover<br>Display', on: () => hoverPageOn, dim: () => !(hoverEligible() || hoverPageOn), act: () => { toggleHoverPage(); try { updateHoverBtns(); } catch (e) { _swallow(e); } } },
+    { lbl: 'Hover<br>Position', on: () => hoverPosOn, act: () => toggleHoverPosition() },
     { lbl: 'CAS' },
-    {},
+    // SIM — 조종간으로 직접 모는 모드(FCP 의 SIM 버튼을 옮겨 왔다 · simModeBtnPress)
+    { lbl: 'SIM', on: () => simModeOn, act: () => simModeBtnPress() },
   ],
   // 그림 6 — PFD 지도 선택
   MAPSET: [

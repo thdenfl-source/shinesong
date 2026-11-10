@@ -1201,9 +1201,9 @@ function toggleVStick() {
 }
 
 function updateSimModeBtn() {
-  const b = document.getElementById('sim-mode-btn');
-  if (!b) return;
-  b.classList.toggle('on', simModeOn);
+  const b = document.getElementById('sim-mode-btn');   // FCP 버튼은 없앴다(PFD 소프트키 SIM) — 있으면만
+  if (b) b.classList.toggle('on', simModeOn);
+  try { if (typeof pfdSkRender === 'function') pfdSkRender(); } catch (e) { _swallow(e); }
   // 3D 창·지도 창 오른쪽 버튼 묶음 맨 아래의 SIM 버튼도 함께
   document.querySelectorAll('.sim-side-btn').forEach(x => {
     x.classList.toggle('on', simModeOn); x.textContent = simModeOn ? 'SIM ON' : 'SIM OFF';
