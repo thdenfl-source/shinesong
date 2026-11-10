@@ -406,6 +406,7 @@ export async function run(page, t) {
     if (!shipVisible) shipToggleOn();
     shipLat = 37.0; shipLon = 126.0; shipHdg = 0; shipSpd = 0; updateShipMarker();
     if (!simModeOn) toggleSimMode(true);
+    if (!chinViewOn) { chinL = true; chinR = true; chinViewOn = true; try { syncChinView(); } catch (e) {} }   // CHIN 창은 처음에 꺼져 있다 — 켜고 본다
     if (S.running) toggleSim();
     S.lat = 37.0 - 60 / 111320; S.lon = 126.0; S.hdg = 0; S.alt = 150; S.spd = 0; S.vs = 0; S.pit = 0; S.bnk = 0;
     _applyFollow();
