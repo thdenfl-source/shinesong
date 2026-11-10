@@ -38,10 +38,13 @@ const GND_BRAKE     = 2;       // 토크를 내렸을 때 서는 감속(kt/s)
 const GND_AERO_K    = 2;       // 기수 10° 들고 레버를 내리면 원판이 받는 바람으로 자연 감속의 3배(1+2)
 const GND_WHEEL_BRK = 6;       // 스페이스(휠 브레이크)를 누르고 있는 동안의 감속(kt/s)
 const GND_PARK_BRK  = 12;      // 파킹 브레이크가 걸린 채 구를 때 끌리며 서는 감속(kt/s)
+const GND_EMER_BRK  = 9;       // EMER 브레이크(하부 콘솔 PARKING BRAKE 레버 가운데) — 스페이스(6)와 파킹 SET(12) 사이
 let simWheelBrake = false;     // 스페이스를 누르고 있다
 let simParkBrake = false;      // PARKING BRAKE SET — 1초 안에 스페이스 두 번
 let simParkWarn = 0;           // 파킹 브레이크를 건 채 굴러 내려앉았다 — PFD 경고 남은 시간(s)
+let simEmerBrake = false;      // EMER 브레이크 — 하부 콘솔 PARKING BRAKE 레버 EMER(19-lower.js)
 function simParkBrakeOn() { return simModeOn && simParkBrake; }
+function simEmerBrakeOn() { return simModeOn && simEmerBrake && !simParkBrake; }
 function simParkWarnOn() { return simModeOn && simParkWarn > 0; }
 let _simSpaceAt = -1e9;
 function simSpaceDown(now) {
@@ -49,6 +52,8 @@ function simSpaceDown(now) {
   if (now - _simSpaceAt <= 1000) {
     simParkBrake = !simParkBrake; _simSpaceAt = -1e9;
     try { uiToast(simParkBrake ? 'PARKING BRAKE SET' : 'PARKING BRAKE RELEASE', simParkBrake ? 'warn' : '', 2000); } catch (e) { _swallow(e); }
+    // 하부 콘솔 PARKING BRAKE 레버도 함께(SET · RELEASE)
+    try { if (typeof ovhdSet === 'function') ovhdSet('parkBrake', simParkBrake ? 'SET' : 'RELEASE'); } catch (e) { _swallow(e); }
   } else _simSpaceAt = now;
 }
 function simSpaceUp() { simWheelBrake = false; }
@@ -1612,6 +1617,8 @@ function simFly(dt) {
       let acc;
       if (simParkBrake) {
         acc = -Math.min(GND_PARK_BRK, Math.abs(S.spd) / dt) * Math.sign(S.spd);
+      } else if (simEmerBrake) {                            // EMER — 스페이스보다 세고 파킹 SET 보다 약하다
+        acc = -Math.min(GND_EMER_BRK, Math.abs(S.spd) / dt) * Math.sign(S.spd);
       } else if (S.tq >= GND_TQ_ROLL && !simWheelBrake) {
         acc = GND_CREEP * (S.tq - GND_TQ_ROLL) + GND_CYC_ACC * (-S.pit) - GND_DRAG * S.spd;
       } else {
