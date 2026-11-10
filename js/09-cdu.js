@@ -1978,7 +1978,8 @@ function act(name, ...args) {
         if (id === 'wpt_create') { try { openFlightPlan(); fpGo('ADD'); } catch (e) { _swallow(e); } return; }
         // VOR · NDB — GPX 에서 만든 목록(20-navaids.js)을 보이고, 고르면 Flight Plan 에 넣는다
         // Airport — ICAO 이름이 있는 비행장(04-map.js AIRPORTS_KR)도 같은 목록으로
-        if (id === 'wpt_vor' || id === 'wpt_ndb' || id === 'wpt_apt') { _navKind = { wpt_vor: 'VOR', wpt_ndb: 'NDB', wpt_apt: 'APT' }[id]; switchMode('NAVLIST'); return; }
+        // INT — Fix.gpx 의 교차점(20-navaids.js NAVAID_INT)
+        if (id === 'wpt_vor' || id === 'wpt_ndb' || id === 'wpt_apt' || id === 'wpt_int') { _navKind = { wpt_vor: 'VOR', wpt_ndb: 'NDB', wpt_apt: 'APT', wpt_int: 'INT' }[id]; switchMode('NAVLIST'); return; }
         _wptPage = id; switchMode('WPT_PAGE');
     }
     let _navKind = 'VOR', _navSort = 'DIST';
@@ -1986,6 +1987,7 @@ function act(name, ...args) {
     function _navSrc(kind) {
         if (kind === 'APT') return (typeof AIRPORTS_KR !== 'undefined' ? AIRPORTS_KR : []).map(a => ({ id: a.icao, name: a.name, freq: '', lat: a.lat, lon: a.lon }));
         if (kind === 'VOR') return typeof NAVAID_VOR !== 'undefined' ? NAVAID_VOR : [];
+        if (kind === 'INT') return typeof NAVAID_INT !== 'undefined' ? NAVAID_INT : [];
         return typeof NAVAID_NDB !== 'undefined' ? NAVAID_NDB : [];
     }
     function _navList() {
@@ -2003,7 +2005,7 @@ function act(name, ...args) {
     function renderNavList(container, footer, title) {
         title.innerText = _navKind === 'APT' ? 'Airport' : _navKind;
         const rows = _navList().sort((a, b) => _navSort === 'DIST' ? a.d - b.d : a.n.id.localeCompare(b.n.id));
-        const col = _navKind === 'VOR' ? '#2ab4f0' : _navKind === 'APT' ? '#e040c8' : '#d23aa8';
+        const col = (_navKind === 'VOR' || _navKind === 'INT') ? '#2ab4f0' : _navKind === 'APT' ? '#e040c8' : '#d23aa8';
         const html = rows.map(r => {
             const sub = r.n.name !== r.n.id ? r.n.name : '';
             return `<div class="nav-row" data-act="navaidAdd" data-arg='["${_navKind}", ${r.i}]' style="display:grid;grid-template-columns:1fr 62px 70px;align-items:center;gap:6px;padding:8px 10px;margin-bottom:5px;border:1px solid #234;border-radius:6px;cursor:pointer;">` +

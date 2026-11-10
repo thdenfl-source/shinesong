@@ -3,7 +3,8 @@ export const name = '스모크';
 
 import { readFileSync } from 'node:fs';
 const _navSrc = readFileSync(new URL('../../js/20-navaids.js', import.meta.url), 'utf8');
-const NAV_N = { vor: (_navSrc.split('const NAVAID_NDB')[0].match(/"id":/g) || []).length, ndb: (_navSrc.split('const NAVAID_NDB')[1].match(/"id":/g) || []).length };
+const _navPart = k => (_navSrc.split('const NAVAID_' + k)[1] || '').split('];')[0];
+const NAV_N = { vor: (_navPart('VOR').match(/"id":/g) || []).length, ndb: (_navPart('NDB').match(/"id":/g) || []).length, int: (_navPart('INT').match(/"id":/g) || []).length };
 const APT_N = (readFileSync(new URL('../../js/04-map.js', import.meta.url), 'utf8').split('const AIRPORTS_KR')[1].split('];')[0].match(/icao:/g) || []).length;
 export async function run(page, t) {
   t.eq(page.errors.length, 0, `로드 시 페이지 오류 없음${page.errors.length ? ': ' + page.errors.join(' | ') : ''}`);
@@ -139,7 +140,7 @@ export async function runDegenerate(page, t) {
     const t2 = title();
     [...document.querySelectorAll('#footerNav .nav-btn')].pop().click(); await wait(60);
     const t3 = title();
-    document.querySelector('#mainContentArea [data-act="wptOpen"][data-arg=\'["wpt_int"]\']').click(); await wait(60);
+    document.querySelector('#mainContentArea [data-act="wptOpen"][data-arg=\'["wpt_vrp"]\']').click(); await wait(60);
     const t4 = title(); [...document.querySelectorAll('#footerNav .nav-btn')].pop().click(); await wait(60);
     const t5 = title();
     document.querySelector('#mainContentArea [data-act="wptOpen"][data-arg=\'["wpt_create"]\']').click(); await wait(80);
@@ -150,7 +151,7 @@ export async function runDegenerate(page, t) {
     const keep = JSON.stringify({ wps: S.wps, awp: S.awp });
     S.wps = []; S.awp = -1; S.lat = 36.7; S.lon = 127.5;
     const nav = {};
-    for (const k of ['vor', 'ndb', 'apt']) {
+    for (const k of ['vor', 'ndb', 'apt', 'int']) {
       CDU_ACT.switchMode('WPTINFO'); await wait(40);
       document.querySelector(`#mainContentArea [data-act="wptOpen"][data-arg='["wpt_${k}"]']`).click(); await wait(60);
       const rows = [...document.querySelectorAll('#mainContentArea .nav-row')];
@@ -168,11 +169,13 @@ export async function runDegenerate(page, t) {
   t.ok(wpt.add.title === 'ADD WAYPOINT' && wpt.add.shown, `Create Waypoint 는 Flight Plan 의 ADD WAYPOINT 화면을 연다 (${wpt.add.title} · ${wpt.add.shown})`);
   t.ok(wpt.nav.vor.title === 'VOR' && wpt.nav.vor.n === NAV_N.vor && wpt.nav.vor.first === 'CHJ' && wpt.nav.vor.wp === 'CHJ',
     `VOR 목록 — ${wpt.nav.vor.n}곳, 거리순 첫째 ${wpt.nav.vor.first}(청주 근처), 누르면 Flight Plan 에 ${wpt.nav.vor.wp} (${wpt.nav.vor.fp})`);
+  t.ok(wpt.nav.int.title === 'INT' && wpt.nav.int.n === NAV_N.int && wpt.nav.int.wp === wpt.nav.int.first && wpt.nav.int.first === 'VASLI',
+    `INT 목록 — Fix ${wpt.nav.int.n}곳, 거리순 첫째 ${wpt.nav.int.first}(청주 근처), 누르면 Flight Plan 에 ${wpt.nav.int.wp}`);
   t.ok(wpt.nav.apt.title === 'Airport' && wpt.nav.apt.n === APT_N && wpt.nav.apt.first === 'RKTU' && wpt.nav.apt.wp === 'RKTU',
     `Airport 목록 — ICAO 비행장 ${wpt.nav.apt.n}곳, 거리순 첫째 ${wpt.nav.apt.first}(청주), 누르면 Flight Plan 에 ${wpt.nav.apt.wp}`);
   t.ok(wpt.nav.ndb.title === 'NDB' && wpt.nav.ndb.n === NAV_N.ndb && wpt.nav.ndb.wp === wpt.nav.ndb.first,
     `NDB 목록 — ${wpt.nav.ndb.n}곳, 첫째 ${wpt.nav.ndb.first} 를 누르면 Flight Plan 에 ${wpt.nav.ndb.wp}`);
-  t.ok(wpt.t4 === 'INT' && wpt.t5 === 'Waypoint Info', `INT 등은 제 화면(준비 중) · Back 은 Waypoint Info 로 (${wpt.t4} → ${wpt.t5})`);
+  t.ok(wpt.t4 === 'VRP' && wpt.t5 === 'Waypoint Info', `VRP 등은 제 화면(준비 중) · Back 은 Waypoint Info 로 (${wpt.t4} → ${wpt.t5})`);
   t.ok(!wx.home.some(l => /Windy|CCTV|METAR/.test(l)), '날씨 버튼 넷은 홈에서 Weather 안으로 들어갔다');
   t.ok(wx.wxTitle === 'Weather' && wx.wxLabels.join('|') === 'Windy|저고도날씨|CCTV|METAR/TAF',
     `Weather 를 누르면 넷이 나온다 (${wx.wxTitle}: ${wx.wxLabels.join(' · ')})`);
