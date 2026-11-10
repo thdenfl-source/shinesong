@@ -619,7 +619,7 @@ function simStep(ts, noLoop){   // noLoop — 새 창이 대신 한 프레임을
           } else if (navApOn && navSrc === 'FMS' && !obsOn) {
             // Last WP passed in NAV AP mode — revert to HDG hold
             navApOn = false;
-            document.getElementById('nav-ap-btn').classList.remove('on');
+            { const b = document.getElementById('nav-ap-btn'); if (b) b.classList.remove('on'); }
             bankTarget = 0;
             selHdg = ((Math.round(hdgInd()) + 359) % 360) + 1; hdgSelOn = true;
           }
@@ -646,7 +646,7 @@ function simStep(ts, noLoop){   // noLoop — 새 창이 대신 한 프레임을
         if (navSrc === 'FMS' && !obsOn && S.awp < 0) {
           // No active WP — disengage NAV AP
           navApOn = false;
-          document.getElementById('nav-ap-btn').classList.remove('on');
+          { const b = document.getElementById('nav-ap-btn'); if (b) b.classList.remove('on'); }
           bankTarget = 0;
           selHdg = ((Math.round(hdgInd()) + 359) % 360) + 1; hdgSelOn = true;
         } else {
@@ -1855,9 +1855,6 @@ function simpleExit() {
 // 노브: 왼쪽(‹)/오른쪽(›)을 누르면 돌린다(누르고 있으면 계속) · 가운데를 누르면 노브 누름(PUSH).
 // 기능은 지금 FCP 와 같은 함수(applyDelta · fcpSync · toggleAltHold …)를 부른다.
 // UPLIM · DH 와 빈 버튼 둘은 아직 기능이 없다(자리만).
-const FCPS_KEY = 'fcpSimple';
-let fcpSimpleOn = false;
-try { fcpSimpleOn = localStorage.getItem(FCPS_KEY) === '1'; } catch (e) { _swallow(e); }
 const FCPS_KNOBS = {
   ias:  { lbl: 'IAS',   rot: ['spd', 1],   push: ['fcpSync', 'ias'] },
   hdg:  { lbl: 'HDG',   rot: ['hdg', 1],   push: ['fcpSync', 'hdg'] },
@@ -1869,6 +1866,9 @@ const FCPS_KNOBS = {
   uplim:{ lbl: 'UPLIM', none: true },
   crs:  { lbl: 'CRS',   rot: ['crs', 1],   push: ['fcpSync', 'crs'] },
   dh:   { lbl: 'DH',    none: true },
+  // 오른쪽 영역(사용자 기능) — 바람
+  wdir: { lbl: 'WIND DIR', rot: ['wdir', 5] },
+  wspd: { lbl: 'WIND SPD', rot: ['wspd', 1] },
 };
 function _fcpsKnob(k) {
   const d = FCPS_KNOBS[k];
@@ -1884,20 +1884,26 @@ function _fcpsBtn(id, lbl, act, framed) {
 function _fcpsBuild() {
   const bar = document.querySelector('#pfd-wrap .ctrl-bar');
   if (!bar || document.getElementById('fcp-simple')) return;
-  const tog = document.createElement('button');
-  tog.type = 'button'; tog.id = 'fcps-tog'; tog.className = 'fcps-tog';
-  tog.dataset.act = 'toggleFcpSimple'; tog.title = 'FCP 바꾸기 — 지금 FCP ⇄ SIMPLE(실기 AFCS 조작 패널 모양)';
-  bar.prepend(tog);
   const p = document.createElement('div'); p.id = 'fcp-simple';
-  p.innerHTML = `<div class="fks-l">` +
+  p.innerHTML = `<div class="fks-main"><div class="fks-l">` +
       _fcpsKnob('ias') + _fcpsKnob('hdg') + _fcpsKnob('vs') + _fcpsKnob('alta') + _fcpsBtn('alt', 'ALT', 'toggleAltHold', true) + _fcpsKnob('crht') +
       _fcpsBtn('b1', '', '') + _fcpsBtn('navd', 'NAVD CPL', 'toggleNavAp', true) + _fcpsBtn('b2', '', '') +
       _fcpsBtn('tdown', 'T-DOWN', 'tdownSet') + _fcpsBtn('tdh', 'T.D.HOV', 'tdhEngage') + _fcpsKnob('hht') +
     `</div><div class="fks-div"></div><div class="fks-r">` +
-      _fcpsKnob('baro') + _fcpsKnob('uplim') + _fcpsKnob('crs') + _fcpsKnob('dh') + `</div>`;
-  // 옛 FCP 1행 자리 — 소프트키 바로 아래, 나머지 줄 위
-  const firstRow = bar.querySelector(':scope > .ctrl-sub-row');
-  if (firstRow) bar.insertBefore(p, firstRow); else bar.appendChild(p);
+      _fcpsKnob('baro') + _fcpsKnob('uplim') + _fcpsKnob('crs') + _fcpsKnob('dh') + `</div></div>` +
+    // UPLIM · DH 오른쪽 — 구분선 + 사용자 기능 영역(바람 노브 · RNP · SIM SPD · 인터셉트 · 트림 · FORCE TRIM · G/A · GSPD · 페달)
+    `<div class="fks-div fks-div2"></div><div class="fks-x"><div class="fks-xw">` + _fcpsKnob('wdir') + _fcpsKnob('wspd') + `</div>` +
+    `<div class="fks-xr"><div class="fks-xr1"></div><div class="fks-xr2"></div></div></div>`;
+  bar.appendChild(p);
+  // 옛 FCP 의 나머지 버튼 무리를 그대로(누름 · 홀드가 붙은 채) 옮겨 온다 — 옛 FCP 줄은 모두 없앤다
+  const r1 = p.querySelector('.fks-xr1'), r2 = p.querySelector('.fks-xr2');
+  const mv = (sel, to) => { const e = bar.querySelector(sel); if (e) to.appendChild(e); };
+  mv('.nav-src-group', r1);            // RNP
+  mv('.simspd-group', r1);             // SIM SPD
+  { const ic = document.getElementById('icpt-btn');   // NAV 인터셉트 각도(30 · 45 · 60°) — 옛 AP 칸에서
+    if (ic) { const g = document.createElement('div'); g.className = 'ctrl-group fks-icpt'; g.innerHTML = '<div class="ctrl-lbl">INTCPT</div>'; g.appendChild(ic); r1.appendChild(g); } }
+  mv('#trim-group', r2);               // COLLECTIVE TRIM · 4-WAY TRIM · FORCE TRIM · G/A · GSPD · ANTI-TORQUE PEDAL
+  bar.querySelectorAll(':scope > .ctrl-sub-row').forEach(r => r.remove());
   // 노브 돌리기 — 누르고 있으면 계속(지금 FCP ▲▼ 와 같은 빠르기)
   p.querySelectorAll('[data-rot]').forEach(el => {
     const [f, dStr] = el.dataset.rot.split(','), d = +dStr;
@@ -1913,7 +1919,8 @@ function _fcpsBuild() {
     });
     ['pointerup', 'pointercancel', 'pointerleave'].forEach(ev => el.addEventListener(ev, stop));
   });
-  fcpSimpleApply();
+  fcpsSync();
+  requestAnimationFrame(() => { try { resizePFD(); drawPFD(); } catch (e) { _swallow(e); } });
 }
 // BARO — QNH 를 1 hPa(IN 이면 0.01 inHg) 씩 · 누르면 STD(29.92 inHg = 1013.25 hPa)
 // 표준 기압 — 29.92 inHg = 1013.25 hPa. IN 으로 볼 때는 0.01 inHg 씩, HPA 로 볼 때는 1 hPa 씩 돈다
@@ -1950,20 +1957,11 @@ function fcpsSync() {
   on('alt', g(() => altHoldOn, false));
   on('navd', g(() => navApOn, false));
   on('tdh', g(() => tdOn, false));
-}
-function fcpSimpleApply() {
-  const bar = document.querySelector('#pfd-wrap .ctrl-bar');
-  if (bar) bar.classList.toggle('fcp-simple', fcpSimpleOn);
-  const t = document.getElementById('fcps-tog');
-  if (t) t.textContent = fcpSimpleOn ? 'FULL' : 'SIMPLE';
-  fcpsSync();
-  // FCP 높이가 바뀌면 PFD 를 다시 나눈다
-  requestAnimationFrame(() => { try { resizePFD(); drawPFD(); } catch (e) { _swallow(e); } });
-}
-function toggleFcpSimple() {
-  fcpSimpleOn = !fcpSimpleOn;
-  try { localStorage.setItem(FCPS_KEY, fcpSimpleOn ? '1' : '0'); } catch (e) { _swallow(e); }
-  fcpSimpleApply();
+  set('wdir', fmtA(toMag(windDir)) + '°');
+  set('wspd', Math.round(windSpd) + 'kt');
+  // GSPD 중에는 NAV 가 조향하지 못한다(updateApInhibit) — NAVD CPL 도 흐린 테로
+  const nv = document.getElementById('fks-navd');
+  if (nv) nv.classList.toggle('ap-inh', g(() => gspdOn || gspdCoasting, false));
 }
 try { _fcpsBuild(); } catch (e) { _swallow(e); }
 setInterval(() => { try { fcpsSync(); } catch (e) { _swallow(e); } }, 250);
@@ -2047,8 +2045,7 @@ function _pfdSkBuild() {
   if (!bar || document.getElementById('pfd-sk')) return;
   const sk = document.createElement('div'); sk.id = 'pfd-sk';
   sk.innerHTML = Array.from({ length: 12 }, (_, i) => `<div class="pfd-sk" id="sk-${i}" data-act="pfdSkPress" data-arg='[${i}]'><span></span><em></em><i></i></div>`).join('');
-  const tog = document.getElementById('fcps-tog');
-  if (tog) tog.after(sk); else bar.prepend(sk);
+  bar.prepend(sk);   // FCP 맨 위 — 그 아래 FCP 패널
   pfdSkRender();
 }
 function pfdSkGo(m) {
