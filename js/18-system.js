@@ -704,12 +704,12 @@ function _sysStatusPage(g, F) {
   const det = _ov('fireDet', 'OPER');
   panel(615, 30, 800, 136, 'Fire Detection');
   ['ENG1', 'ENG2', 'APU', 'MGB'].forEach((n, i) => kv(625, 790, 58 + i * 20, n, det === n ? 'FIRE' : 'OK', det === n ? R : '#fff'));
-  // 화재 소화 — TQS 화재소화 레버(ARM/DISCH) · APU T-핸들 · RESERVE 스위치
-  const f1 = _ov('fire1', 'NORM'), f2 = _ov('fire2', 'NORM'), res = _ov('fireExtRes', 'OFF');
+  // 화재 소화 — TQS T HANDLE(ARM) · APU T-핸들 · RESERVE 스위치
+  const f1 = _ov('fire1', 'UNARMED'), f2 = _ov('fire2', 'UNARMED'), res = _ov('fireExtRes', 'OFF');
   const on = (b, c) => [b ? 'On' : 'Off', b ? (c || R) : '#fff'];
-  const main = f1 === 'DISCH' || f2 === 'DISCH', rsrv = res !== 'OFF';
+  const main = false, rsrv = res !== 'OFF';            // 주 소화기 방출 조작은 아직 없다(T HANDLE 은 ARM 까지)
   panel(615, 158, 800, 386, 'Fire Extinguishing');
-  [[186, 'ENG1 CMD', on(f1 !== 'NORM', Y)], [205, 'ENG2 CMD', on(f2 !== 'NORM', Y)], [224, 'APU CMD', on(_ov('apuFire', 'IN') === 'PULLED', Y)],
+  [[186, 'ENG1 CMD', on(f1 === 'ARM', Y)], [205, 'ENG2 CMD', on(f2 === 'ARM', Y)], [224, 'APU CMD', on(_ov('apuFire', 'IN') === 'PULLED', Y)],
    [279, 'MAIN DISCHRG', on(main)], [299, 'RSRV DISCHRG', on(rsrv)],
    [342, 'MAIN Switch Position', main ? ['Disch', R] : ['Off', '#fff']], [365, 'RSRV Switch Position', rsrv ? [res, R] : ['Off', '#fff']]]
     .forEach(([y, l, v]) => kv(625, 790, y, l, v[0], v[1]));

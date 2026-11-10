@@ -17,7 +17,7 @@
      CDN 을 쓰면 한 번이라도 못 받는 순간 앱이 통째로 죽는다 — 비행 중에는
      그럴 여지를 두지 않는다. -->
 <!-- 패널 새 창(다중 모니터) — 라이브러리가 거는 이벤트까지 받아 적어야 하므로 맨 먼저 -->
-<script src="js/00-popout.js?v=543"></script>
+<script src="js/00-popout.js?v=544"></script>
 <link rel="stylesheet" href="vendor/leaflet.css"/>
 <script src="vendor/leaflet.js"></script>
 <link rel="stylesheet" href="vendor/leaflet-velocity.min.css"/>
@@ -2065,7 +2065,7 @@ body.gate-open #gate-overlay { display: none; }
     </div>
   </form>
 </div>
-<script src="js/00-gate.js?v=543"></script>
+<script src="js/00-gate.js?v=544"></script>
 <!-- ── 단일화면 선택 바 (기본 숨김) ── -->
 <!-- ── 시작 안내(사용법/키보드) 오버레이 ── -->
 <div id="help-overlay" style="display:none;">
@@ -2128,8 +2128,8 @@ body.gate-open #gate-overlay { display: none; }
             2.5분 정격(MTA 의 73%) → 연속 정격(64%)까지 냅니다(PFD 에 OEI 2.5MIN 타이머와 <b>ENG n TRNG</b>, 3D 의 ENG 버튼도 ENGn TRNG).
             둘 다 올리면 훈련이 걸리지 않고(AEO), 다 내리면 AEO 로 돌아옵니다.<br>
             <b>TQS</b>(UPPER 창 아래 — 엔진 출력 조절장치): <b>PCD 레버</b> 둘(OFF · IDLE · FLY — 위치 글자 쪽을 누른다. FLY 에서 내리면 IDLE 에서 한 번 멈추고(누름쇠)
-            한 번 더 눌러야 OFF), <b>MTRING</b> 버튼, 엔진마다 <b>연료차단 레버</b>(OPEN · SHUT)와 <b>화재소화 레버</b>(NORM · ARM · DISCH).
-            SIM 에서 엔진마다: PCD FLY → 출력 · IDLE → IDLE · OFF 또는 연료 SHUT 또는 화재 레버 ARM/DISCH → 멎음. 한 엔진만 출력이면 OEI(2.5분 → 연속 정격),
+            한 번 더 눌러야 OFF), <b>MTRING</b> 버튼, 엔진마다 <b>FUEL</b>(OPEN · CLOSE)과 <b>T HANDLE</b>(UNARMED · ARM).
+            SIM 에서 엔진마다: PCD FLY → 출력 · IDLE → IDLE · OFF 또는 FUEL CLOSE 또는 T HANDLE ARM → 멎음. 한 엔진만 출력이면 OEI(2.5분 → 연속 정격),
             둘 다 없으면 동력 없는 오토로테이션입니다(PFD 경고 ENG IDLE / ENG OFF). 3D 의 ENG 버튼(AEO · OEI · IDLE)도 그대로 씁니다.
             그림 7 대로 SRCH LT · NAV LTS 는 NORM/IR, DISPLAY 는 DAY/NIGHT/NVG, APU/GPU 는 GPU/OFF/APU GEN(GPU 는 땅 위에서만 전원), TRAINING 은 NORM/TRNG 입니다.<br>
             <b>3D 화면의 계기</b> — 3D 지도가 떠 있으면(3D 단독 · 3D 탭 창 · 2D 지도 위 3D) 그 <b>왼쪽 위</b>에
@@ -2656,7 +2656,7 @@ body.gate-open #gate-overlay { display: none; }
             두 AP 가 함께 시험(C · YR · P 액추에이터가 붉게)을 시작해 AP2 TEST OK → AP1 TEST OK 뒤 처음 화면으로 돌아옵니다(약 10초).
             <b>Engine</b> — 엔진마다 EHC 자료(Anti-Ice · T45 Margin · T2 · PS3 · P0 · LDS · PCD Position 등)와 MGB · IGB · TGB 온도. 엔진이 멎으면 값이 노란 X.
             <b>Aircraft Status</b> — 유압 1·2(PSI · °C · Liters), 연료 FQMS 표(탱크별 · L/R · Total), Feed PRESS · MFSOV 상태, 이송 펌프,
-            화재 탐지(FIRE DETECTOR 노브로 시험) · 화재 소화(TQS 화재소화 레버 · APU T-핸들 · RESERVE), ADS 가열(PITOT HEAT), ACC PRESS, 방빙(ENG ANTI ICE).
+            화재 탐지(FIRE DETECTOR 노브로 시험) · 화재 소화(TQS T HANDLE ARM → ENG CMD · APU T-핸들 · RESERVE), ADS 가열(PITOT HEAT), ACC PRESS, 방빙(ENG ANTI ICE).
             나머지 화면은 '준비 중'입니다.</li>
         <li><b>정보</b>: CCTV · Charts · NOTAM · <b>INFO</b>(비행장) · Services · SkyVector · ER availability · Wildfire status</li>
         <li><b>항법</b>: Flight Plan · PROC · <b>VNAV</b> · Track &amp; Point · MAP</li>
@@ -3477,35 +3477,35 @@ body.gate-open #gate-overlay { display: none; }
 <!-- 앱 코드 — 클래식 스크립트(모듈 아님)라 전역 스코프를 공유한다.
      순서가 곧 실행 순서이므로 임의로 바꾸지 말 것. -->
   <!-- AIP 데이터 — 코드보다 먼저 로드한다 -->
-  <script src="js/data/terminal-fixes.js?v=543"></script>
-  <script src="js/data/ifr-fixes.js?v=543"></script>
-  <script src="js/data/ifr-procedures.js?v=543"></script>
-  <script src="js/data/airfield-info.js?v=543"></script>
-  <script src="js/data/enr-vors.js?v=543"></script>
-  <script src="js/data/loc-stations.js?v=543"></script>
-  <script src="js/data/enr-routes.js?v=543"></script>
-  <script src="js/data/airspace.js?v=543"></script>
-  <script src="js/data/runways.js?v=543"></script>
+  <script src="js/data/terminal-fixes.js?v=544"></script>
+  <script src="js/data/ifr-fixes.js?v=544"></script>
+  <script src="js/data/ifr-procedures.js?v=544"></script>
+  <script src="js/data/airfield-info.js?v=544"></script>
+  <script src="js/data/enr-vors.js?v=544"></script>
+  <script src="js/data/loc-stations.js?v=544"></script>
+  <script src="js/data/enr-routes.js?v=544"></script>
+  <script src="js/data/airspace.js?v=544"></script>
+  <script src="js/data/runways.js?v=544"></script>
   <!-- 앱 코드 -->
-  <script src="js/00-ui.js?v=543"></script>
-  <script src="js/01-state.js?v=543"></script>
-  <script src="js/02-math.js?v=543"></script>
-  <script src="js/03-pfd.js?v=543"></script>
-  <script src="js/04-map.js?v=543"></script>
-  <script src="js/05-gps.js?v=543"></script>
-  <script src="js/06-nav.js?v=543"></script>
-  <script src="js/07-sim.js?v=543"></script>
-  <script src="js/08-ifrdb.js?v=543"></script>
-  <script src="js/09-cdu.js?v=543"></script>
-  <script src="js/10-tools.js?v=543"></script>
-  <script src="js/11-charts.js?v=543"></script>
-  <script src="js/12-joystick.js?v=543"></script>
-  <script src="js/13-joyhid.js?v=543"></script>
-  <script src="js/14-simmode.js?v=543"></script>
-  <script src="js/15-heli3d.js?v=543"></script>
-  <script src="js/16-sound.js?v=543"></script>
-  <script src="js/17-upper.js?v=543"></script>
-  <script src="js/18-system.js?v=543"></script>
+  <script src="js/00-ui.js?v=544"></script>
+  <script src="js/01-state.js?v=544"></script>
+  <script src="js/02-math.js?v=544"></script>
+  <script src="js/03-pfd.js?v=544"></script>
+  <script src="js/04-map.js?v=544"></script>
+  <script src="js/05-gps.js?v=544"></script>
+  <script src="js/06-nav.js?v=544"></script>
+  <script src="js/07-sim.js?v=544"></script>
+  <script src="js/08-ifrdb.js?v=544"></script>
+  <script src="js/09-cdu.js?v=544"></script>
+  <script src="js/10-tools.js?v=544"></script>
+  <script src="js/11-charts.js?v=544"></script>
+  <script src="js/12-joystick.js?v=544"></script>
+  <script src="js/13-joyhid.js?v=544"></script>
+  <script src="js/14-simmode.js?v=544"></script>
+  <script src="js/15-heli3d.js?v=544"></script>
+  <script src="js/16-sound.js?v=544"></script>
+  <script src="js/17-upper.js?v=544"></script>
+  <script src="js/18-system.js?v=544"></script>
 
 <input type="file" id="zipFileInput" accept=".zip,application/zip,application/x-zip-compressed,application/octet-stream" style="display:none" onchange="handleZipFile(this.files[0]); this.value='';"></body>
 </html>
