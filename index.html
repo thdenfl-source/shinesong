@@ -17,7 +17,7 @@
      CDN 을 쓰면 한 번이라도 못 받는 순간 앱이 통째로 죽는다 — 비행 중에는
      그럴 여지를 두지 않는다. -->
 <!-- 패널 새 창(다중 모니터) — 라이브러리가 거는 이벤트까지 받아 적어야 하므로 맨 먼저 -->
-<script src="js/00-popout.js?v=531"></script>
+<script src="js/00-popout.js?v=533"></script>
 <link rel="stylesheet" href="vendor/leaflet.css"/>
 <script src="vendor/leaflet.js"></script>
 <link rel="stylesheet" href="vendor/leaflet-velocity.min.css"/>
@@ -1976,7 +1976,7 @@ body.gate-open #gate-overlay { display: none; }
     </div>
   </form>
 </div>
-<script src="js/00-gate.js?v=531"></script>
+<script src="js/00-gate.js?v=533"></script>
 <!-- ── 단일화면 선택 바 (기본 숨김) ── -->
 <!-- ── 시작 안내(사용법/키보드) 오버레이 ── -->
 <div id="help-overlay" style="display:none;">
@@ -2179,7 +2179,7 @@ body.gate-open #gate-overlay { display: none; }
             <b>SIM 을 켜면 지도 창이 3D 로 바뀌고</b> <b>1인칭(조종석) 시야</b>가 됩니다 —
             눈이 헬기 자리에 놓이므로 화면에는 <b>앞</b>만 보입니다(뒤에서 따라가는 3인칭이 아닙니다).<br>
             카메라가 <b>헬기 자리·고도</b>에 그대로 놓이고, <b>방향지시계</b>대로 방위가,
-            <b>자세계</b>대로 기울기와 뱅크가 따라갑니다. 기본 시선은 <b>기체 자세보다 5° 아래</b>라(함정 이착함 때 발밑 갑판이 잘 보이게) <b>수평 자세면 지평선이 화면 한가운데보다 조금 위</b>이고,
+            <b>자세계</b>대로 기울기와 뱅크가 따라갑니다. 기본 시선은 저속(40kt 이하)에서 <b>기체 자세보다 5° 아래</b>라(함정 이착함 때 발밑 갑판이 잘 보이게) 수평 자세면 지평선이 화면 한가운데보다 조금 위이고, 속도가 붙을수록 덜 숙여 <b>120kt 에서는 0°</b> — 순항 수평 자세면 지평선이 한가운데로 와서 <b>외부 시점(EXT)에서 본 기체 자세와 목측이 같습니다</b>.
             <b>기수를 들면 그만큼 하늘</b>을, <b>숙이면 땅</b>을 봅니다(카메라 자체가 들리므로 앞으로
             나가 보이지 않습니다). 뱅크를 주면 카메라가 그대로 기울어 지평선이 <b>PFD 의 ADI 와 같은 쪽으로</b>
             기웁니다(오른쪽 뱅크면 지평선 오른쪽이 올라갑니다 · 확대되지 않습니다).
@@ -2452,8 +2452,8 @@ body.gate-open #gate-overlay { display: none; }
         <li><b>방위 표기는 모두 자북(°M)</b>입니다 — HDG·CRS·BRG·NAV SOURCE·지도 BRG 라벨·비행계획 구간방위·바람·선박 침로.
             지도의 선과 거리는 정확도를 위해 내부적으로 진북(대권) 기하로 계산하고, 화면 숫자와 입력만 자북으로 변환합니다
             (한국 자기편차 9°W 기준). 측정자는 <b>°T / °M</b>을 함께 표시합니다.</li>
-        <li><b>NAV SOURCE 판독</b>(HSI 우측, 황토 바탕): <b>FMS · NAV1 · NAV2</b> 세 소스가 각각 가리키는 지점의
-            <b>명칭 · 방위 · 거리</b>를 동시에 표시합니다. 현재 선택된 소스는 배경 강조로 구분되며,
+        <li><b>NAV SOURCE 판독</b>(오른쪽 아래 칸 — CRHT 계기를 2/3 높이로 줄이고 그 밑에 둠, HSI 와 겹치지 않음): <b>FMS · NAV1 · NAV2</b> 세 소스가 각각 가리키는 지점의
+            <b>명칭 · 방위 · 거리</b>를 소스마다 두 줄(윗줄 소스·명칭, 아랫줄 방위·거리)로 동시에 표시합니다. 현재 선택된 소스는 배경 강조로 구분되며,
             좌우의 <b>BRG1 · BRG2 판독을 모두 대신합니다</b> — 같은 값을 두 번 적지 않습니다.
             <b>나침반의 BRG1(파랑) · BRG2(녹색) 니들</b>은 그대로이고, 하단 <b>BRG</b> 버튼으로 켜고 끕니다.</li>
         <li><b>순서 바꾸기</b>: 비행계획 목록에서 각 줄 왼쪽의 <b>≡ 손잡이</b>를 <b>끌어서</b> 순서를 바꿉니다
@@ -3349,33 +3349,33 @@ body.gate-open #gate-overlay { display: none; }
 <!-- 앱 코드 — 클래식 스크립트(모듈 아님)라 전역 스코프를 공유한다.
      순서가 곧 실행 순서이므로 임의로 바꾸지 말 것. -->
   <!-- AIP 데이터 — 코드보다 먼저 로드한다 -->
-  <script src="js/data/terminal-fixes.js?v=531"></script>
-  <script src="js/data/ifr-fixes.js?v=531"></script>
-  <script src="js/data/ifr-procedures.js?v=531"></script>
-  <script src="js/data/airfield-info.js?v=531"></script>
-  <script src="js/data/enr-vors.js?v=531"></script>
-  <script src="js/data/loc-stations.js?v=531"></script>
-  <script src="js/data/enr-routes.js?v=531"></script>
-  <script src="js/data/airspace.js?v=531"></script>
-  <script src="js/data/runways.js?v=531"></script>
+  <script src="js/data/terminal-fixes.js?v=533"></script>
+  <script src="js/data/ifr-fixes.js?v=533"></script>
+  <script src="js/data/ifr-procedures.js?v=533"></script>
+  <script src="js/data/airfield-info.js?v=533"></script>
+  <script src="js/data/enr-vors.js?v=533"></script>
+  <script src="js/data/loc-stations.js?v=533"></script>
+  <script src="js/data/enr-routes.js?v=533"></script>
+  <script src="js/data/airspace.js?v=533"></script>
+  <script src="js/data/runways.js?v=533"></script>
   <!-- 앱 코드 -->
-  <script src="js/00-ui.js?v=531"></script>
-  <script src="js/01-state.js?v=531"></script>
-  <script src="js/02-math.js?v=531"></script>
-  <script src="js/03-pfd.js?v=531"></script>
-  <script src="js/04-map.js?v=531"></script>
-  <script src="js/05-gps.js?v=531"></script>
-  <script src="js/06-nav.js?v=531"></script>
-  <script src="js/07-sim.js?v=531"></script>
-  <script src="js/08-ifrdb.js?v=531"></script>
-  <script src="js/09-cdu.js?v=531"></script>
-  <script src="js/10-tools.js?v=531"></script>
-  <script src="js/11-charts.js?v=531"></script>
-  <script src="js/12-joystick.js?v=531"></script>
-  <script src="js/13-joyhid.js?v=531"></script>
-  <script src="js/14-simmode.js?v=531"></script>
-  <script src="js/15-heli3d.js?v=531"></script>
-  <script src="js/16-sound.js?v=531"></script>
+  <script src="js/00-ui.js?v=533"></script>
+  <script src="js/01-state.js?v=533"></script>
+  <script src="js/02-math.js?v=533"></script>
+  <script src="js/03-pfd.js?v=533"></script>
+  <script src="js/04-map.js?v=533"></script>
+  <script src="js/05-gps.js?v=533"></script>
+  <script src="js/06-nav.js?v=533"></script>
+  <script src="js/07-sim.js?v=533"></script>
+  <script src="js/08-ifrdb.js?v=533"></script>
+  <script src="js/09-cdu.js?v=533"></script>
+  <script src="js/10-tools.js?v=533"></script>
+  <script src="js/11-charts.js?v=533"></script>
+  <script src="js/12-joystick.js?v=533"></script>
+  <script src="js/13-joyhid.js?v=533"></script>
+  <script src="js/14-simmode.js?v=533"></script>
+  <script src="js/15-heli3d.js?v=533"></script>
+  <script src="js/16-sound.js?v=533"></script>
 
 <input type="file" id="zipFileInput" accept=".zip,application/zip,application/x-zip-compressed,application/octet-stream" style="display:none" onchange="handleZipFile(this.files[0]); this.value='';"></body>
 </html>

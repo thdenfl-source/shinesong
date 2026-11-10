@@ -989,6 +989,15 @@ function simVisAlt(map) {
 //   · 롤     = 뱅크(자세계) — 오른쪽으로 기울이면 지평선의 오른쪽이 올라간다
 //              (PFD 의 ADI 와 같은 쪽). maplibre 의 롤 + 가 바로 그 방향이다.
 const SIM_VIEW_DOWN = 5;   // 1인칭 기본 시선을 기체 자세보다 숙이는 각(°) — 기수 그림은 화면 같은 자리에 둔다
+// 그 숙임은 저속(접근·함정 이착함 — 발밑 갑판을 보려고)에서만 다 준다. 속도가 붙을수록 줄여
+// 순항(120kt)에서는 0° — 수평 자세면 지평선이 화면 한가운데에 와서, 외부 시점(EXT)에서
+// 본 기체 자세와 조종석에서 본 목측이 같아진다(종전에는 120kt 에서도 5° 숙여 기수를 숙인 듯 보였다).
+const SIM_VIEW_DOWN_KT0 = 40, SIM_VIEW_DOWN_KT1 = 120;
+function simViewDown() {
+  const v = Math.abs(Number(S.spd) || 0);
+  const k = Math.max(0, Math.min(1, (SIM_VIEW_DOWN_KT1 - v) / (SIM_VIEW_DOWN_KT1 - SIM_VIEW_DOWN_KT0)));
+  return SIM_VIEW_DOWN * k;
+}
 function _ml3dSimCamera() {
   if (!_ml3d || typeof _ml3d.calculateCameraOptionsFromCameraLngLatAltRotation !== 'function') return;
   // 1인칭 ⇄ 외부 시점이 바뀌는 중 — 두 카메라 자리 사이를 옮긴다(15-heli3d.js simCamTx)
@@ -1025,8 +1034,8 @@ function _ml3dSimCamera() {
   // 시선(둘러보기)을 기체 자세 위에 얹는다
   let look = { yaw: 0, pitch: 0 };
   try { if (typeof simLookStep === 'function') look = simLookStep(); } catch (e) { _swallow(e); }
-  // 기본 시선은 기체 자세보다 SIM_VIEW_DOWN(5°) 아래 — 함정 이착함 때 발밑 갑판이 잘 보이게
-  const r = _ml3dCamRot(S.hdg, S.pit, S.bnk, look.yaw, look.pitch - SIM_VIEW_DOWN);
+  // 기본 시선은 기체 자세보다 simViewDown()(저속 5° → 120kt 0°) 아래 — 함정 이착함 때 발밑 갑판이 잘 보이게
+  const r = _ml3dCamRot(S.hdg, S.pit, S.bnk, look.yaw, look.pitch - simViewDown());
   const pitch = Math.max(0, Math.min(180, 90 + r.pitch));
   // 화면 아래 가운데의 내 헬기 기수(15-heli3d.js) — 고개를 돌리면 비켜 간다
   try { if (typeof heli3dNoseSync === 'function') heli3dNoseSync(look); } catch (e) { _swallow(e); }
@@ -1117,7 +1126,7 @@ function _ml3dCamRot(hdg, pit, bnk, lookYaw, lookPit) {
 function _simCockpitPose() {
   const vis = simVisAlt();
   const camAlt = Math.max(vis.alt, vis.drawn + _simEyeFloorM(vis.phys)) + SIM_EYE_MIN_M;
-  const r = _ml3dCamRot(S.hdg, S.pit, S.bnk, 0, -SIM_VIEW_DOWN);
+  const r = _ml3dCamRot(S.hdg, S.pit, S.bnk, 0, -simViewDown());
   const pitch = Math.max(0, Math.min(180, 90 + r.pitch));
   const dist = Math.max(200, Math.min(10000, (camAlt - vis.drawn) * 20));
   return { lon: S.lon, lat: S.lat, alt: camAlt, bearing: r.yaw, pitch, roll: r.roll, dist };
