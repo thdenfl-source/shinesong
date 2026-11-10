@@ -1959,46 +1959,118 @@ try { _fcpsBuild(); } catch (e) { _swallow(e); }
 setInterval(() => { try { fcpsSync(); } catch (e) { _swallow(e); } }, 250);
 
 // ══════════════════════════════════════════════════════
-// PFD 소프트키(터치바) — 실기 PFD 아래쪽 12칸. FCP 맨 위 한 줄(FULL · SIMPLE 어느 쪽에서도 보인다).
-//   Map Range − · Map Range + · PFD Map Settings · Traffic Map · PFD Settings · OBS · Active NAV · Sensors ·
-//   Hover Display · Hover Position · CAS · (빈칸)
-// 지금 기능이 있는 칸: OBS(지금 FCP 의 OBS) · Active NAV(FMS → NAV1 → NAV2 순환) · Hover Display(HSI ⇄ HOVER).
-// 켜진 칸은 아래에 녹색 바. 나머지 칸은 차차 기능을 붙인다(지금은 자리만 · Hover Position · CAS 는 흐리게).
-const PFD_SK = [
-  { id: 'mapdn', lbl: 'Map<br>Range −' }, { id: 'mapup', lbl: 'Map<br>Range +' },
-  { id: 'pfdmap', lbl: 'PFD Map<br>Settings' }, { id: 'tfc', lbl: 'Traffic<br>Map' },
-  { id: 'pfdset', lbl: 'PFD<br>Settings' }, { id: 'obs', lbl: 'OBS', act: 'toggleObs' },
-  { id: 'nav', lbl: 'Active NAV', act: 'pfdSkNavCycle', sub: true }, { id: 'sens', lbl: 'Sensors' },
-  { id: 'hov', lbl: 'Hover<br>Display', act: 'toggleHoverPage' }, { id: 'hpos', lbl: 'Hover<br>Position', dim: true },
-  { id: 'cas', lbl: 'CAS', dim: true }, { id: 'blank', lbl: '' },
-];
+// PFD 소프트키(터치바) — KUH-1CG FLM 그림 5~8 의 트리. PFD 바로 아래(FCP 맨 위 한 줄) 12칸.
+// 최상위: Map Range − · Map Range + · PFD Map Settings ▸ · Traffic Map · PFD Settings ▸ · OBS · Active NAV(VOR1→VOR2→FMS) ·
+//         Sensors ▸ · Hover Display · Hover Position · CAS · (빈칸)
+// 하위 메뉴(▸)는 Back 으로 한 단계 위로, 45초 동안 누르지 않으면 최상위로 돌아간다.
+// 켜진 기능은 칸 아래 녹색 바, 지금 쓸 수 없는 칸은 회색으로 흐려진다.
+// 아직 시뮬레이터와 잇지 않은 칸(Traffic · Terrain · WX · Detail · Map Layout · Meters · RA1/2 · CAS)은 고른 상태만 기억한다.
+const SK_IDLE_MS = 45000;
+const skState = { tfcMap: false, traffic: false, detail: 'ALL', terrain: 'OFF', wx: false, ltg: false, layout: 'Inset Map',
+                  meters: false, ra: 'RA1' };
+let pfdBaroUnit = 'HPA';      // PFD 기압 칸 단위(UNITS 메뉴의 IN · HPA)
+try { const v = JSON.parse(localStorage.getItem('pfdSk') || 'null'); if (v) { Object.assign(skState, v.s || {}); if (v.baro) pfdBaroUnit = v.baro; } } catch (e) { _swallow(e); }
+function _skSave() { try { localStorage.setItem('pfdSk', JSON.stringify({ s: skState, baro: pfdBaroUnit })); } catch (e) { _swallow(e); } }
+const _skCyc = (k, arr) => () => { skState[k] = arr[(arr.indexOf(skState[k]) + 1) % arr.length]; _skSave(); };
+const _skTog = k => () => { skState[k] = !skState[k]; _skSave(); };
+const _skRadio = (k, v) => ({ lbl: v, on: () => skState[k] === v, act: () => { skState[k] = v; _skSave(); } });
+const _skBack = { lbl: 'Back', back: true };
+const _skDis = id => { const b = document.getElementById(id); return !!(b && b.disabled); };
+const SK_MENUS = {
+  TOP: [
+    { lbl: 'Map<br>Range −', act: () => { try { leafMap.setZoom(leafMap.getZoom() - 1); } catch (e) { _swallow(e); } } },
+    { lbl: 'Map<br>Range +', act: () => { try { leafMap.setZoom(leafMap.getZoom() + 1); } catch (e) { _swallow(e); } } },
+    { lbl: 'PFD Map<br>Settings', go: 'MAPSET' },
+    { lbl: 'Traffic<br>Map', on: () => skState.tfcMap, act: _skTog('tfcMap') },
+    { lbl: 'PFD<br>Settings', go: 'PFDSET' },
+    { lbl: 'OBS', on: () => obsOn, dim: () => _skDis('obs-btn'), act: () => toggleObs() },
+    { lbl: 'Active NAV', sub: () => ({ FMS: 'FMS', NAV1: 'VOR1', NAV2: 'VOR2' })[navSrc] || navSrc, act: () => pfdSkNavCycle() },
+    { lbl: 'Sensors', go: 'SENS' },
+    { lbl: 'Hover<br>Display', on: () => hoverPageOn, dim: () => _skDis('hover-btn'), act: () => toggleHoverPage() },
+    { lbl: 'Hover<br>Position', on: () => hoverPosOn, dim: () => _skDis('hover-pos-btn'), act: () => toggleHoverPosition() },
+    { lbl: 'CAS' },
+    {},
+  ],
+  // 그림 6 — PFD 지도 선택
+  MAPSET: [
+    { lbl: 'Map Layout', go: 'LAYOUT' },
+    { lbl: 'Detail', sub: () => skState.detail, act: _skCyc('detail', ['ALL', 'DCLTR1', 'DCLTR2', 'Least']) },
+    {}, { lbl: 'Traffic', on: () => skState.traffic, act: _skTog('traffic') }, {},
+    { lbl: 'Terrain', sub: () => skState.terrain, act: _skCyc('terrain', ['OFF', 'absolute', 'relative']) },
+    {}, { lbl: 'WX Overlay', sub: () => 'Connext', on: () => skState.wx, act: _skTog('wx') },
+    { lbl: 'Lightning', on: () => skState.ltg, act: _skTog('ltg') }, {}, _skBack, {},
+  ],
+  LAYOUT: [
+    _skRadio('layout', 'Map off'), _skRadio('layout', 'Inset Map'), _skRadio('layout', 'HSI Map'),
+    _skRadio('layout', 'Inset<br>Traffic'), _skRadio('layout', 'HSI<br>Traffic'), {}, {}, {}, {}, {}, _skBack, {},
+  ],
+  // 그림 7 — PFD 조절
+  PFDSET: [
+    {}, {}, {}, {}, {},
+    { lbl: 'Bearing1', sub: () => brgSrcLabel(1), act: () => brgSrcCycle(1) },
+    { lbl: 'Bearing2', sub: () => brgSrcLabel(2), act: () => brgSrcCycle(2) },
+    {}, { lbl: 'Other PFD<br>Settings', go: 'OTHER' }, {}, _skBack, {},
+  ],
+  OTHER: [{}, {}, { lbl: 'Altitude<br>Units', go: 'UNITS' }, {}, {}, {}, {}, {}, {}, {}, _skBack, {}],
+  UNITS: [
+    {}, {}, {}, {}, {},
+    { lbl: 'Meters', on: () => skState.meters, act: _skTog('meters') }, {},
+    { lbl: 'IN', on: () => pfdBaroUnit === 'IN', act: () => { pfdBaroUnit = 'IN'; _skSave(); try { drawPFD(); } catch (e) { _swallow(e); } } },
+    { lbl: 'HPA', on: () => pfdBaroUnit === 'HPA', act: () => { pfdBaroUnit = 'HPA'; _skSave(); try { drawPFD(); } catch (e) { _swallow(e); } } },
+    {}, _skBack, {},
+  ],
+  // 그림 8 — PFD 센서
+  SENS: [{}, {}, { lbl: 'RA<br>Settings', go: 'RA' }, {}, {}, {}, {}, {}, {}, {}, _skBack, {}],
+  RA: [{}, _skRadio('ra', 'RA1'), _skRadio('ra', 'RA2'), {}, {}, {}, {}, {}, {}, {}, _skBack, {}],
+};
+let skMenu = 'TOP', _skStack = [], _skIdle = null;
 function _pfdSkBuild() {
   const bar = document.querySelector('#pfd-wrap .ctrl-bar');
   if (!bar || document.getElementById('pfd-sk')) return;
   const sk = document.createElement('div'); sk.id = 'pfd-sk';
-  sk.innerHTML = PFD_SK.map(k => `<div class="pfd-sk${k.dim ? ' dim' : ''}${k.act ? '' : ' none'}" id="sk-${k.id}"${k.act ? ` data-act="${k.act}"` : ''}>` +
-    `<span>${k.lbl}</span>${k.sub ? '<em id="sk-nav-src"></em>' : ''}<i></i></div>`).join('');
-  // 세로 탭(SIMPLE/FULL) 다음 · FCP 줄들 앞
+  sk.innerHTML = Array.from({ length: 12 }, (_, i) => `<div class="pfd-sk" id="sk-${i}" data-act="pfdSkPress" data-arg='[${i}]'><span></span><em></em><i></i></div>`).join('');
   const tog = document.getElementById('fcps-tog');
   if (tog) tog.after(sk); else bar.prepend(sk);
-  pfdSkSync();
+  pfdSkRender();
 }
-// Active NAV — FMS → NAV1 → NAV2 → FMS
+function pfdSkGo(m) {
+  _skStack = m === 'TOP' ? [] : _skStack;
+  skMenu = m; pfdSkRender(); _skArmIdle();
+}
+function _skArmIdle() {
+  clearTimeout(_skIdle);
+  if (skMenu !== 'TOP') _skIdle = setTimeout(() => { _skStack = []; skMenu = 'TOP'; pfdSkRender(); }, SK_IDLE_MS);
+}
+function pfdSkPress(i) {
+  const it = (SK_MENUS[skMenu] || [])[i];
+  if (!it || !it.lbl) { _skArmIdle(); return; }
+  if (it.dim && it.dim()) return;
+  if (it.back) { skMenu = _skStack.pop() || 'TOP'; }
+  else if (it.go) { _skStack.push(skMenu); skMenu = it.go; }
+  else if (it.act) { try { it.act(); } catch (e) { _swallow(e); } }
+  pfdSkRender(); _skArmIdle();
+}
+// Active NAV — VOR1(NAV1) → VOR2(NAV2) → FMS → VOR1
 function pfdSkNavCycle() {
-  const order = ['FMS', 'NAV1', 'NAV2'];
-  const i = order.indexOf(navSrc);
-  setNavSrc(order[(i + 1) % order.length]);
-  pfdSkSync();
+  const order = ['NAV1', 'NAV2', 'FMS'];
+  setNavSrc(order[(order.indexOf(navSrc) + 1) % order.length]);
 }
-function pfdSkSync() {
-  const set = (id, on) => { const e = document.getElementById('sk-' + id); if (e && e.classList.contains('on') !== !!on) e.classList.toggle('on', !!on); };
-  set('obs', obsOn);
-  set('hov', hoverPageOn);
-  const src = document.getElementById('sk-nav-src');
-  if (src && src.textContent !== navSrc) src.textContent = navSrc;
-  // Hover Display 는 지금 FCP 의 HOVER PAGE 처럼 80kt 아래(또는 켜져 있을 때)만 누를 수 있다
-  const hb = document.getElementById('hover-btn'), h = document.getElementById('sk-hov');
-  if (hb && h && h.classList.contains('off') !== hb.disabled) h.classList.toggle('off', hb.disabled);
+function pfdSkRender() {
+  const sk = document.getElementById('pfd-sk');
+  if (!sk) return;
+  const M = SK_MENUS[skMenu] || SK_MENUS.TOP;
+  sk.dataset.menu = skMenu;
+  [...sk.children].forEach((el, i) => {
+    const it = M[i] || {};
+    const lbl = it.lbl || '';
+    const span = el.firstElementChild, em = span.nextElementSibling;
+    if (span.innerHTML !== lbl) span.innerHTML = lbl;
+    const sub = it.sub ? it.sub() : '';
+    if (em.textContent !== sub) em.textContent = sub;
+    const flags = { none: !it.lbl, on: !!(it.on && it.on()), off: !!(it.dim && it.dim()), go: !!it.go };
+    Object.entries(flags).forEach(([c, v]) => { if (el.classList.contains(c) !== v) el.classList.toggle(c, v); });
+  });
 }
+function pfdSkSync() { pfdSkRender(); }
 try { _pfdSkBuild(); } catch (e) { _swallow(e); }
-setInterval(() => { try { pfdSkSync(); } catch (e) { _swallow(e); } }, 250);
+setInterval(() => { try { pfdSkRender(); } catch (e) { _swallow(e); } }, 250);
