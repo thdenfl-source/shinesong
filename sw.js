@@ -1,6 +1,6 @@
 // VFR Flight Sim — Service Worker
 // 버전을 올리면 캐시가 갱신됩니다
-const CACHE = 'vfr-flight-v535';
+const CACHE = 'vfr-flight-v536';
 const CORE  = [
   './index.html',
   './manifest.json',
@@ -46,6 +46,7 @@ const CORE  = [
   './js/14-simmode.js',
   './js/15-heli3d.js',
   './js/16-sound.js',
+  './js/17-upper.js',
   // 로터 소리(16-sound.js) — 되풀이용 WAV
   './sounds/heli-ground.wav',
   './sounds/heli-flight.wav',

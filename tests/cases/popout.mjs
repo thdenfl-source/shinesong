@@ -14,8 +14,8 @@ export async function run(page, t) {
   });
   t.ok(tabs.tri && tabs.sel === 'pfd·cdu·map', `처음에는 3분할 PFD · CDU · MAP (${tabs.sel})`);
   t.ok(/^PFD\|▦ 4분할\|⧉ POP UP$/.test(tabs.L), `PFD 창 탭: PFD · 분할(→4분할) · POP UP (+ 📌 Top) (${tabs.L})`);
-  t.ok(tabs.M === 'CDU|MAP|3D|⧉ POP UP|⟳', `CDU 창 탭: CDU · MAP · 3D · POP UP · 새로고침 (+ 📌 Top) (${tabs.M})`);
-  t.ok(tabs.R === 'CDU|MAP|3D|⛶ 3D Only|⧉ POP UP', `MAP 창 탭: CDU · MAP · 3D · 3D Only · POP UP (+ 📌 Top) (${tabs.R})`);
+  t.ok(tabs.M === 'CDU|MAP|3D|UPPER|⧉ POP UP|⟳', `CDU 창 탭: CDU · MAP · 3D · UPPER · POP UP · 새로고침 (+ 📌 Top) (${tabs.M})`);
+  t.ok(tabs.R === 'CDU|MAP|3D|UPPER|⛶ 3D Only|⧉ POP UP', `MAP 창 탭: CDU · MAP · 3D · UPPER · 3D Only · POP UP (+ 📌 Top) (${tabs.R})`);
   const two = await page.evaluate(() => { toggleTriple(false); const o = [leftSel, rightSel].join('·'); toggleTriple(true); return o; });
   t.eq(two, 'pfd·map', '2분할은 PFD · MAP');
   // 4분할 — 위에 PFD · 3D · MAP, 아래에 CDU
