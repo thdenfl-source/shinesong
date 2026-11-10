@@ -123,7 +123,8 @@ export async function run(page, t) {
     const inHold = { holdOn, susp: navSuspended(), manual: suspOn,
                      awp: S.wps[S.awp].ident,
                      cls: (pfdSkGo('TOP'), document.getElementById('sk-5').className),
-                     txt: document.getElementById('sk-5').firstElementChild.textContent.trim() };
+                     txt: document.getElementById('sk-5').firstElementChild.textContent.trim(),
+                     bar: getComputedStyle(document.querySelector('#sk-5 i')).backgroundColor };
     // 눌러서 풀면 홀딩을 그만두고 다음 지점으로 간다
     document.getElementById('sk-5').click();
     const t1 = performance.now();
@@ -134,7 +135,8 @@ export async function run(page, t) {
   t.eq(auto.inHold.holdOn, true, '홀딩 지점에 닿으면 홀딩이 걸린다');
   t.ok(auto.inHold.susp && !auto.inHold.manual,
     '홀딩이면 SUSP 가 저절로 걸린다(손으로 켠 것은 아니다)');
-  t.ok(/\bauto\b/.test(auto.inHold.cls) && auto.inHold.txt === 'SUSP', `홀딩 중에는 소프트키가 SUSP · 저절로 걸린 것은 흰 바 (${auto.inHold.txt} · ${auto.inHold.cls})`);
+  t.ok(/\bon\b/.test(auto.inHold.cls) && auto.inHold.txt === 'SUSP' && auto.inHold.bar === 'rgb(34, 224, 34)',
+    `홀딩으로 저절로 걸린 SUSP 도 녹색 바 (${auto.inHold.txt} · ${auto.inHold.cls} · ${auto.inHold.bar})`);
   t.eq(auto.inHold.awp, 'FIX', '홀딩 중에는 그 지점에 머문다');
   t.eq(auto.after.holdOn, false, 'SUSP 를 누르면 홀딩을 그만둔다');
   t.eq(auto.after.susp, false, '보류도 함께 풀린다');
