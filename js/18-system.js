@@ -85,6 +85,7 @@ function sysTick() {
   if (w && !w.classList.contains('page-hidden')) sysDraw();
   _fuelCduRefresh();
   _elecCduRefresh();
+  _hocasCduRefresh();
   const ac = document.getElementById('afcsc');
   if (ac) {
     const P = afcsPhase();
@@ -139,7 +140,8 @@ function sysDraw() {
     g.fillStyle = '#4a6a7a'; g.font = 'bold 26px Helvetica Neue, Arial, sans-serif';
     g.fillText(name.toUpperCase(), 610, 310);
     g.font = '14px Helvetica Neue, Arial, sans-serif'; g.fillStyle = '#567';
-    g.fillText('준비 중 — 이 계통 화면은 차차 갖춥니다', 610, 340);
+    g.fillText(sysPage === 'asys_hocas' ? 'HOCAS 는 PFD(HSI 오른쪽 아래)에 보입니다 — 켜기 · CTR · DEFAULT 는 CDU 의 HOCAS 칸'
+                                     : '준비 중 — 이 계통 화면은 차차 갖춥니다', 610, 340);
   }
 }
 const _f = (sz, b = true) => `${b ? 'bold ' : ''}${sz}px Helvetica Neue, Arial, sans-serif`;
@@ -742,6 +744,16 @@ function sysCduHtml(id) {
     `<div class="nav-btn" data-act="afcsTestStart" style="width:100%;margin-bottom:10px">AFCS TEST</div>` +
     `<div id="afcsc" style="text-align:center;font-size:15px;font-weight:bold;color:#fff;min-height:22px"></div>` +
     `<div style="color:#567;font-size:10px;margin-top:12px">SYSTEM 창(탭 'SYSTEM')에 AFCS 화면이 보입니다.</div></div>`;
+  if (id === 'asys_hocas') {
+    const b = (act, txt, extra) => `<div class="nav-btn" data-act="${act}" ${extra || ''} style="flex:1;min-width:0;max-width:none;width:auto;height:auto;min-height:54px;padding:8px 4px;font-size:13px;line-height:16px;text-align:center">${txt}</div>`;
+    return `<div style="padding:12px 8px;color:#cde;font-size:12px">` +
+      `<div style="color:#567;font-size:10px;margin-bottom:6px">HOCAS — 조종간(사이클릭)·페달·컬렉티브가 가운데인지 PFD(HSI 오른쪽 아래)에 보입니다.</div>` +
+      `<div style="display:flex;gap:6px;margin-bottom:8px">${b('toggleHocas', 'PFD 표시 <b id="hocasc-on"></b>')}</div>` +
+      `<div style="color:#567;font-size:10px;margin:8px 0 4px">가운데(중립) — 조종간·페달에서 손을 뗀 채 누릅니다</div>` +
+      `<div style="display:flex;gap:6px;margin-bottom:10px">${b('hocasCenter', 'CTR<span style="font-size:10px;line-height:13px;height:auto;color:#9ab">가운데 맞춤 · 저장</span>')}` +
+      `${b('hocasDefault', 'DEFAULT<span style="font-size:10px;line-height:13px;height:auto;color:#9ab">저장한 가운데 지우기</span>')}</div>` +
+      `<div id="hocasc" style="font-size:12px"></div></div>`;
+  }
   if (id === 'asys_eng' || id === 'asys_status') return `<div style="padding:12px 8px;color:#cde;font-size:12px">` +
     `<div style="margin-bottom:8px">${id === 'asys_eng' ? 'Engine — 엔진 제어기(EHC) 자료 · PCD 위치 · MGB/IGB/TGB 온도' : 'Aircraft Status — 유압 · 연료(FQMS) · 화재 탐지/소화 · ADS 가열 · 방빙'}</div>` +
     `<div style="color:#567;font-size:10px">SYSTEM 창(탭 'SYSTEM')에 이 화면이 보입니다. 엔진은 UPPER 창 아래 TQS(PCD · 연료차단 · 화재소화 레버)로 조작합니다.</div></div>`;
@@ -763,6 +775,26 @@ function _elecCduRefresh() {
     row('DC 1 · DC 2 BUS', E.dc, E.dc ? (E.tru1 || E.tru2 ? 'ON' : 'ON (BATT)') : 'OFF') +
     row('BATT', E.batt, `${E.bat.a}A · ${E.bat.v}V`) +
     `<div style="color:#567;font-size:10px;margin-top:12px">SYSTEM 창(탭 'SYSTEM')에 Electrical 계통도가 보입니다.</div>`;
+  if (el.innerHTML !== h) el.innerHTML = h;
+}
+
+// CDU HOCAS 칸 — 표시 켜짐 · 장치 · 저장한 가운데 · 지금 조종 장치 값
+function _hocasCduRefresh() {
+  const on = document.getElementById('hocasc-on');
+  if (on) { const t = (typeof hocasOn !== 'undefined' && hocasOn) ? 'ON' : 'OFF'; if (on.textContent !== t) { on.textContent = t; on.style.color = t === 'ON' ? '#3ad13a' : '#888'; } }
+  const el = document.getElementById('hocasc');
+  if (!el) return;
+  let p = null, saved = false, ax = null;
+  try { const ps = joyPads(); p = ps.find(q => q.index === joyActiveIdx) || ps[0] || null; } catch (e) { p = null; }
+  try { saved = !!(p && joyNeutralSaved(p)); } catch (e) { _swallow(e); }
+  try { ax = hocasAxes(); } catch (e) { ax = null; }
+  const pct = (v, a, b) => !ax ? '—' : Math.abs(v) <= HOCAS_DEAD ? '0' : (v > 0 ? a : b) + Math.round(Math.abs(v) * 100);
+  const row = (k, v, col) => `<div style="display:flex;justify-content:space-between;padding:5px 4px;border-bottom:1px solid #1e2a33"><span>${k}</span><b style="color:${col || '#fff'}">${v}</b></div>`;
+  const h = row('조종 장치', p ? (p.id || '').slice(0, 28) || `#${p.index}` : '없음', p ? '#fff' : '#888') +
+    row('저장한 가운데', saved ? '있음(CTR)' : '없음(기본값)', saved ? '#3ad13a' : '#888') +
+    row('CYC 전후 · 좌우', ax ? `${pct(ax.pitch, 'F', 'A')} · ${pct(ax.roll, 'R', 'L')}` : '—') +
+    row('PEDAL', ax ? pct(ax.yaw, 'R', 'L') : '—') +
+    row('COLLECTIVE', ax && ax.coll ? `${Math.round(ax.coll.tq != null ? ax.coll.tq : ax.coll.frac * 100)}%` : '—');
   if (el.innerHTML !== h) el.innerHTML = h;
 }
 
