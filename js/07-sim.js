@@ -938,10 +938,10 @@ function panelSet(k, v) { if (k === 'left') leftSel = v; else if (k === 'mid') m
 // (지도는 2D·3D 가 서로 다른 창이라 나란히 둘 수 있다)
 function fixPanelDupes() {
   const sides = panelSides();
-  // 화면 배치 — 좌측은 늘 PFD 창이고, 가운데·우측은 CDU·MAP·3D 중에서 고른다(단독 화면 중은 빼고)
+  // 화면 배치 — 좌측은 PFD 창(탭으로 SYSTEM 창으로도 바꿀 수 있다)이고, 가운데·우측은 CDU·MAP·3D 중에서 고른다(단독 화면 중은 빼고)
   const solo = document.body.classList.contains('solo-mode');
   if (!solo) {
-    leftSel = 'pfd';
+    if (leftSel !== 'sysp') leftSel = 'pfd';
     if (midSel === 'pfd') midSel = 'cdu';
     if (rightSel === 'pfd') rightSel = 'map';
     if (botSel === 'pfd') botSel = 'cdu';

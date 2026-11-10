@@ -13,7 +13,18 @@ export async function run(page, t) {
              L: txt('left-tabs'), M: txt('mid-tabs'), R: txt('page-tabs') };
   });
   t.ok(tabs.tri && tabs.sel === 'pfd·cdu·map', `처음에는 3분할 PFD · CDU · MAP (${tabs.sel})`);
-  t.ok(/^PFD\|▦ 4분할\|⧉ 창 배치\|⧉ POP UP$/.test(tabs.L), `PFD 창 탭: PFD · 분할(→4분할) · 창 배치 · POP UP (+ 📌 Top) (${tabs.L})`);
+  t.ok(/^PFD\|SYSTEM\|▦ 4분할\|⧉ 창 배치\|⧉ POP UP$/.test(tabs.L), `PFD 창 탭: PFD · SYSTEM · 분할(→4분할) · 창 배치 · POP UP (+ 📌 Top) (${tabs.L})`);
+  // 제일 왼쪽 창의 SYSTEM 탭 — PFD 자리에 SYSTEM 창, PFD 탭으로 돌아온다(다른 창이 SYSTEM 이면 맞바꾼다)
+  const lsys = await page.evaluate(() => {
+    const where = () => [leftSel, document.getElementById('sysp-wrap').parentElement.id, document.getElementById('pfd-wrap').classList.contains('page-hidden')];
+    selectPanel('right', 'sysp');
+    document.querySelector('#left-tabs [data-sel="sysp"]').click(); const a = where(), r = rightSel;
+    document.querySelector('#left-tabs [data-sel="pfd"]').click(); const b = where();
+    selectPanel('right', 'map');
+    return { a, r, b };
+  });
+  t.ok(lsys.a.join() === 'sysp,left-panel,true' && lsys.r !== 'sysp' && lsys.b[0] === 'pfd' && lsys.b[2] === false,
+    `왼쪽 창 SYSTEM 탭 — PFD 자리에 SYSTEM, PFD 탭으로 돌아온다 (${lsys.a.join(' ')} · 우측 ${lsys.r} · ${lsys.b.join(' ')})`);
   t.ok(tabs.M === 'CDU|MAP|3D|UPPER|LOWER|SYSTEM|⧉ POP UP|⟳', `CDU 창 탭: CDU · MAP · 3D · UPPER · LOWER · SYSTEM · POP UP · 새로고침 (+ 📌 Top) (${tabs.M})`);
   t.ok(tabs.R === 'CDU|MAP|3D|UPPER|LOWER|SYSTEM|⛶ 3D Only|⧉ POP UP', `MAP 창 탭: CDU · MAP · 3D · UPPER · LOWER · SYSTEM · 3D Only · POP UP (+ 📌 Top) (${tabs.R})`);
   const two = await page.evaluate(() => { toggleTriple(false); const o = [leftSel, rightSel].join('·'); toggleTriple(true); return o; });
