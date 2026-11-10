@@ -318,7 +318,11 @@ function pfdMsgs() {
     const on = E ? E['gen' + n] : ov('gen' + n, 'ON') === 'ON';
     if (!on) out.push({ t: `${n} GEN OFF`, c: PFD_MSG_AMBER });
   });
-  if (ov('parkBrake', 'RELEASE') === 'SET') out.push({ t: 'PARKING BRAKE SET', c: PFD_MSG_GREEN });
+  // 하부 콘솔 레버 SET, 또는 SIM 스페이스 두 번(simParkBrakeOn). 걸린 채 활주 착륙하면 빨갛게(simParkWarnOn)
+  let park = ov('parkBrake', 'RELEASE') === 'SET', parkWarn = false;
+  try { if (typeof simParkBrakeOn === 'function' && simParkBrakeOn()) park = true; } catch (e) { _swallow(e); }
+  try { parkWarn = park && typeof simParkWarnOn === 'function' && simParkWarnOn(); } catch (e) { _swallow(e); }
+  if (park) out.push({ t: 'PARKING BRAKE SET', c: parkWarn ? '#ff3030' : PFD_MSG_GREEN });
   [1, 2].forEach(n => {
     const ng = P ? (n === 1 ? P.e1 : P.e2).ng : 100;
     if (ov('engAi' + n, 'OFF') === 'ON' || ng <= PFD_AI_NGR) out.push({ t: `${n} ENG A/I ON`, c: PFD_MSG_GREEN });
@@ -840,12 +844,10 @@ function drawAI(x, y, w, h) {
     ctx.fillStyle = '#ffb000'; ctx.textAlign = 'center';
     ctx.fillText(txt, cx, ty + th * 0.72);
   }
-  // PARKING BRAKE — 파킹 브레이크 걸림(SIM) · 걸린 채 활주 착륙하면 빨갛게 · EMER 브레이크면 EMER BRAKE
+  // EMER BRAKE — 비상 브레이크(SIM). 파킹 브레이크는 자세계에 띄우지 않고 메시지 시현창(pfdMsgs)에만 보인다
   const emerBrk = typeof simEmerBrakeOn === 'function' && simEmerBrakeOn();
-  if ((typeof simParkBrakeOn === 'function' && simParkBrakeOn()) || emerBrk) {
-    const warn = !emerBrk && simParkWarnOn();
-    const txt = emerBrk ? 'EMER BRAKE' : warn ? 'PARKING BRAKE SET' : 'PARKING BRAKE';
-    const col = warn ? '#ff3030' : '#ffb000';
+  if (emerBrk) {
+    const txt = 'EMER BRAKE', col = '#ffb000';
     ctx.font = `bold ${Math.max(10, wS * 0.032)}px Helvetica Neue, Arial, sans-serif`;
     const tw = ctx.measureText(txt).width + 14, th = Math.max(16, wS * 0.045);
     const ty = aiY + aiH - 2 * th - 22;
