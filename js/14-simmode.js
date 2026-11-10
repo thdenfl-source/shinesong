@@ -1828,6 +1828,7 @@ function simFly(dt) {
     if (window.gateLocked) return;                       // 아직 비밀번호·화면 고르기 중
     if (!mode) { try { mode = window.vfrStartMode || sessionStorage.getItem('vfrStartMode'); } catch (e) { _swallow(e); } }
     clearInterval(t);
+    if (mode === 'sim') { setTimeout(() => { try { simLayoutStart(); } catch (e) { _swallow(e); } }, 400); return; }   // SIM Mode — 창 배치판
     if (mode !== '3d') return;
     setTimeout(() => {
       try { if (!(_soloActive && _soloCurrent === 'm3d')) panelSolo('m3d'); } catch (e) { _swallow(e); }
