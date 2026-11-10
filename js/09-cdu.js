@@ -1973,7 +1973,11 @@ function act(name, ...args) {
     ];
     const WPT_INFO_IDS = ['wpt_apt', 'wpt_int', 'wpt_vor', 'wpt_ndb', 'wpt_vrp', 'wpt_user', 'wpt_create', 'afld'];
     let _wptPage = 'wpt_apt';
-    function wptOpen(id) { _wptPage = id; switchMode('WPT_PAGE'); }
+    function wptOpen(id) {
+        // Create Waypoint — Flight Plan 의 Add WPT 와 같은 화면(ADD WAYPOINT)을 연다
+        if (id === 'wpt_create') { try { openFlightPlan(); fpGo('ADD'); } catch (e) { _swallow(e); } return; }
+        _wptPage = id; switchMode('WPT_PAGE');
+    }
     function renderWptPage(container, footer, title) {
         const b = WPT_SUB_BTNS.find(x => x.id === _wptPage) || WPT_SUB_BTNS[0];
         const name = b.text.replace(/<br>/g, ' ');
