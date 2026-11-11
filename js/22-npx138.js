@@ -39,6 +39,8 @@ const NPX_ST = [   // 상태 편집(EDIT = ST) 항목 — [화면 이름, 상태
   ['PWR-UP CHAN', 'puCh', () => ['PDC', ...Array.from({ length: 99 }, (_, i) => i + 1)]],
 ];
 
+// 전원 — DC 버스(18-system.js pwrDc). 전원이 없으면 화면 · 표시등이 꺼지고 조작이 듣지 않는다
+function _npxPwr() { try { return typeof pwrDc === 'function' ? pwrDc() : true; } catch (e) { return true; } }
 let npx = null;
 function _npxFresh() {
   return {
@@ -112,7 +114,7 @@ function _npxFields() {
 }
 const _npxCh = () => npx._ed || npxChan(npx.ch);
 function npxLines() {
-  if (!npx.on) return { l: ['', ''], cur: null };
+  if (!npx.on || !_npxPwr()) return { l: ['', ''], cur: null };
   const now = performance.now();
   if (npx.msg && now < npx.msgT) return { l: npx.msg, cur: null };
   if (npx.helpPg >= 0) return { l: NPX_HELP_PG[npx.helpPg], cur: null };
@@ -136,7 +138,7 @@ function _npxFlash(a, b, ms = 1800) { npx.msg = [_npxPad(a, NPX_W), _npxPad(b, N
 // ── 조작 ──
 // CHAN(평소) · SELECT(편집)
 function npxChanSw(d) {
-  if (!npx.on) return;
+  if (!npx.on || !_npxPwr()) return;
   npx.msg = null;
   if (npx.edit === 'CH') return _npxSelCh(d);
   if (npx.edit === 'ST') {
@@ -175,7 +177,7 @@ function _npxSelCh(d) {
 }
 // BRIGHT(평소) · NEXT(편집)
 function npxBrightSw(d) {
-  if (!npx.on) return;
+  if (!npx.on || !_npxPwr()) return;
   npx.msg = null;
   if (npx.edit === 'CH') { const n = _npxFields().length; npx.cur = (npx.cur + d + n) % n; return npxRender(); }
   if (npx.edit === 'ST') { npx.stItem = (npx.stItem + d + NPX_ST.length) % NPX_ST.length; return npxRender(); }
@@ -201,7 +203,7 @@ function npxDispSw(pos) {
 }
 // SQ(평소 — 누르는 동안 스켈치 열림) · HELP(편집) · 켠 직후 HELP
 function npxSq(down) {
-  if (!npx.on) return;
+  if (!npx.on || !_npxPwr()) return;
   if (!down) { npx.sq = false; return npxRender(); }
   npx.msg = null;
   if (npx.edit === 'CH') return _npxFlash('NEXT=MOVE CURSOR', 'SELECT=CHANGE');
@@ -216,6 +218,7 @@ function _npxHelpRun() {
 }
 // MN 노브 — 왼쪽 끝 OFF(멈춤쇠) · 돌리면 켜지고 주 수신 음량 1~10
 function npxMn(d) {
+  if (!_npxPwr()) return;
   if (!npx.on) { if (d > 0) _npxPowerUp(); return; }
   if (npx.mn <= 0 && d < 0) { npx.on = false; npx.edit = 'NORM'; npx._ed = null; npx.helpPg = -1; npx.sq = false; _npxSave(); return npxRender(); }
   npx.mn = Math.max(0, Math.min(10, npx.mn + d)); _npxSave(); npxRender();
@@ -227,7 +230,9 @@ function _npxPowerUp() {
   if (npx.helpUntil) setTimeout(npxRender, 3020);
   _npxSave(); npxRender();
 }
-function npxGd(d) { npx.gd = Math.max(0, Math.min(10, npx.gd + d)); _npxSave(); npxRender(); }
+function npxGd(d) {
+  if (!_npxPwr()) return;
+  npx.gd = Math.max(0, Math.min(10, npx.gd + d)); _npxSave(); npxRender(); }
 // SCAN · NORM · GD TX
 function npxScanSw(pos) {
   npx.scanSw = pos; npx.scanSkip = []; npx.scanPtr = 0;
@@ -256,7 +261,7 @@ function npxRender() {
     const on = cur && cur[0] === li && ci >= cur[1] && ci < cur[1] + cur[2];
     return `<span${on ? ' class="npx-cur"' : ''}>${on && ch === ' ' ? '_' : esc(ch)}</span>`;
   }).join('') + '</div>').join('');
-  lcd.classList.toggle('off', !npx.on);
+  lcd.classList.toggle('off', !npx.on || !_npxPwr());
   lcd.style.setProperty('--npx-dim', (0.3 + npx.bright * 0.1).toFixed(2));
   const host = document.getElementById('npx');
   const set = (sel, attr, v) => { const e = host.querySelector(sel); if (e) e.dataset[attr] = v; };
@@ -266,7 +271,7 @@ function npxRender() {
   rot('[data-npx="mn"]', npx.on ? -120 + npx.mn * 24 : -150);
   rot('[data-npx="gd"]', -120 + npx.gd * 24);
   const led = host.querySelector('.npx-led.main');
-  if (led) led.className = 'npx-led main' + (npx.on && npx.sq ? ' rx' : '');
+  if (led) led.className = 'npx-led main' + (npx.on && npx.sq && _npxPwr() ? ' rx' : '');
   host.classList.toggle('edit', npx.edit !== 'NORM');
 }
 function npxBuild() {
