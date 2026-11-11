@@ -61,7 +61,7 @@ let fuel = _fuelMk(FUEL_FULL);                      // L 956 · R 958 · AUX 105
 const auxPump = { 1: false, 2: false };             // 이송 펌프가 돌고 있나(Fuel 화면의 TP 심벌)
 // 연료 계통 상태 — 라인 압력(psi) · 교차공급이 선 시간 · 이송 방향(−1 왼쪽으로 · +1 오른쪽으로) · F5 이송 · 불균형 시간
 const fuelSys = { p: { 1: 0, 2: 0 }, xfT: { 1: 0, 2: 0 }, xfer: 0, f5: false, imbT: 0, autoT: 0, imb: false, init: false };
-let fuelDrawn = { tp: 0, f5: false };             // Fuel 화면이 마지막으로 그린 이송 화살표(검사용)
+let fuelDrawn = { tp: 0, tpTxt: '', tpOn: true, f5: false, f5Show: false, aux: [false, false] };             // Fuel 화면이 마지막으로 그린 이송 화살표(검사용)
 let sysFltSec = 0;                                  // FLT — 비행 시간(시뮬 시간)
 function fuelLeft()  { return fuel.ft1 + fuel.aft + fuel.f5; }
 function fuelRight() { return fuel.ft2 + fuel.fwd; }
@@ -434,8 +434,9 @@ function _sysFuelPage(g, F) {
   ln([[892, 200], [892, 297], [845, 297]], run2); ln([[787, 297], [770, 297]], run2); ln([[713, 297], [677, 297]], run2);
   ln([[870, 297], [870, 312], [905, 312], [905, 516]], run2);
   // AUX 이송 배관 — 실기 사진처럼 TP1 · TP2 두 펌프가 갈래로 모여 나간다(AUX1 → AFT · AUX2 → F5).
-  // 스위치가 OFF 가 아니고 DC N-ESS 가 살아 있으면 녹색
-  const auxAv = n => _ov(n === 1 ? 'aux1Xfer' : 'aux2Xfer', 'AUTO') !== 'OFF' && pwrDcNess();
+  // TP1 · TP2 는 이송할 때만 보인다 — AUTO 에서 주 탱크가 차 있으면 펌프가 쉬어 심벌도 없다.
+  // (AUTO 가 이송을 시작했거나 스위치 ON 이면 녹색 펌프 · 녹색 배관)
+  const auxAv = n => auxPump[n] || (_ov(n === 1 ? 'aux1Xfer' : 'aux2Xfer', 'AUTO') === 'ON' && pwrDcNess());
   ln([[424, 356], [424, 343], [466, 343], [466, 356]], auxAv(1)); ln([[445, 343], [445, 322], [496, 322], [496, 415], [507, 415]], auxAv(1));
   ln([[739, 356], [739, 343], [782, 343], [782, 356]], auxAv(2)); ln([[760, 343], [760, 322], [705, 322], [705, 465], [648, 465]], auxAv(2));
   ln([[466, 498], [556, 498]]);                                             // 급유구 → F5
@@ -479,21 +480,26 @@ function _sysFuelPage(g, F) {
     g.save(); g.strokeStyle = '#fff'; g.lineWidth = 1.6; g.lineJoin = 'miter';
     g.beginPath(); g.moveTo(pts[0][0], pts[0][1]); pts.slice(1).forEach(p => g.lineTo(p[0], p[1])); g.closePath(); g.stroke(); g.restore();
   };
-  // TP — 주 탱크 이송 펌프(XFER LH · RH · AUTO). 돌면 녹 테 + 받는 쪽 BP 를 가리키는 화살표(BP1 ◁ TP · TP ▷ BP2)
-  const dir = fuelSys.xfer;
-  pump(602, 300, 21, 'TP', '', dir !== 0);
+  // TP — 주 탱크 이송 펌프(XFER LH · RH · AUTO). 실기처럼 늘 녹 테 —
+  // 이송 중이면 받는 쪽 BP 를 가리키는 화살표(BP1 ◁ TP · TP ▷ BP2), 쉬고 있으면 아래에 스위치 자리(AUTO · LH · RH).
+  // XFER OFF · DC N-ESS 없음이면 회색 테 · OFF
+  const dir = fuelSys.xfer, xsel = _ov('xferSel', 'AUTO'), tpOn = xsel !== 'OFF' && pwrDcNess();
+  const tpTxt = dir ? '' : (tpOn ? xsel : 'OFF');
+  pump(602, 300, 21, 'TP', tpTxt, tpOn);
   if (dir < 0) arrow([[558, 299], [571, 290], [571, 295], [581, 295], [581, 303], [571, 303], [571, 308]]);
   if (dir > 0) arrow([[646, 299], [633, 290], [633, 295], [623, 295], [623, 303], [633, 303], [633, 308]]);
-  // F5 → AFT 이송 펌프 — F5 오른쪽 아래. 돌면 녹 테 + AFT 로 올라가는 화살표
+  // F5 → AFT 이송 펌프 — F5 오른쪽 아래. 이송할 때만 보인다(AUTO 에서 AFT 가 차 있으면 없다 · ON 이면 녹 테)
+  // 돌면 AFT 로 올라가는 화살표
+  const f5Show = fuelSys.f5 || (_ov('f5Xfer', 'AUTO') === 'ON' && pwrDcNess());
   ln([[648, 497], [662, 497]], fuelSys.f5);
-  pump(676, 497, 14, 'TP', '', fuelSys.f5);
+  if (f5Show) pump(676, 497, 14, 'TP', '', true);
   if (fuelSys.f5) arrow([[676, 436], [667, 448], [673, 448], [673, 483], [679, 483], [679, 448], [685, 448]]);
-  fuelDrawn = { tp: dir, f5: fuelSys.f5 };
+  fuelDrawn = { tp: dir, tpTxt, tpOn, f5: fuelSys.f5, f5Show, aux: [auxAv(1), auxAv(2)] };
   // EXT AUX1 · AUX2 — 채움 + 탱크마다 TP1 · TP2(실기 사진)
   _sysTank(g, 400, 330, 90, 63, fuel.auxL / FUEL_AUX_FULL);
   _sysTank(g, 714, 330, 92, 63, fuel.auxR / FUEL_AUX_FULL);
-  pump(424, 371, 15, 'TP1', '', auxAv(1)); pump(466, 371, 15, 'TP2', '', auxAv(1));
-  pump(739, 371, 15, 'TP1', '', auxAv(2)); pump(782, 371, 15, 'TP2', '', auxAv(2));
+  if (auxAv(1)) { pump(424, 371, 15, 'TP1', '', true); pump(466, 371, 15, 'TP2', '', true); }
+  if (auxAv(2)) { pump(739, 371, 15, 'TP1', '', true); pump(782, 371, 15, 'TP2', '', true); }
   tankLbl(355, 352, 'EXT AUX1', r0(fuel.auxL)); tankLbl(856, 352, 'EXT AUX2', r0(fuel.auxR));
   // 경고 칸
   _sysAnn(g, 284, 231, 60, 37, 'MFSOV 1', 'CLOSE', !fuelLine(1).msov);     // TQS 연료차단 레버 CLOSE

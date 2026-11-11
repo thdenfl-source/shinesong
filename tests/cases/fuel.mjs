@@ -18,6 +18,9 @@ export async function run(page, t) {
       return { seen, fills, dash };
     };
     tick(0.1); tick(1);
+    // ⓪ 주 탱크가 가득 · AUX1/2 · F5 · XFER 모두 AUTO — 이송 펌프가 쉬어 AUX TP1/TP2 · F5 TP 가 안 보이고,
+    //    가운데 TP 는 녹색 테에 'AUTO'
+    draw(); o.idle = { aux: fuelDrawn.aux.slice(), f5: fuelDrawn.f5Show, tp: fuelDrawn.tpTxt, on: fuelDrawn.tpOn, seen: draw().seen };
     // ① BP 켜짐 — 라인 압력 17 · 18, F/L PRES 없음, BP 심벌
     o.p0 = [fuelPress(1), fuelPress(2)]; o.m0 = msgs().filter(m => /F\/L PRES/.test(m)).length;
     o.bp0 = draw().seen.filter(x => x === 'BP').length;
@@ -57,6 +60,7 @@ export async function run(page, t) {
     // ⑧ F5 XFER — ON: F5 → AFT(TP ▲) · AUTO: 비행 중 AFT 170 아래에서
     fuelReset(); fuel.aft -= 100; ovhdSet('f5Xfer', 'ON'); tick(0.1);
     const f50 = fuel.f5; tick(0.1, 60);
+    o.f5Show = (draw(), fuelDrawn.f5Show); ovhdSet('aux1Xfer', 'ON'); o.auxOn = (draw(), fuelDrawn.aux[0]) && draw().seen.filter(x => x === 'TP1').length === 1; ovhdSet('aux1Xfer', 'AUTO');
     o.f5On = fuelSys.f5 && (draw(), fuelDrawn.f5) && Math.round(f50 - fuel.f5) === 14;
     fuelReset(); fuelWow = () => true; ovhdSet('f5Xfer', 'AUTO'); fuel.aft = 160; tick(0.1); o.f5Gnd = fuelSys.f5;
     fuelWow = () => false; tick(0.1); o.f5Auto = fuelSys.f5; fuelWow = wow0;
@@ -70,6 +74,9 @@ export async function run(page, t) {
     selectPanel('right', 'map', true);
     return o;
   });
+  t.ok(!R.idle.aux[0] && !R.idle.aux[1] && !R.idle.f5 && !R.idle.seen.includes('TP1') && R.idle.tp === 'AUTO' && R.idle.on && R.idle.seen.includes('AUTO'),
+    `주 탱크 가득 · 모두 AUTO — AUX TP1/TP2 · F5 TP 안 보임, 가운데 TP 는 녹색 'AUTO' (${R.idle.tp})`);
+  t.ok(R.auxOn && R.f5Show, 'AUX XFER · F5 XFER 를 ON 으로 두면(또는 AUTO 가 이송을 시작하면) TP 가 보인다');
   t.ok(R.p0.join() === '17,18' && R.m0 === 0 && R.bp0 === 2, `BP1 · BP2 켜짐 — 라인 압력 ${R.p0.join(' · ')} psi, F/L PRES 없음, BP 심벌 둘`);
   t.ok(R.p1 < 9 && R.m1 && R.low1, `BP1 OFF — ${R.p1} psi · 1 F/L PRES · BP1 LOW · PRESS 1 LOW 호박색`);
   t.ok(R.xf1, 'X-FEED ENG1 — 교차공급 점선 · FUEL XFEED, 압력은 아직(1 F/L PRES 그대로)');
