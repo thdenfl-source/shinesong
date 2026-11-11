@@ -375,6 +375,8 @@ function pfdMsgs() {
     const on = E ? E['gen' + n] : ov('gen' + n, 'ON') === 'ON';
     if (!on) out.push({ t: `${n} GEN OFF`, c: PFD_MSG_AMBER });
   });
+  // 연료 계통 CAS(18-system.js fuelCas) — 1 · 2 F/L PRES · FUEL IMBALANCE · FUEL 1 · 2 LOW(황) · FUEL XFEED(녹)
+  try { if (typeof fuelCas === 'function') fuelCas().forEach(m => out.push({ t: m.t, c: m.amber ? PFD_MSG_AMBER : PFD_MSG_GREEN })); } catch (e) { _swallow(e); }
   // 하부 콘솔 레버 SET, 또는 SIM 스페이스 두 번(simParkBrakeOn). 걸린 채 활주 착륙하면 빨갛게(simParkWarnOn)
   let park = ov('parkBrake', 'RELEASE') === 'SET', parkWarn = false;
   try { if (typeof simParkBrakeOn === 'function' && simParkBrakeOn()) park = true; } catch (e) { _swallow(e); }
