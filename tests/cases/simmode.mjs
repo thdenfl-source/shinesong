@@ -2359,7 +2359,7 @@ async function part5(page, t) {
   t.ok(Math.abs(trimT.released + 10) < 1,
     `놓으면 트림으로 넣은 경사만 남는다 (${trimT.released.toFixed(1)}°)`);
 
-  // COLLECTIVE TO YAW — 실제 비행에서 레버를 움직이는 동안만 돈다
+  // COLLECTIVE TO YAW — 레버를 올리면 왼쪽(CW)으로 돌기 시작해 올려 둔 채면 계속 돌고, 호버로 되돌리면 멎고, 내리면 오른쪽
   const cy = await page.evaluate(`(() => {
     (${SETUP.toString()})();
     const fly = ${FLY};
@@ -2368,14 +2368,16 @@ async function part5(page, t) {
     const h0 = S.hdg;
     for (let i = 1; i <= 10; i++) { _ax(3, 0.05 * i); fly(0.1); }    // 1초에 걸쳐 레버를 올린다
     fly(0.6); const up = normAS(S.hdg - h0), h1 = S.hdg;      // 0.5초 늦게 나타나므로 그만큼 더 본다
-    fly(1); const hold = normAS(S.hdg - h1), h2 = S.hdg;
-    for (let i = 1; i <= 10; i++) { _ax(3, 0.5 - 0.05 * i); fly(0.1); }  // 내린다
-    fly(0.6); const dn = normAS(S.hdg - h2);
+    const flyS = sec => { for (let i = 0; i < sec * 10; i++) { S.spd = 0; simLat = 0; fly(0.1); } };   // 호버에서만 — 속도는 0 으로 붙잡아 둔다
+    flyS(1); const hold = normAS(S.hdg - h1);
+    for (let i = 1; i <= 10; i++) { _ax(3, 0.5 - 0.05 * i); flyS(0.1); }  // 호버로 되돌린다
+    flyS(1); const h2 = S.hdg; flyS(1); const stop = normAS(S.hdg - h2);
+    _ax(3, -0.5); flyS(1.5); const h3 = S.hdg; flyS(1); const dn = normAS(S.hdg - h3);   // 호버 아래로 내린다
     rotorChar = false; _ax(3, 0);
-    return { up, hold, dn };
+    return { up, hold, stop, dn };
   })()`);
-  t.ok(cy.up < -1 && Math.abs(cy.hold) < 0.2 && cy.dn > 1,
-    `레버를 올리면 왼쪽 · 멈추면 그대로 · 내리면 오른쪽(CW) (${cy.up.toFixed(1)}° · ${cy.hold.toFixed(1)}° · ${cy.dn.toFixed(1)}°)`);
+  t.ok(cy.up < -1 && cy.hold < -1 && Math.abs(cy.stop) < 0.3 && cy.dn > 1,
+    `레버를 올리면 왼쪽 · 올려 둔 채면 계속 · 호버로 되돌리면 멎음 · 내리면 오른쪽(CW) (${cy.up.toFixed(1)}° · ${cy.hold.toFixed(1)}° · ${cy.stop.toFixed(2)}° · ${cy.dn.toFixed(1)}°)`);
 
   // 회전익 특성 — 선회 중 1/2 볼 외활 · 페달 요율은 지연되어 붙는다
   const skid = await page.evaluate(`(() => {
@@ -2630,19 +2632,39 @@ async function part5(page, t) {
     o.off = rcPitchOff({ coll: 1, yaw: 1 }) === 0 && rcYawRate(20) === 0;
     toggleRotorChar();
     o.top = rcPitchOff({ coll: 1, yaw: 0 }); o.bot = rcPitchOff({ coll: -1, yaw: 0 });
-    o.upCW = rcYawRate(10); o.dnCW = rcYawRate(-10); o.still = rcYawRate(0); o.cap = rcYawRate(1000);
+    o.upCW = rcYawRate(1); o.dnCW = rcYawRate(-1); o.half = rcYawRate(0.4); o.still = rcYawRate(0); o.cap = rcYawRate(5); o.ped50 = RC_YAW_PED * SIM_YAW_RATE;
     o.pedOppCW = rcPitchOff({ coll: 0, yaw: -1 }); o.pedWithCW = rcPitchOff({ coll: 0, yaw: 1 });
     setRotorDir('CCW');
-    o.yawTopCCW = rcYawRate(10); o.pedOppCCW = rcPitchOff({ coll: 0, yaw: 1 });
+    o.yawTopCCW = rcYawRate(1); o.pedOppCCW = rcPitchOff({ coll: 0, yaw: 1 });
     o.btn = document.querySelector('#rotor-3d [data-rdir=CCW]').classList.contains('on');
     rotorChar = false; rotorDir = 'CW'; updateRotorBtns();
     return o;
   });
   t.ok(rc.off, '회전익 특성을 끄면 커플링이 없다');
   t.ok(Math.abs(rc.top - 5) < 1e-6 && Math.abs(rc.bot + 5) < 1e-6, `COLLECTIVE TO PITCH ±5° (${rc.top} / ${rc.bot})`);
-  t.ok(rc.upCW === -3 && rc.dnCW === 3 && rc.still === 0 && rc.cap === -7.5,
-    `COLLECTIVE TO YAW — 레버를 움직일 때만: CW 는 올리면 왼쪽 · 내리면 오른쪽, 최대 7.5°/s (${rc.upCW} / ${rc.dnCW} / ${rc.cap})`);
-  t.ok(rc.yawTopCCW === 3, `CCW 로터는 반대(오른쪽) (${rc.yawTopCCW})`);
+  t.ok(rc.upCW === -rc.ped50 && rc.dnCW === rc.ped50 && Math.abs(rc.half + 0.4 * rc.ped50) < 1e-9 && rc.still === 0 && rc.cap === -rc.ped50,
+    `COLLECTIVE TO YAW — 호버에서 벗어난 만큼: CW 는 올리면 왼쪽 · 내리면 오른쪽, 레버 끝까지 = 페달 50% 요율 ${rc.ped50.toFixed(1)}°/s (${rc.upCW} / ${rc.dnCW} / ${rc.cap})`);
+  t.ok(rc.yawTopCCW === rc.ped50, `CCW 로터는 반대(오른쪽) (${rc.yawTopCCW})`);
+
+  // COLLECTIVE TO YAW — 한번 돌기 시작하면 반대 페달 없이는 계속 돈다 · 레버 끝까지의 요도 페달 50% 로 잡힌다
+  const rcy = await page.evaluate(`(() => {
+    (${SETUP.toString()})();
+    const fly = ${FLY};
+    S.alt = 1000; _simGndFt = 0; S.spd = 0; S.hdg = 90; rotorChar = true; rotorDir = 'CW'; updateRotorBtns();
+    // 호버(저속)에서만 생기는 현상이라 재는 동안 속도를 0 으로 붙잡아 둔다(레버 140% 면 가라앉으며 앞으로 나가 20kt 를 넘긴다)
+    const turn = sec => { const h = S.hdg; for (let i = 0; i < sec * 10; i++) { S.spd = 0; simLat = 0; fly(0.1); } return normAS(S.hdg - h); };
+    _ax(3, 0); _ax(2, 0); fly(1); const o = { hov: turn(2) };
+    _ax(3, 1); turn(2); o.a = turn(3); o.b = turn(3); o.defl = rcCollDefl();      // 레버 끝까지
+    _ax(2, 0.5); turn(3); o.ped = turn(3);                                      // 오른쪽 페달 50%
+    _ax(2, 0); _ax(3, 0); turn(2); o.back = turn(2);
+    rotorChar = false; updateRotorBtns(); _ax(3, 0);
+    return o;
+  })()`);
+  t.ok(rcy.a < -10 && rcy.b < -10 && Math.abs(rcy.b - rcy.a) < Math.abs(rcy.a) * 0.25,
+    `레버를 올려 둔 채면 요가 그치지 않는다 — 3초마다 ${rcy.a.toFixed(1)}° · ${rcy.b.toFixed(1)}° (호버 ${rcy.hov.toFixed(1)}° · 레버 ${rcy.defl.toFixed(2)})`);
+  t.ok(Math.abs(rcy.ped) < Math.abs(rcy.a) * 0.15,
+    `레버 끝까지의 요도 반대 페달 50% 로 잡힌다 (3초 ${rcy.ped.toFixed(1)}°)`);
+  t.ok(Math.abs(rcy.hov) < 1 && Math.abs(rcy.back) < 1.5, `호버 토크에서는 돌지 않는다 (${rcy.hov.toFixed(2)}° · 되돌린 뒤 ${rcy.back.toFixed(2)}°)`);
   t.ok(rc.pedOppCW === 2 && rc.pedWithCW === -2 && rc.pedOppCCW === 2, 'YAW TO PITCH — 로터 반대 페달 2° 들림 · 로터 방향 페달 2° 숙임');
   t.ok(rc.btn, 'CW/CCW 버튼이 토글된다');
 

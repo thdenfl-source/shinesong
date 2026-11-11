@@ -59,7 +59,7 @@ function simSpaceDown(now) {
 function simSpaceUp() { simWheelBrake = false; }
 // ── 회전익 특성(3D 창 '회전익 특성') ──
 // 로터 회전 방향(위에서 볼 때): CW 시계 · CCW 반시계. 켜면 세 가지 커플링이 붙는다.
-//  COLLECTIVE TO YAW  : 레버를 움직이는 동안 — 올리면 로터 반대, 내리면 로터 방향으로 돈다(공중)
+//  COLLECTIVE TO YAW  : 호버 토크에서 벗어난 만큼 계속 돈다 — 올리면 로터 반대, 내리면 로터 방향(공중) · 반대 페달로 잡는다(레버 끝까지 = 페달 50%)
 //  COLLECTIVE TO PITCH: 레버와 비례해 기수가 최대 ±5° (올리면 들리고 내리면 숙여진다)
 //  YAW TO PITCH       : 로터 반대 방향 페달 → 최대 2° 들림 · 로터 방향 페달 → 최대 2° 숙임
 const RC_DRIFT_BANK = 3;        // 전이성향 — 호버 편류를 막는 데 드는 뱅크(°)
@@ -104,10 +104,11 @@ function rcPitchOff(a) {
   // 20kt 위(전진 비행)에서는 수평·수직 안정판이 잡아 주므로 셋 다 없다 — 호버 운용에서만
   return ((rcOpt.collPitch ? RC_COLL_PIT * a.coll : 0) - (rcOpt.yawPitch ? RC_YAW_PIT * rotorSign() * a.yaw : 0)) * rcLowK();
 }
-// COLLECTIVE TO YAW — 레버를 움직이는 동안만 돈다(토크가 바뀌는 만큼 반작용이 바뀐다).
-// 올리면 로터 반대 방향, 내리면 로터 방향으로 — 레버 1%/s 당 RC_YAW_K °/s, 최대 RC_YAW_MAX °/s.
-// 레버를 멈추면 회전도 멈춘다(페달로 받아 둔 만큼 그대로다).
-const RC_YAW_K = 0.3, RC_YAW_MAX = 7.5;     // 7.5°/s(종전 최대의 2배)
+// COLLECTIVE TO YAW — 컬렉티브가 호버 토크에서 벗어난 만큼 토크 반작용이 남아 동체가 '계속' 돈다
+// (올리면 로터 반대 방향, 내리면 로터 방향). 레버를 멈춰도 그치지 않고, 반대 페달로 잡아 줘야 멎는다.
+// 레버 전 범위(맨 아래 ~ 맨 위)의 요는 페달 50% 안에서 잡힌다 — 끝까지 올렸을 때의 요율 = 페달 50% 의 요율.
+// 조이스틱 페달은 중립 문턱(JOY_AX_DEAD)을 빼고 펴므로, 실제 페달 50% 자리가 내는 값으로 맞춘다(그 자리에서 정확히 잡힌다)
+const RC_YAW_PED = (0.5 - JOY_AX_DEAD) / (1 - JOY_AX_DEAD);   // 레버 끝까지 = 페달 50%
 let _rcLevPrev = null;
 const RC_YAW_DELAY = 0.5;      // 컬렉티브 → 요가 나타나기까지(s)
 let _rcYawBuf = [], _rcT = 0;
@@ -124,10 +125,11 @@ function rcLeverTq(a) {
   const hov = hoverPowerTq();
   return hov + a.coll * (a.coll > 0 ? SIM_LEVER_TOP - hov : TQ_SPAN);
 }
-function rcYawRate(dLev) {
-  if (!rcOn('collYaw') || !rcLowK() || !dLev) return 0;
-  const r = Math.max(-RC_YAW_MAX, Math.min(RC_YAW_MAX, RC_YAW_K * dLev));
-  return -rotorSign() * r * rcLowK();
+// defl — 호버 토크에서 벗어난 컬렉티브(rcCollDefl, −1 맨 아래 … 0 호버 … +1 맨 위)
+function rcYawRate(defl) {
+  if (!rcOn('collYaw') || !rcLowK() || !defl) return 0;
+  const d = Math.max(-1, Math.min(1, defl));
+  return -rotorSign() * RC_YAW_PED * SIM_YAW_RATE * d * rcLowK();
 }
 function toggleRotorChar() { rotorChar = !rotorChar; updateRotorBtns(); }
 function setRotorDir(d) { rotorDir = d === 'CCW' ? 'CCW' : 'CW'; updateRotorBtns(); }
@@ -1686,13 +1688,12 @@ function simFly(dt) {
   } else simYawRate = 0;
   // 회전익 특성 — 선회 중 1/2 볼 외활(skid): 볼이 선회 바깥쪽으로 반 볼 비킨다(20kt 위 · 뱅크 10° 에서 다)
   simSkidHalf = (rotorChar && !onGnd && !simAfcsAny()) ? -Math.sign(S.bnk) * Math.min(1, Math.abs(S.bnk) / 10) * (1 - rcLowK()) : 0;
-  // 회전익 특성 — 컬렉티브 토크의 반작용으로 동체가 로터 반대 방향으로 돈다(공중에서만)
-  const lev = Number.isFinite(simTqCmd) ? simTqCmd : rcLeverTq(a);   // 실제로 걸린 컬렉티브(AFCS 가 몰 때 포함)
-  const dLev = (_rcLevPrev === null) ? 0 : (lev - _rcLevPrev) / dt;
-  _rcLevPrev = lev;
+  // 회전익 특성 — 컬렉티브 토크의 반작용으로 동체가 돈다(공중에서만). 호버 토크에서 벗어난 만큼 계속 돌고
+  // 반대 페달(simYawRate)로 잡아 줘야 멎는다 — 실제로 걸린 컬렉티브(AFCS 가 몰 때 포함)를 쓴다
+  const defl = rcCollDefl();
   // 0.5초 늦게 나타난다(RC_YAW_DELAY) — 레버를 움직인 뒤 토크 반작용이 동체를 돌리기까지
   _rcT += dt;
-  _rcYawBuf.push({ t: _rcT, r: (rotorChar && !onGnd) ? rcYawRate(dLev) : 0 });
+  _rcYawBuf.push({ t: _rcT, r: (rotorChar && !onGnd) ? rcYawRate(defl) : 0 });
   while (_rcYawBuf.length > 1 && _rcYawBuf[1].t <= _rcT - RC_YAW_DELAY) _rcYawBuf.shift();
   const yrDelayed = (_rcYawBuf[0].t <= _rcT - RC_YAW_DELAY + 1e-9) ? _rcYawBuf[0].r : 0;
   if (rotorChar && !onGnd && !simAfcsLat()) {
