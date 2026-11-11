@@ -1,7 +1,7 @@
 // ── LOWER CONSOLE(하부 콘솔) ── 탭의 'LOWER' 로 연다. 상부 콘솔(17-upper.js)과 같은 엔진·같은 저장소를 쓴다
 // (스위치 id 가 서로 달라 ovhdGet · ovhdSet · ovhdOn 으로 함께 읽고 쓴다).
 // 실기 하부 콘솔 그림(⑥~⑰)대로 — 왼쪽 열: ⑰ AHRS · ⑯ AFCAU · ⑮ 비디오 컨버터 · ⑭ 비상부주 · ⑬ 호이스트 · ⑫ CPI · ⑪ PA
-//                                    오른쪽 열: ⑥ FUEL · ⑦ U/VHF-AM/FM · ⑧ VHF-FM · ⑨ AVCS · ⑩ MPP · NOSE WHEEL LOCK · PARKING BRAKE
+//                                    오른쪽 열: ⑥ FUEL · ⑦ C-5000 · ⑧ NPX138 VHF-FM · ⑨ AVCS · ⑩ MPP · NOSE WHEEL LOCK · PARKING BRAKE
 // 조작 종류: lpb(눌러 두는 사각 버튼 — 들어가면 글씨가 켜진다) · key(누르는 동안만) · lamp(표시등) · disp(표시창) 와 상부 콘솔의 것들.
 
 const LCON_W = 1000, LCON_H = 1400;
@@ -100,13 +100,9 @@ const LCON_PLATES = [
   { x: 510, y: 300, w: 480, h: 250, items: [
     { t: 'html', hid: 'c5k', x: 0, y: 0, w: 480, h: 250 },
   ]},
-  // ⑧ VHF-FM 제어패널
+  // ⑧ VHF-FM 무전기 — NAT NPX138 FM TRANSCEIVER(2줄 LCD · DISP/CHAN/BRIGHT/EDIT/SQ · MN/GD 노브 · SCAN/GD 스위치). 안은 22-npx138.js 가 꾸민다
   { x: 510, y: 560, w: 480, h: 120, items: [
-    { t: 'disp', x: 28, y: 18, w: 210, h: 46, text: '30.000 FM' },
-    ...[0, 1, 2, 3].map(i => ({ t: 'dim', id: `vhfK${i}`, x: 52 + i * 58, y: 92, small: true, def: 5 })),
-    { t: 'key', id: 'vhfB1', x: 300, y: 40, w: 40, h: 28 }, { t: 'key', id: 'vhfB2', x: 352, y: 40, w: 40, h: 28 },
-    { t: 'key', id: 'vhfB3', x: 404, y: 40, w: 40, h: 28 }, { t: 'key', id: 'vhfB4', x: 352, y: 88, w: 40, h: 28 },
-    { t: 'key', id: 'vhfB5', x: 404, y: 88, w: 40, h: 28 },
+    { t: 'html', hid: 'npx', x: 0, y: 0, w: 480, h: 120 },
   ]},
   // ⑨ AVCS 패널
   { x: 510, y: 690, w: 480, h: 120, items: [
@@ -141,7 +137,7 @@ const LCON_PLATES = [
 ];
 
 consoleRegister('lcon', { wrap: 'lcon-wrap', plates: LCON_PLATES, W: LCON_W, H: LCON_H });
-function lconShow() { consoleBuild('lcon'); consoleFit('lcon'); if (typeof c5Build === 'function') c5Build(); }   // C-5000 무전기 제어기(21-c5000.js)
+function lconShow() { consoleBuild('lcon'); consoleFit('lcon'); if (typeof c5Build === 'function') c5Build(); if (typeof npxBuild === 'function') npxBuild(); }   // C-5000(21-c5000.js) · NPX138(22-npx138.js)
 try {
   const w = document.getElementById('lcon-wrap');
   if (w && !w.classList.contains('page-hidden')) lconShow();
