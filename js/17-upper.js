@@ -234,6 +234,8 @@ function _ovhdItemHtml(it) {
       const w = it.w || 26, h = it.h || 20;
       return `<div class="ov-lamp" data-lamp="${it._lamp}" style="${at}"><div class="ov-sq" style="left:${-w / 2}px;top:${-h / 2}px;width:${w}px;height:${h}px">${_nl(it.label || '')}</div></div>`;
     }
+    case 'html':                                       // 맞춤 장치 자리 — 다른 파일이 그 안을 꾸민다(예: 21-c5000.js 무전기 제어기)
+      return `<div class="ov-html" id="${it.hid}" style="left:${it.x}px;top:${it.y}px;width:${it.w}px;height:${it.h}px"></div>`;
     case 'disp':                                       // 표시창(글자만)
       return `<div class="ov-disp" style="left:${it.x}px;top:${it.y}px;width:${it.w}px;height:${it.h}px">${_nl(it.text || '')}</div>`;
     case 'pb':

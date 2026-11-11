@@ -96,13 +96,9 @@ const LCON_PLATES = [
     { t: 'tg', id: 'f5Xfer', x: 240, y: 238, title: 'F5 XFER', pos: ['ON', 'AUTO', 'OFF'], side: true, def: 'AUTO' },
     { t: 'tg', id: 'aux2Xfer', x: 395, y: 238, title: 'AUX2 XFER', pos: ['ON', 'AUTO', 'OFF'], side: true, def: 'AUTO' },
   ]},
-  // ⑦ U/VHF-AM/FM 제어패널
+  // ⑦ 무전기 제어기 — Wulfsberg C-5000 CMC(무전기 두 대 · 2×20 LCD · 소프트키 · VOL/SEL 노브 · 12키). 안은 21-c5000.js 가 꾸민다
   { x: 510, y: 300, w: 480, h: 250, items: [
-    { t: 'disp', x: 40, y: 22, w: 400, h: 70, text: '121.500  AM\nPRE 01   SQ ON' },
-    { t: 'dim', id: 'uvhfVol', x: 60, y: 190, title: 'PUSH ON', def: 5 },
-    ...[['1', '2', '3', '4'], ['5', '6', '7', '8'], ['9', '0', 'CLR', 'ENT']].flatMap((row, r) =>
-      row.map((lb, c) => ({ t: 'key', id: `uvhfK${lb}`, x: 160 + c * 64, y: 132 + r * 44, w: 54, h: 32, label: lb }))),
-    { t: 'dim', id: 'uvhfSel', x: 420, y: 190, title: 'PUSH ENTER', def: 5 },
+    { t: 'html', hid: 'c5k', x: 0, y: 0, w: 480, h: 250 },
   ]},
   // ⑧ VHF-FM 제어패널
   { x: 510, y: 560, w: 480, h: 120, items: [
@@ -145,7 +141,7 @@ const LCON_PLATES = [
 ];
 
 consoleRegister('lcon', { wrap: 'lcon-wrap', plates: LCON_PLATES, W: LCON_W, H: LCON_H });
-function lconShow() { consoleBuild('lcon'); consoleFit('lcon'); }
+function lconShow() { consoleBuild('lcon'); consoleFit('lcon'); if (typeof c5Build === 'function') c5Build(); }   // C-5000 무전기 제어기(21-c5000.js)
 try {
   const w = document.getElementById('lcon-wrap');
   if (w && !w.classList.contains('page-hidden')) lconShow();

@@ -17,7 +17,7 @@
      CDN 을 쓰면 한 번이라도 못 받는 순간 앱이 통째로 죽는다 — 비행 중에는
      그럴 여지를 두지 않는다. -->
 <!-- 패널 새 창(다중 모니터) — 라이브러리가 거는 이벤트까지 받아 적어야 하므로 맨 먼저 -->
-<script src="js/00-popout.js?v=579"></script>
+<script src="js/00-popout.js?v=580"></script>
 <link rel="stylesheet" href="vendor/leaflet.css"/>
 <script src="vendor/leaflet.js"></script>
 <link rel="stylesheet" href="vendor/leaflet-velocity.min.css"/>
@@ -2118,6 +2118,34 @@ body.gate-open #gate-overlay { display: none; }
 .ov-key.pressed .ov-sq { transform: translateY(2px); box-shadow: 0 1px 0 #77756d; }
 .ov-lamp .ov-sq { font-size: 10px; color: #3c4a3c; background: #111; }
 .ov-lamp.on .ov-sq { color: #001a00; background: #3ad13a; box-shadow: 0 0 8px #3ad13a, 0 0 0 2px #0e0f10; }
+/* Wulfsberg C-5000 CMC(js/21-c5000.js) — 하부 콘솔 ⑦ */
+.ov-html { position: absolute; }
+#c5k { background: linear-gradient(#26292d, #17191c); border-radius: 6px; box-shadow: inset 0 0 0 2px #0c0d0f, inset 0 0 0 3px #3a3e44; color: #eee; font-family: Arial, sans-serif; }
+.c5-brand { position: absolute; left: 0; right: 0; top: 4px; text-align: center; font: bold 13px Arial; letter-spacing: 4px; color: #e8e8e8; }
+.c5-lcd { position: absolute; left: 62px; top: 24px; width: 372px; height: 78px; box-sizing: border-box; padding: 8px 10px;
+  background: #061309; border: 4px solid #0b0c0d; border-radius: 3px; box-shadow: inset 0 0 14px #000;
+  color: #5cf07e; font: bold 21px 'Courier New', monospace; line-height: 29px; opacity: var(--c5-dim, 1); text-shadow: 0 0 4px rgba(92,240,126,.5); }
+.c5-lcd.off { color: transparent; text-shadow: none; }
+.c5-row { white-space: pre; display: flex; }
+.c5-row span { width: 17.6px; text-align: center; }
+.c5-row span.c5-cur { background: #5cf07e; color: #061309; text-shadow: none; }
+.c5-soft { position: absolute; left: 18px; width: 34px; height: 28px; border-radius: 4px; border: 0; cursor: pointer;
+  background: linear-gradient(#e9e7df, #bdbab2); box-shadow: 0 3px 0 #77756d, 0 4px 5px #000; }
+.c5-soft.up { top: 32px; } .c5-soft.dn { top: 68px; }
+.c5-soft:active, .c5-key:active { transform: translateY(2px); box-shadow: 0 1px 0 #77756d; }
+.c5-pad { position: absolute; left: 132px; top: 114px; width: 216px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; }
+.c5-key { height: 37px; border: 0; border-radius: 4px; cursor: pointer; padding: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  background: linear-gradient(#e9e7df, #bdbab2); color: #222; box-shadow: 0 3px 0 #77756d, 0 4px 5px #000; line-height: 1; }
+.c5-key b { font-size: 15px; } .c5-key i { font-style: normal; font-size: 9px; font-weight: bold; margin-top: 2px; }
+.c5-tag { position: absolute; top: 112px; width: 110px; text-align: center; font: bold 11px Arial; color: #ddd; }
+.c5-tag.vol { left: 12px; } .c5-tag.sel { left: 358px; }
+.c5-knob { position: absolute; top: 128px; width: 110px; height: 110px; border-radius: 50%; cursor: pointer; touch-action: none;
+  background: repeating-conic-gradient(#2a2c30 0 6deg, #15171a 6deg 12deg); box-shadow: 0 0 0 3px #0c0d0f, 0 4px 8px #000; }
+.c5-knob.vol { left: 12px; } .c5-knob.sel { left: 358px; }
+.c5-inner { position: absolute; left: 18%; top: 18%; width: 64%; height: 64%; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  background: repeating-conic-gradient(#3a3d42 0 8deg, #26282c 8deg 16deg); box-shadow: 0 0 0 2px #0c0d0f, 0 2px 4px #000; }
+.c5-push { width: 50%; height: 50%; border-radius: 50%; background: radial-gradient(#55595f, #2a2c30); box-shadow: 0 0 0 1px #0c0d0f;
+  display: flex; align-items: center; justify-content: center; text-align: center; font: bold 7.5px Arial; color: #eee; line-height: 1.1; }
 .ov-disp { position: absolute; display: flex; align-items: center; justify-content: center; text-align: center; box-sizing: border-box;
   background: #0b1a10; border: 3px solid #0e0f10; border-radius: 3px; box-shadow: inset 0 0 12px #000;
   color: #59e07a; font: bold 18px 'Courier New', monospace; letter-spacing: 1px; white-space: pre; }
@@ -2187,7 +2215,7 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
     </div>
   </form>
 </div>
-<script src="js/00-gate.js?v=579"></script>
+<script src="js/00-gate.js?v=580"></script>
 <!-- ── 단일화면 선택 바 (기본 숨김) ── -->
 <!-- ── 시작 안내(사용법/키보드) 오버레이 ── -->
 <div id="help-overlay" style="display:none;">
@@ -3484,37 +3512,38 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
 <!-- 앱 코드 — 클래식 스크립트(모듈 아님)라 전역 스코프를 공유한다.
      순서가 곧 실행 순서이므로 임의로 바꾸지 말 것. -->
   <!-- AIP 데이터 — 코드보다 먼저 로드한다 -->
-  <script src="js/data/terminal-fixes.js?v=579"></script>
-  <script src="js/data/ifr-fixes.js?v=579"></script>
-  <script src="js/data/ifr-procedures.js?v=579"></script>
-  <script src="js/data/airfield-info.js?v=579"></script>
-  <script src="js/data/enr-vors.js?v=579"></script>
-  <script src="js/data/loc-stations.js?v=579"></script>
-  <script src="js/data/enr-routes.js?v=579"></script>
-  <script src="js/data/airspace.js?v=579"></script>
-  <script src="js/data/runways.js?v=579"></script>
+  <script src="js/data/terminal-fixes.js?v=580"></script>
+  <script src="js/data/ifr-fixes.js?v=580"></script>
+  <script src="js/data/ifr-procedures.js?v=580"></script>
+  <script src="js/data/airfield-info.js?v=580"></script>
+  <script src="js/data/enr-vors.js?v=580"></script>
+  <script src="js/data/loc-stations.js?v=580"></script>
+  <script src="js/data/enr-routes.js?v=580"></script>
+  <script src="js/data/airspace.js?v=580"></script>
+  <script src="js/data/runways.js?v=580"></script>
   <!-- 앱 코드 -->
-  <script src="js/00-ui.js?v=579"></script>
-  <script src="js/01-state.js?v=579"></script>
-  <script src="js/02-math.js?v=579"></script>
-  <script src="js/03-pfd.js?v=579"></script>
-  <script src="js/04-map.js?v=579"></script>
-  <script src="js/05-gps.js?v=579"></script>
-  <script src="js/06-nav.js?v=579"></script>
-  <script src="js/07-sim.js?v=579"></script>
-  <script src="js/08-ifrdb.js?v=579"></script>
-  <script src="js/09-cdu.js?v=579"></script>
-  <script src="js/10-tools.js?v=579"></script>
-  <script src="js/11-charts.js?v=579"></script>
-  <script src="js/12-joystick.js?v=579"></script>
-  <script src="js/13-joyhid.js?v=579"></script>
-  <script src="js/14-simmode.js?v=579"></script>
-  <script src="js/15-heli3d.js?v=579"></script>
-  <script src="js/16-sound.js?v=579"></script>
-  <script src="js/17-upper.js?v=579"></script>
-  <script src="js/18-system.js?v=579"></script>
-  <script src="js/19-lower.js?v=579"></script>
-  <script src="js/20-navaids.js?v=579"></script>
+  <script src="js/00-ui.js?v=580"></script>
+  <script src="js/01-state.js?v=580"></script>
+  <script src="js/02-math.js?v=580"></script>
+  <script src="js/03-pfd.js?v=580"></script>
+  <script src="js/04-map.js?v=580"></script>
+  <script src="js/05-gps.js?v=580"></script>
+  <script src="js/06-nav.js?v=580"></script>
+  <script src="js/07-sim.js?v=580"></script>
+  <script src="js/08-ifrdb.js?v=580"></script>
+  <script src="js/09-cdu.js?v=580"></script>
+  <script src="js/10-tools.js?v=580"></script>
+  <script src="js/11-charts.js?v=580"></script>
+  <script src="js/12-joystick.js?v=580"></script>
+  <script src="js/13-joyhid.js?v=580"></script>
+  <script src="js/14-simmode.js?v=580"></script>
+  <script src="js/15-heli3d.js?v=580"></script>
+  <script src="js/16-sound.js?v=580"></script>
+  <script src="js/17-upper.js?v=580"></script>
+  <script src="js/18-system.js?v=580"></script>
+  <script src="js/19-lower.js?v=580"></script>
+  <script src="js/20-navaids.js?v=580"></script>
+  <script src="js/21-c5000.js?v=580"></script>
 
 <input type="file" id="zipFileInput" accept=".zip,application/zip,application/x-zip-compressed,application/octet-stream" style="display:none" onchange="handleZipFile(this.files[0]); this.value='';"></body>
 </html>
