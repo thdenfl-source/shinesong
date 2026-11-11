@@ -86,7 +86,7 @@ function fuelAuxPumps() {
   [[1, 'auxL', 'mainL', 'L'], [2, 'auxR', 'mainR', 'R']].forEach(([n, ak, mk, side]) => {
     const mode = _ov(n === 1 ? 'aux1Xfer' : 'aux2Xfer', 'AUTO'), cap = FUEL_MAIN_CAP[side];
     let on;
-    if (fuel[ak] <= 0 || mode === 'OFF') on = false;
+    if (fuel[ak] <= 0 || mode === 'OFF' || !pwrDcNess()) on = false;   // 이송 펌프는 DC N-ESS
     else if (mode === 'ON') on = fuel[mk] < cap - 0.5;
     else on = auxPump[n] ? fuel[mk] < cap - 10 : fuel[mk] < cap - 100;   // AUTO — 100 비면 돌고 거의 차면 멈춘다
     auxPump[n] = on;
@@ -102,8 +102,9 @@ function fuelWow() {
 function fuelLine(n) {
   const o = n === 1 ? 2 : 1;
   const msov = _ov('fuel' + n, 'OPEN') === 'OPEN';
-  const own = _ov('bp' + n, 'BP' + n) !== 'OFF' && fuel['ft' + n] > 0;
-  const xf = _ov('xFeed', 'OFF') === 'ENG' + n && _ov('bp' + o, 'BP' + o) !== 'OFF' && fuel['ft' + o] > 0;
+  const dc = pwrDc();                                   // 승압 펌프는 DC 버스 — 전원이 없으면 돌지 않는다
+  const own = dc && _ov('bp' + n, 'BP' + n) !== 'OFF' && fuel['ft' + n] > 0;
+  const xf = dc && _ov('xFeed', 'OFF') === 'ENG' + n && _ov('bp' + o, 'BP' + o) !== 'OFF' && fuel['ft' + o] > 0;
   return { msov, own, xf, xfOn: xf && fuelSys.xfT[n] >= FUEL_XFEED_SEC };
 }
 function fuelPress(n) { return Math.round(fuelSys.p[n]); }
@@ -145,13 +146,14 @@ function fuelSysTick(dtReal, dt) {
     const d = Lq - Rq;
     dir = fuelSys.xfer === 0 ? (Math.abs(d) >= 100 ? (d > 0 ? 1 : -1) : 0) : (Math.abs(d) <= 11 ? 0 : fuelSys.xfer);
   }
+  if (!pwrDcNess()) dir = 0;                                     // 이송 펌프는 DC N-ESS
   if (dir === -1 && (hiAft || fuel.fwd <= 0)) dir = 0;          // 받는 쪽이 98% 면(넘침 방지) · 보낼 연료가 없으면 멈춘다
   if (dir === 1 && (hiFwd || fuel.aft <= 0)) dir = 0;
   fuelSys.xfer = dir;
   // F5 이송 — F5 → AFT
   const f5s = _ov('f5Xfer', 'AUTO');
   let f5 = false;
-  if (fuel.f5 > 0 && fuel.aft < FUEL_CAP.aft * FUEL_HI) {
+  if (fuel.f5 > 0 && fuel.aft < FUEL_CAP.aft * FUEL_HI && pwrDcNess()) {
     if (f5s === 'ON') f5 = true;
     else if (f5s === 'AUTO') f5 = !wow && (fuelSys.f5 || fuel.aft <= 170);
   }
@@ -573,6 +575,11 @@ function elecState() {
   return { gen1, gen2, apu, gpu, apuConn, gpuConn, mainGen, ac, tru1, tru2, dc, dcNess, batt, battBus: batt || dc, nGen, genA, truA, bat,
            tie, dropL, dropR };
 }
+// 전원 — 하부 콘솔 장치 · 연료 펌프 · AFCS 가 쓰는 버스(상부 콘솔 스위치를 따른 elecState)
+//   DC(필수) : 무전기(C-5000 · NPX138) · 승압 펌프 BP1/BP2 · AFCS(AP1 · AP2) · 하부 콘솔 표시등·버튼 글씨
+//   DC N-ESS : 이송 펌프(XFER · F5 · AUX1/2 XFER) — APU 발전기로만 버틸 때는 끊긴다
+function pwrDc() { try { return elecState().dc; } catch (e) { return true; } }
+function pwrDcNess() { try { return elecState().dcNess; } catch (e) { return true; } }
 // 둥근 계기(270° 호) — 값 → 바늘, 색 띠
 function _sysGauge(g, cx, cy, r, frac, bands) {
   const a0 = Math.PI * 0.75, span = Math.PI * 1.5;
@@ -684,7 +691,21 @@ function _sysX(g, x, y) {
 const AFCS_AP2_SEC = 3, AFCS_AP1_SEC = 7, AFCS_HOLD_SEC = 3;
 let afcsTest = null;          // { t0 } — 시험 중이면
 let afcsLast = '';            // 마지막 시험 결과
+// P FLT TST 는 땅 위(WOW) · 두 엔진이 멎은 채 · DC 전원이 있을 때만 — 아니면 시험하지 않고 버튼이 다시 나온다
+function afcsPfltOk() {
+  if (!pwrDc()) return false;
+  let wow = true, eng = true;
+  try { wow = radarAltFt() < 5; } catch (e) { _swallow(e); }
+  try { const P = engParams(); eng = P.e1.ng < 10 && P.e2.ng < 10; } catch (e) { _swallow(e); }
+  return wow && eng;
+}
 function afcsTestStart() {
+  if (!afcsPfltOk()) {
+    afcsTest = null; afcsLast = 'P FLT TST INHIBITED';
+    try { if (typeof ovhdGet === 'function' && ovhdGet('bFltTst') === 'IN') setTimeout(() => ovhdSet('bFltTst', 'OUT'), 300); } catch (e) { _swallow(e); }
+    try { sysPageSet('asys_afcs'); } catch (e) { _swallow(e); }
+    return;
+  }
   afcsTest = { t0: performance.now() };
   afcsLast = '';
   try { sysPageSet('asys_afcs'); } catch (e) { _swallow(e); }
@@ -719,7 +740,9 @@ function _sysAfcsPage(g) {
         g.fillStyle = hot ? '#ff2020' : '#c01010'; g.fillRect(x - 24, y - 26, 48, 26);
         g.fillStyle = '#fff'; g.font = _f(13, false); g.fillText(act, x, y - 8);
       } else if (!P) {
-        const on = ase && _ov('ap' + n, 'OUT') !== 'IN';   // 하부 콘솔 AFCAU 의 AP1/AP2 OFF 를 누르면 그 레인 OFF
+        let apOk = _ov('ap' + n, 'OUT') !== 'IN' && pwrDc();
+        try { apOk = afcsAxes()['ap' + n]; } catch (e) { _swallow(e); }
+        const on = ase && apOk;                          // 하부 콘솔 AFCAU 의 AP1/AP2 OFF · DC 전원이 없으면 그 레인 OFF
         g.fillStyle = on ? '#22e022' : '#e8d000'; g.font = _f(13, false); g.fillText(on ? 'ON' : 'OFF', x, y - 8);
       }
       g.fillStyle = '#fff'; g.font = _f(13, false); g.fillText(lbl, x, y + 20);
@@ -735,7 +758,11 @@ function _sysAfcsPage(g) {
   };
   lane(1, 170, 330);
   lane(2, 420, 900);
-  if (!P && afcsLast) { g.fillStyle = '#22e022'; g.textAlign = 'center'; g.font = _f(14); g.fillText(afcsLast, 610, 590); }
+  if (!P && afcsLast) {
+    const inh = /INHIBITED/.test(afcsLast);
+    g.fillStyle = inh ? SYS_AMBER : '#22e022'; g.textAlign = 'center'; g.font = _f(14); g.fillText(afcsLast, 610, 590);
+    if (inh) { g.font = _f(11, false); g.fillText('WOW · BOTH ENG OFF · DC POWER REQUIRED', 610, 608); }
+  }
 }
 
 // ── Engine — 엔진 제어기(EHC) 자료 · 기어박스 온도 ──

@@ -375,6 +375,8 @@ function pfdMsgs() {
     const on = E ? E['gen' + n] : ov('gen' + n, 'ON') === 'ON';
     if (!on) out.push({ t: `${n} GEN OFF`, c: PFD_MSG_AMBER });
   });
+  // AFCS CAS(23-afcs.js afcsCas) — AFCS FAIL(적) · 1 · 2 APM OFF · AFCS DEGRADED · BOTH ON AHRS/ADC(황)
+  try { if (typeof afcsCas === 'function') out.unshift(...afcsCas()); } catch (e) { _swallow(e); }
   // 연료 계통 CAS(18-system.js fuelCas) — 1 · 2 F/L PRES · FUEL IMBALANCE · FUEL 1 · 2 LOW(황) · FUEL XFEED(녹)
   try { if (typeof fuelCas === 'function') fuelCas().forEach(m => out.push({ t: m.t, c: m.amber ? PFD_MSG_AMBER : PFD_MSG_GREEN })); } catch (e) { _swallow(e); }
   // 하부 콘솔 레버 SET, 또는 SIM 스페이스 두 번(simParkBrakeOn). 걸린 채 활주 착륙하면 빨갛게(simParkWarnOn)
@@ -593,11 +595,23 @@ function drawFMA(x, y, w) {
   const modes  = [left,   mid,    right  ];
   const active = [leftOn, midOn,  rightOn];
   const armed  = [leftArm, '',    ''      ];
+  // AFCS 가용성(23-afcs.js afcsAxes) — AP1·AP2 모두 OFF · TRIM FEEL REL · AUTO TRIM OFF · AHRS BACKUP 이면
+  // 그 축이 기본 안정 증대(SAS)로 내려가 황색 SAS. AFCS FAIL(DC 전원 없음)이면 세 칸 모두 꺼진다.
+  try {
+    if (typeof afcsAxes === 'function') {
+      const A = afcsAxes();
+      for (let i = 0; i < 3; i++) {
+        if (A.fail) { active[i] = false; armed[i] = ''; }
+        else if (A.sas[i]) { modes[i] = 'SAS'; active[i] = true; armed[i] = ''; }
+      }
+    }
+  } catch (e) { _swallow(e); }
 
   // T/D to H 중 45kt 밑 — 롤 축(HDG·NAV)이 성능이 줄었다는 주의(황색)
   const midAmber = (typeof tdRollAmber === 'function') && tdRollAmber();
   const modeColor = (lbl, on, i) => {
     if (!on) return '#3a3a3a';
+    if (lbl === 'SAS') return '#ffb000';     // 기본 안정 증대로 내려간 축 — 황색
     if (i === 1 && midAmber) return '#ffcc00';
     // GS/NAV · GS/HDG = GSPD 가 축을 잡고 있어 NAV·HDG 가 조향하지 못하는 대기 상태.
     // 초록(정상 작동)과 구분되게 호박색으로 표시한다.
@@ -642,9 +656,29 @@ function drawFMA(x, y, w) {
       ctx.fillStyle = modeColor(modes[i], on, i);
       ctx.fillText(modes[i], bx + cellW / 2, ty);
     }
+    // 모드가 바뀌어 걸리면 10초 동안 네 귀퉁이 상자가 깜빡인다 — 녹색(걸림) · 황색(SAS · 성능 저하)
+    const key = modes[i] + '|' + (on ? 1 : 0) + armed[i], now = performance.now();
+    if (_fmaPrev[i] !== undefined && _fmaPrev[i] !== key && on) {
+      const c = modeColor(modes[i], on, i);
+      _fmaFlash[i] = { t: now, col: c === '#00ff88' || c === '#ff66ff' ? '#00ff88' : '#ffb000' };
+    }
+    _fmaPrev[i] = key;
+    const F = _fmaFlash[i];
+    if (F && on && now - F.t < FMA_FLASH_MS) {
+      if (Math.floor((now - F.t) / 500) % 2 === 0) {
+        const L = 6, x0 = bx + 1.5, y0 = Y0 + 1.5, x1 = bx + cellW - 1.5, y1 = Y0 + BOX_H - 1.5;
+        ctx.strokeStyle = F.col; ctx.lineWidth = 2; ctx.beginPath();
+        [[x0, y0, 1, 1], [x1, y0, -1, 1], [x0, y1, 1, -1], [x1, y1, -1, -1]].forEach(([cx, cy, dx, dy]) => {
+          ctx.moveTo(cx + dx * L, cy); ctx.lineTo(cx, cy); ctx.lineTo(cx, cy + dy * L);
+        });
+        ctx.stroke();
+      }
+    } else if (F) _fmaFlash[i] = null;
   }
   ctx.restore();
 }
+const FMA_FLASH_MS = 10000;
+const _fmaPrev = [], _fmaFlash = [null, null, null];
 
 // ────────────────────────────────────────
 // CRHT ALTITUDE DISPLAY  (bottom-right of PFD)

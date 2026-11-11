@@ -163,6 +163,22 @@ ovhdOn((id, v) => {
 });
 lconSyncPark();
 
+// ── 전원 — 상부 콘솔 전기 계통(18-system.js pwrDc)이 DC 버스를 못 살리면 하부 콘솔이 죽는다 ──
+// 버튼 글씨 · 표시등이 꺼지고(.lcon-nopwr) 무전기(C-5000 · NPX138) 화면도 꺼진다. 전원이 바뀔 때만 다시 그린다.
+let _lconPwr = null;
+function lconPowerSync() {
+  let on = true;
+  try { if (typeof pwrDc === 'function') on = pwrDc(); } catch (e) { _swallow(e); }
+  if (on === _lconPwr) return;
+  _lconPwr = on;
+  const w = document.getElementById('lcon-wrap');
+  if (w) w.classList.toggle('lcon-nopwr', !on);
+  try { if (typeof c5Render === 'function') c5Render(); } catch (e) { _swallow(e); }
+  try { if (typeof npxRender === 'function') npxRender(); } catch (e) { _swallow(e); }
+  try { if (typeof drawPFD === 'function') drawPFD(); } catch (e) { _swallow(e); }
+}
+setInterval(lconPowerSync, 300);
+
 // ── AHRS 패널 → PFD 방향 기준(MG Slaved / DG) ──
 // AHRS 노브(1 · N · 2 · BACKUP)가 PFD 에 쓰는 AHRS 를 고른다 — 2 면 AHRS 2, 그 밖(1 · N · BACKUP)은 AHRS 1.
 // 고른 AHRS 의 TG/MG DG 버튼이 들어가 있으면 DG, 나와 있으면 MG(Slaved).

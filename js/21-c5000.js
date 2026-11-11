@@ -28,6 +28,8 @@ const C5_MODS = ['FM', 'AM', 'P', 'TK'], C5_BWS = ['N', 'S', 'W', 'X'], C5_PWRS 
 const C5_MODES = ['SIMULCAST', 'RELAY', 'RELAY/SIMULCAST', 'REPEATER'];
 const C5_PHI = 'φ', C5_ARROW = '→';
 
+// 전원 — DC 버스(상부 콘솔 전기 계통 · 18-system.js pwrDc). 전원이 없으면 화면이 꺼지고 조작이 듣지 않는다
+function _c5Pwr() { try { return typeof pwrDc === 'function' ? pwrDc() : true; } catch (e) { return true; } }
 let c5 = null;
 function _c5Fresh() {
   return {
@@ -51,7 +53,7 @@ function _c5chNo(n) { return n === 0 ? '..M' : _c5rpad(n, 3).replace(/ /g, '.');
 
 // ── 화면 두 줄(20자씩)과 커서 자리 [줄, 시작, 길이] ──
 function c5Lines() {
-  if (!c5.on) return { l: ['', ''], cur: null };
+  if (!c5.on || !_c5Pwr()) return { l: ['', ''], cur: null };
   const p = c5.page;
   if (c5.msg && performance.now() < c5.msgT) return { l: c5.msg, cur: null };
   if (p === 'PWR_WARN') return { l: ['!!! USE CAUTION !!!', 'TURNING SYSTEM OFF'], cur: null };
@@ -94,7 +96,7 @@ function _c5flash(l0, l1, ms = 1500) { c5.msg = [_c5pad(l0, C5_W), _c5pad(l1, C5
 
 // ── 누름 · 돌림 ──
 function c5Key(k) {
-  if (!c5.on) return;
+  if (!c5.on || !_c5Pwr()) return;
   c5.msg = '';                                        // 잠깐 띄운 알림은 다음 조작에서 걷힌다
   const p = c5.page, r = c5.r[c5.line];
   // 숫자를 받는 화면 — NUM · PROG 비밀번호 · PROG 메뉴
@@ -136,7 +138,7 @@ function c5ProgMenu(k) {
 }
 // ENTER(SEL 노브 누름) — 화면마다 확정 · HOME 에서는 RT1 ⇄ RT2 줄 바꾸기
 function c5Enter() {
-  if (!c5.on) return;
+  if (!c5.on || !_c5Pwr()) return;
   c5.msg = '';                                        // 잠깐 띄운 알림은 다음 조작에서 걷힌다
   const p = c5.page, r = c5.r[c5.line];
   if (p === 'HOME') c5.line = 1 - c5.line;
@@ -157,7 +159,7 @@ function c5Enter() {
 }
 // CURSOR 노브 — EDIT 에서는 고칠 칸을 옮기고, HOME 에서는 RT1 ⇄ RT2 줄
 function c5Cursor(d) {
-  if (!c5.on) return;
+  if (!c5.on || !_c5Pwr()) return;
   c5.msg = '';                                        // 잠깐 띄운 알림은 다음 조작에서 걷힌다
   if (c5.page === 'EDIT') c5.editF = (c5.editF + d + C5_EF.length) % C5_EF.length;
   else if (c5.page === 'HOME') c5.line = 1 - c5.line;
@@ -165,7 +167,7 @@ function c5Cursor(d) {
 }
 // VALUE 노브 — 커서 자리의 값을 돌린다(HOME: 채널 · EDIT: 칸 값 · MODE · KEY · DIM)
 function c5Value(d) {
-  if (!c5.on) return;
+  if (!c5.on || !_c5Pwr()) return;
   c5.msg = '';                                        // 잠깐 띄운 알림은 다음 조작에서 걷힌다
   const p = c5.page, r = c5.r[c5.line];
   const cyc = (arr, v) => arr[(arr.indexOf(v) + d + arr.length) % arr.length];
@@ -187,7 +189,7 @@ function c5Value(d) {
 }
 // 소프트키 — DIM 화면: 밝기 ▲▼ · 그 밖: 그 줄 무전기의 GUARD 수신기 ⇄ MAIN
 function c5Soft(i) {
-  if (!c5.on) return;
+  if (!c5.on || !_c5Pwr()) return;
   c5.msg = '';                                        // 잠깐 띄운 알림은 다음 조작에서 걷힌다
   if (c5.page === 'DIM') c5.dim = Math.max(1, Math.min(10, c5.dim + (i === 0 ? 1 : -1)));
   else { c5.r[i].guard = !c5.r[i].guard; _c5Save(); }
@@ -195,7 +197,7 @@ function c5Soft(i) {
 }
 // VOL 노브 — 안 = RT1 · 바깥 = RT2 (0 … 10)
 function c5Vol(i, d) {
-  if (!c5.on) return;
+  if (!c5.on || !_c5Pwr()) return;
   c5.r[i].vol = Math.max(0, Math.min(10, c5.r[i].vol + d));
   c5.volShow = { i, t: performance.now() + 1200 }; setTimeout(c5Render, 1250);
   _c5Save(); c5Render();
@@ -203,6 +205,7 @@ function c5Vol(i, d) {
 // PUSH ON — 꺼져 있으면 1초 누르면 켜진다 · 켜져 있으면 누르는 동안 경고, 2초 넘게 누르면 꺼진다
 let _c5PwrT = null, _c5PwrPrev = 'HOME';
 function c5PwrDown() {
+  if (!_c5Pwr()) return;
   const t0 = performance.now();
   if (!c5.on) { _c5PwrT = setTimeout(() => { c5.on = true; c5.page = 'HOME'; _c5flash('WULFSBERG C-5000', 'SELF TEST OK', 1200); _c5Save(); c5Render(); }, 1000); return; }
   _c5PwrPrev = c5.page; c5.page = 'PWR_WARN'; c5Render();
@@ -222,7 +225,7 @@ function c5Render() {
   const esc = ch => ch === '<' ? '&lt;' : ch === '>' ? '&gt;' : ch === '&' ? '&amp;' : ch === ' ' ? '&nbsp;' : ch;
   lcd.innerHTML = l.map((line, li) => '<div class="c5-row">' + [..._c5pad(line, C5_W)].map((ch, ci) =>
     `<span${cur && cur[0] === li && ci >= cur[1] && ci < cur[1] + cur[2] ? ' class="c5-cur"' : ''}>${esc(ch)}</span>`).join('') + '</div>').join('');
-  lcd.classList.toggle('off', !c5.on);
+  lcd.classList.toggle('off', !c5.on || !_c5Pwr());
   lcd.style.setProperty('--c5-dim', (0.35 + c5.dim * 0.065).toFixed(2));
   lcd.dataset.page = c5.on ? c5.page : 'OFF';
 }
