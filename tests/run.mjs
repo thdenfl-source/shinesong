@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// VFR Flight Simulator — 회귀 테스트 러너
+// Flight Simulator — 회귀 테스트 러너
 //   실행:  node tests/run.mjs            (전체)
 //          node tests/run.mjs 홀딩 NAV   (이름으로 일부만)
 // 필요:   npm i -D playwright   (라이브러리는 vendor/ 사본을 그대로 쓴다)
