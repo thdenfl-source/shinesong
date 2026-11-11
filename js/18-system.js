@@ -555,8 +555,8 @@ function fuelCduHtml() {
     _gtcBtn('Fuel E-AUX Tank', '<div class="gtc-bar" id="fuelc-eaux"></div>', 'fuelEauxToggle', [], 'style="justify-content:center"') +
     _gtcBtn('Return Fuel', '<div class="gtc-v" id="fuelc-ret"></div>', 'fuelReturnSet', []) +
     `</div>` +
-    `<div style="padding:10px 8px 4px;color:#cde;font-size:12px;border-top:1px solid #1e2a33;margin-top:10px">` +
-    `<div style="color:#567;font-size:10px;margin-bottom:6px">시뮬 연료(훈련용)</div>` +
+    `<div class="gtc-sim">` +
+    `<div style="color:#567;font-size:10px;margin-bottom:6px">시뮬 연료(훈련용) — 칸이 모자라면 위아래로 밀어 봅니다</div>` +
     `<div style="display:flex;justify-content:space-around;text-align:center;margin-bottom:8px">` +
     `<div>Left<div id="fuelc-l" style="font-size:17px;font-weight:bold;color:#fff"></div></div>` +
     `<div>Total<div id="fuelc-t" style="font-size:17px;font-weight:bold;color:#3ad13a"></div></div>` +
@@ -565,7 +565,7 @@ function fuelCduHtml() {
     `<div style="display:flex;gap:6px;margin-bottom:6px">${btn('−100', 'fuelAdjust', [-100])}${btn('+100', 'fuelAdjust', [100])}</div>` +
     `<div style="display:flex;gap:6px;margin-bottom:6px">${[1000, 1500, 2000, FUEL_MAX].map(v => btn(String(v), 'fuelSetTotal', [v])).join('')}</div>` +
     `<div style="text-align:center;margin:4px 0 6px">AUX L <b id="fuelc-al" style="color:#fff"></b> · R <b id="fuelc-ar" style="color:#fff"></b> LBS</div>` +
-    `<div style="display:flex;gap:6px">${btn('RESET (1914 + AUX 1050)', 'fuelReset', [])}</div></div></div>`;
+    `<div style="display:flex;gap:6px">${btn('RESET — 기내 1914 + AUX 1050', 'fuelReset', [])}</div></div></div>`;
 }
 function fuelTypeCycle() {
   fuelCfg.type = FUEL_TYPES[(FUEL_TYPES.indexOf(fuelCfg.type) + 1) % FUEL_TYPES.length];
