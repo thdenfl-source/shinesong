@@ -57,7 +57,13 @@ function _fuelMk(o) {
   return f;
 }
 const FUEL_FULL = { ft1: 266, ft2: 305, fwd: 653, aft: 420, f5: 270, auxL: FUEL_AUX_FULL, auxR: FUEL_AUX_FULL };
-let fuel = _fuelMk(FUEL_FULL);                      // L 956 · R 958 · AUX 1050
+// CDU Fuel Configuration(실기 GTC 화면) — 연료 종류 · E-AUX 탱크 장착 · 귀환 연료(Return Fuel) — 이 기기에 남긴다
+const FUEL_TYPES = ['JET A-1', 'JET A', 'JP-8', 'JP-5'];
+let fuelCfg = { type: 'JET A-1', eaux: true, ret: 0 };
+try { const v = JSON.parse(localStorage.getItem('fuelCfg') || 'null'); if (v) fuelCfg = Object.assign(fuelCfg, v); } catch (e) { _swallow(e); }
+function _fuelCfgSave() { try { localStorage.setItem('fuelCfg', JSON.stringify(fuelCfg)); } catch (e) { _swallow(e); } }
+const _auxFull = () => (fuelCfg.eaux ? FUEL_AUX_FULL : 0);
+let fuel = _fuelMk(Object.assign({}, FUEL_FULL, { auxL: _auxFull(), auxR: _auxFull() }));   // L 956 · R 958 · AUX 1050(E-AUX 장착 시)
 const auxPump = { 1: false, 2: false };             // 이송 펌프가 돌고 있나(Fuel 화면의 TP 심벌)
 // 연료 계통 상태 — 라인 압력(psi) · 교차공급이 선 시간 · 이송 방향(−1 왼쪽으로 · +1 오른쪽으로) · F5 이송 · 불균형 시간
 const fuelSys = { p: { 1: 0, 2: 0 }, xfT: { 1: 0, 2: 0 }, xfer: 0, f5: false, imbT: 0, autoT: 0, imb: false, init: false };
@@ -77,7 +83,7 @@ function fuelSetTotal(lbs) {
 }
 function fuelAdjust(d) { fuelSetTotal(fuelLeft() + fuelRight() + Number(d || 0)); }
 function fuelReset() {
-  fuel = _fuelMk(FUEL_FULL);
+  fuel = _fuelMk(Object.assign({}, FUEL_FULL, { auxL: _auxFull(), auxR: _auxFull() }));
   auxPump[1] = auxPump[2] = false; sysFltSec = 0;
   Object.assign(fuelSys, { xfer: 0, f5: false, imbT: 0, autoT: 0, imb: false, init: false });
   _fuelCduRefresh();
@@ -264,6 +270,13 @@ function sysDraw() {
   else if (sysPage === 'asys_afcs') _sysAfcsPage(g);
   else if (sysPage === 'asys_eng') _sysEnginePage(g, F);
   else if (sysPage === 'asys_status') _sysStatusPage(g, F);
+  else if (sysPage === 'asys_video') {
+    g.fillStyle = '#4a6a7a'; g.textAlign = 'center'; g.font = 'bold 26px Helvetica Neue, Arial, sans-serif';
+    g.fillText(`VIDEO — ${videoCfg.ch}`, 610, 300);
+    g.font = '14px Helvetica Neue, Arial, sans-serif'; g.fillStyle = '#789';
+    g.fillText(`${videoCfg.src} · Brightness ${videoCfg.bri}% · Contrast ${videoCfg.con}% · Saturation ${videoCfg.sat}%`, 610, 330);
+    g.fillText('영상 입력 없음 — 채널 · 설정은 CDU Aircraft Systems → Video', 610, 354);
+  }
   else {
     g.fillStyle = '#4a6a7a'; g.font = 'bold 26px Helvetica Neue, Arial, sans-serif';
     g.fillText(name.toUpperCase(), 610, 310);
@@ -361,7 +374,7 @@ function _sysLeftStrip(g, F) {
 function _sysTopBar(g, F) {
   const ff = F.f1 + F.f2;
   const hm = h => `${Math.floor(h)}+${String(Math.floor((h % 1) * 60)).padStart(2, '0')}`;
-  const end = ff > 0 ? hm(fuelTotal() / ff) : '_+__';
+  const end = ff > 0 ? hm(Math.max(0, fuelTotal() - (fuelCfg.ret || 0)) / ff) : '_+__';   // 귀환 연료(Return Fuel)는 빼고
   const s = Math.floor(sysFltSec), flt = `${String(Math.floor(s / 3600)).padStart(2, '0')}:${String(Math.floor(s / 60) % 60).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
   let dn = S.alt;
   try { if (typeof simDensityAltFt === 'function') dn = simDensityAltFt(); } catch (e) { _swallow(e); }
@@ -437,8 +450,10 @@ function _sysFuelPage(g, F) {
   // TP1 · TP2 는 이송할 때만 보인다 — AUTO 에서 주 탱크가 차 있으면 펌프가 쉬어 심벌도 없다.
   // (AUTO 가 이송을 시작했거나 스위치 ON 이면 녹색 펌프 · 녹색 배관)
   const auxAv = n => auxPump[n] || (_ov(n === 1 ? 'aux1Xfer' : 'aux2Xfer', 'AUTO') === 'ON' && pwrDcNess());
-  ln([[424, 356], [424, 343], [466, 343], [466, 356]], auxAv(1)); ln([[445, 343], [445, 322], [496, 322], [496, 415], [507, 415]], auxAv(1));
-  ln([[739, 356], [739, 343], [782, 343], [782, 356]], auxAv(2)); ln([[760, 343], [760, 322], [705, 322], [705, 465], [648, 465]], auxAv(2));
+  if (fuelCfg.eaux) {                                                      // E-AUX 탱크를 달았을 때만(CDU Fuel Configuration)
+    ln([[424, 356], [424, 343], [466, 343], [466, 356]], auxAv(1)); ln([[445, 343], [445, 322], [496, 322], [496, 415], [507, 415]], auxAv(1));
+    ln([[739, 356], [739, 343], [782, 343], [782, 356]], auxAv(2)); ln([[760, 343], [760, 322], [705, 322], [705, 465], [648, 465]], auxAv(2));
+  }
   ln([[466, 498], [556, 498]]);                                             // 급유구 → F5
   g.strokeStyle = SYS_LINE; g.lineWidth = 3;
   g.beginPath(); g.moveTo(312, 215); g.lineTo(320, 215); g.stroke();     // 압력 탭
@@ -496,11 +511,13 @@ function _sysFuelPage(g, F) {
   if (fuelSys.f5) arrow([[676, 436], [667, 448], [673, 448], [673, 483], [679, 483], [679, 448], [685, 448]]);
   fuelDrawn = { tp: dir, tpTxt, tpOn, f5: fuelSys.f5, f5Show, aux: [auxAv(1), auxAv(2)] };
   // EXT AUX1 · AUX2 — 채움 + 탱크마다 TP1 · TP2(실기 사진)
-  _sysTank(g, 400, 330, 90, 63, fuel.auxL / FUEL_AUX_FULL);
-  _sysTank(g, 714, 330, 92, 63, fuel.auxR / FUEL_AUX_FULL);
-  if (auxAv(1)) { pump(424, 371, 15, 'TP1', '', true); pump(466, 371, 15, 'TP2', '', true); }
-  if (auxAv(2)) { pump(739, 371, 15, 'TP1', '', true); pump(782, 371, 15, 'TP2', '', true); }
-  tankLbl(355, 352, 'EXT AUX1', r0(fuel.auxL)); tankLbl(856, 352, 'EXT AUX2', r0(fuel.auxR));
+  if (fuelCfg.eaux) {
+    _sysTank(g, 400, 330, 90, 63, fuel.auxL / FUEL_AUX_FULL);
+    _sysTank(g, 714, 330, 92, 63, fuel.auxR / FUEL_AUX_FULL);
+    if (auxAv(1)) { pump(424, 371, 15, 'TP1', '', true); pump(466, 371, 15, 'TP2', '', true); }
+    if (auxAv(2)) { pump(739, 371, 15, 'TP1', '', true); pump(782, 371, 15, 'TP2', '', true); }
+    tankLbl(355, 352, 'EXT AUX1', r0(fuel.auxL)); tankLbl(856, 352, 'EXT AUX2', r0(fuel.auxR));
+  }
   // 경고 칸
   _sysAnn(g, 284, 231, 60, 37, 'MFSOV 1', 'CLOSE', !fuelLine(1).msov);     // TQS 연료차단 레버 CLOSE
   _sysAnn(g, 863, 230, 60, 37, 'MFSOV 2', 'CLOSE', !fuelLine(2).msov);
@@ -526,32 +543,64 @@ function _sysFuelPage(g, F) {
 
 // ── CDU 의 Fuel 화면(Aircraft Systems → Fuel) — 연료를 넣고 빼고 정한다 ──
 // 09-cdu.js renderAcSysPage 가 Fuel 일 때 이 칸을 그린다. 값은 SYSTEM 창과 같은 연료다.
+// 실기 GTC 'Fuel Configuration' — Fuel Type · Fuel E-AUX Tank(장착 막대) · Return Fuel
+// 아래 '시뮬 연료' 칸은 훈련용(연료 넣기 · 빼기 · 정하기 · RESET)이다.
+const _gtcBtn = (title, val, act, arg, extra) =>
+  `<div class="gtc-btn" data-act="${act}" data-arg='${JSON.stringify(arg || [])}' ${extra || ''}><div class="gtc-t">${title}</div>${val}</div>`;
 function fuelCduHtml() {
   const btn = (txt, act, arg) => `<div class="nav-btn" data-act="${act}" data-arg='${JSON.stringify(arg)}' style="flex:1;min-width:0">${txt}</div>`;
-  return `<div style="padding:10px 8px;color:#cde;font-size:12px">` +
-    `<div style="display:flex;justify-content:space-around;text-align:center;margin-bottom:12px">` +
-    `<div>Left<div id="fuelc-l" style="font-size:20px;font-weight:bold;color:#fff"></div></div>` +
-    `<div>Total<div id="fuelc-t" style="font-size:20px;font-weight:bold;color:#3ad13a"></div></div>` +
-    `<div>Right<div id="fuelc-r" style="font-size:20px;font-weight:bold;color:#fff"></div></div></div>` +
-    `<div style="text-align:center;margin-bottom:12px">Fuel Flow <b id="fuelc-ff" style="color:#fff"></b> PPH · END <b id="fuelc-end" style="color:#fff"></b></div>` +
-    `<div style="color:#567;font-size:10px;margin:4px 0">연료 넣기·빼기(양쪽 반씩)</div>` +
-    `<div style="display:flex;gap:6px;margin-bottom:8px">${btn('−100', 'fuelAdjust', [-100])}${btn('+100', 'fuelAdjust', [100])}</div>` +
-    `<div style="color:#567;font-size:10px;margin:4px 0">합계로 정하기(LBS)</div>` +
-    `<div style="display:flex;gap:6px;margin-bottom:8px">${[1000, 1500, 2000, FUEL_MAX].map(v => btn(String(v), 'fuelSetTotal', [v])).join('')}</div>` +
-    `<div style="text-align:center;margin:4px 0 8px">AUX L <b id="fuelc-al" style="color:#fff"></b> · R <b id="fuelc-ar" style="color:#fff"></b> LBS</div>` +
-    `<div style="display:flex;gap:6px">${btn('RESET (1914 + AUX 1050)', 'fuelReset', [])}</div>` +
-    `<div style="color:#567;font-size:10px;margin-top:12px">SYSTEM 창(탭 'SYSTEM')에 Fuel 계통도가 보입니다.</div></div>`;
+  return `<div class="gtc-page"><div class="gtc-head">Fuel Configuration</div>` +
+    `<div class="gtc-grid">` +
+    _gtcBtn('Fuel Type', '<div class="gtc-v" id="fuelc-type"></div>', 'fuelTypeCycle', []) +
+    _gtcBtn('Fuel E-AUX Tank', '<div class="gtc-bar" id="fuelc-eaux"></div>', 'fuelEauxToggle', [], 'style="justify-content:center"') +
+    _gtcBtn('Return Fuel', '<div class="gtc-v" id="fuelc-ret"></div>', 'fuelReturnSet', []) +
+    `</div>` +
+    `<div style="padding:10px 8px 4px;color:#cde;font-size:12px;border-top:1px solid #1e2a33;margin-top:10px">` +
+    `<div style="color:#567;font-size:10px;margin-bottom:6px">시뮬 연료(훈련용)</div>` +
+    `<div style="display:flex;justify-content:space-around;text-align:center;margin-bottom:8px">` +
+    `<div>Left<div id="fuelc-l" style="font-size:17px;font-weight:bold;color:#fff"></div></div>` +
+    `<div>Total<div id="fuelc-t" style="font-size:17px;font-weight:bold;color:#3ad13a"></div></div>` +
+    `<div>Right<div id="fuelc-r" style="font-size:17px;font-weight:bold;color:#fff"></div></div></div>` +
+    `<div style="text-align:center;margin-bottom:8px">Fuel Flow <b id="fuelc-ff" style="color:#fff"></b> PPH · END <b id="fuelc-end" style="color:#fff"></b></div>` +
+    `<div style="display:flex;gap:6px;margin-bottom:6px">${btn('−100', 'fuelAdjust', [-100])}${btn('+100', 'fuelAdjust', [100])}</div>` +
+    `<div style="display:flex;gap:6px;margin-bottom:6px">${[1000, 1500, 2000, FUEL_MAX].map(v => btn(String(v), 'fuelSetTotal', [v])).join('')}</div>` +
+    `<div style="text-align:center;margin:4px 0 6px">AUX L <b id="fuelc-al" style="color:#fff"></b> · R <b id="fuelc-ar" style="color:#fff"></b> LBS</div>` +
+    `<div style="display:flex;gap:6px">${btn('RESET (1914 + AUX 1050)', 'fuelReset', [])}</div></div></div>`;
+}
+function fuelTypeCycle() {
+  fuelCfg.type = FUEL_TYPES[(FUEL_TYPES.indexOf(fuelCfg.type) + 1) % FUEL_TYPES.length];
+  _fuelCfgSave(); _fuelCduRefresh();
+}
+// E-AUX 탱크 — 떼면 AUX 연료 0 · Fuel 화면에서 EXT AUX 가 사라진다. 다시 달면 가득(525 lbs 씩)
+function fuelEauxToggle() {
+  fuelCfg.eaux = !fuelCfg.eaux;
+  fuel.auxL = fuel.auxR = _auxFull(); auxPump[1] = auxPump[2] = false;
+  _fuelCfgSave(); _fuelCduRefresh();
+  try { sysDraw(); } catch (e) { _swallow(e); }
+}
+// Return Fuel — 귀환에 남길 연료(LB). END(체공 가능 시간)는 이만큼 빼고 셈한다
+async function fuelReturnSet() {
+  let v = null;
+  try { v = await uiPrompt('Return Fuel (LB)', String(fuelCfg.ret || 0), { inputmode: 'numeric' }); } catch (e) { _swallow(e); }
+  if (v === null || v === undefined || v === '') return;
+  const n = Math.round(Number(v));
+  if (!Number.isFinite(n)) return;
+  fuelCfg.ret = Math.max(0, Math.min(FUEL_MAX + 2 * FUEL_AUX_FULL, n));
+  _fuelCfgSave(); _fuelCduRefresh();
 }
 function _fuelCduRefresh() {
   const el = document.getElementById('fuelc-t');
   if (!el) return;
   const F = fuelFlow(), ff = F.f1 + F.f2;
   const set = (id, v) => { const e = document.getElementById(id); if (e && e.textContent !== v) e.textContent = v; };
+  set('fuelc-type', fuelCfg.type); set('fuelc-ret', `${fuelCfg.ret || 0}LB`);
+  const bar = document.getElementById('fuelc-eaux'); if (bar) bar.classList.toggle('on', !!fuelCfg.eaux);
   set('fuelc-l', String(Math.round(fuelLeft()))); set('fuelc-r', String(Math.round(fuelRight())));
   set('fuelc-t', String(Math.round(fuelTotal())) + ' LBS');
   set('fuelc-ff', String(Math.round(ff)));
   set('fuelc-al', String(Math.round(fuel.auxL)) + (auxPump[1] ? ' ▸' : '')); set('fuelc-ar', String(Math.round(fuel.auxR)) + (auxPump[2] ? ' ▸' : ''));
-  set('fuelc-end', ff > 0 ? `${Math.floor(fuelTotal() / ff)}+${String(Math.floor((fuelTotal() / ff % 1) * 60)).padStart(2, '0')}` : '—');
+  const usable = Math.max(0, fuelTotal() - (fuelCfg.ret || 0));
+  set('fuelc-end', ff > 0 ? `${Math.floor(usable / ff)}+${String(Math.floor((usable / ff % 1) * 60)).padStart(2, '0')}` : '—');
 }
 
 // ── 전기 계통(Electrical) ──
@@ -959,8 +1008,41 @@ function _sysStatusPage(g, F) {
 }
 
 // ── CDU 의 계통 칸 — Fuel 은 연료 조정, Electrical 은 전원 상태(스위치는 UPPER 창) ──
+// ── CDU Video Settings(실기 GTC 화면) — Channel(RADAR · DMM · EO/IR · HOIST) · Source · Default Settings ·
+//    Brightness · Contrast · Saturation(−/+ 5%). 이 기기에 남긴다
+const VIDEO_CH = ['RADAR', 'DMM', 'EO/IR', 'HOIST'], VIDEO_DEF = { ch: 'RADAR', src: 'Digital', bri: 50, con: 50, sat: 50 };
+let videoCfg = Object.assign({}, VIDEO_DEF), _videoPick = false;
+try { const v = JSON.parse(localStorage.getItem('videoCfg') || 'null'); if (v) videoCfg = Object.assign(videoCfg, v); } catch (e) { _swallow(e); }
+function _videoSave() { try { localStorage.setItem('videoCfg', JSON.stringify(videoCfg)); } catch (e) { _swallow(e); } }
+function videoCduHtml() { return `<div class="gtc-page" id="vidc"></div>`; }
+function _videoCduRender() {
+  const el = document.getElementById('vidc');
+  if (!el) return;
+  const row = (k, lbl) => `<div class="gtc-row"><div class="gtc-rl">${lbl}<b>${videoCfg[k]}%</b></div>` +
+    `<div class="gtc-pm" data-act="videoAdj" data-arg='["${k}",-5]'>−</div>` +
+    `<div class="gtc-slide"><i style="width:${videoCfg[k]}%"></i><u style="left:${videoCfg[k]}%"></u></div>` +
+    `<div class="gtc-pm" data-act="videoAdj" data-arg='["${k}",5]'>+</div></div>`;
+  el.innerHTML = `<div class="gtc-head">${_videoPick ? 'Channel Select' : 'Video Settings'}</div>` +
+    `<div class="gtc-grid three">` +
+    _gtcBtn('Channel', `<div class="gtc-v">${videoCfg.ch}</div>`, 'videoChanOpen', []) +
+    _gtcBtn('Source', `<div class="gtc-v">${videoCfg.src}</div>`, 'videoSrcToggle', []) +
+    _gtcBtn('', '<div style="font-size:14px;color:#fff;line-height:17px">Default<br>Settings</div>', 'videoDefault', []) + `</div>` +
+    `<div class="gtc-rows">${row('bri', 'Brightness')}${row('con', 'Contrast')}${row('sat', 'Saturation')}</div>` +
+    (_videoPick ? `<div class="gtc-pick">${VIDEO_CH.map(c => `<div class="gtc-opt${c === videoCfg.ch ? ' sel' : ''}" data-act="videoChanSet" data-arg='["${c}"]'>${c}</div>`).join('')}</div>` : '');
+}
+function videoChanOpen() { _videoPick = !_videoPick; _videoCduRender(); }
+function videoChanSet(c) { if (VIDEO_CH.includes(c)) videoCfg.ch = c; _videoPick = false; _videoSave(); _videoCduRender(); _videoSysRedraw(); }
+function videoSrcToggle() { videoCfg.src = videoCfg.src === 'Digital' ? 'Analog' : 'Digital'; _videoSave(); _videoCduRender(); _videoSysRedraw(); }
+function videoDefault() { videoCfg = Object.assign({}, VIDEO_DEF); _videoPick = false; _videoSave(); _videoCduRender(); _videoSysRedraw(); }
+function videoAdj(k, d) {
+  if (!(k in VIDEO_DEF) || k === 'ch' || k === 'src') return;
+  videoCfg[k] = Math.max(0, Math.min(100, videoCfg[k] + Number(d || 0)));
+  _videoSave(); _videoCduRender(); _videoSysRedraw();
+}
+function _videoSysRedraw() { try { if (sysPage === 'asys_video') sysDraw(); } catch (e) { _swallow(e); } }
 function sysCduHtml(id) {
   if (id === 'asys_fuel') return fuelCduHtml();
+  if (id === 'asys_video') { setTimeout(_videoCduRender, 0); return videoCduHtml(); }
   if (id === 'asys_elec') return `<div id="elecc" style="padding:10px 8px;color:#cde;font-size:12px"></div>`;
   if (id === 'asys_afcs') return `<div style="padding:12px 8px;color:#cde;font-size:12px">` +
     `<div style="color:#567;font-size:10px;margin-bottom:8px">AFCS 시험 — AP1 · AP2 액추에이터(C · YR · P)를 차례로 시험합니다(약 10초). LOWER 창 AFCAU 의 <b style="color:#9ab">P FLT TST</b> 를 눌러도 됩니다.</div>` +
@@ -1024,7 +1106,7 @@ function _hocasCduRefresh() {
 
 // 창이 보일 때(applyPanels 가 부른다)
 function sysShow() { sysDraw(); }
-try { appRegister({ fuelAdjust, fuelSetTotal, fuelReset, sysPageSet, afcsTestStart }); } catch (e) { _swallow(e); }
+try { appRegister({ fuelAdjust, fuelSetTotal, fuelReset, sysPageSet, afcsTestStart, fuelTypeCycle, fuelEauxToggle, fuelReturnSet, videoChanOpen, videoChanSet, videoSrcToggle, videoDefault, videoAdj }); } catch (e) { _swallow(e); }
 try { window.addEventListener('resize', () => { try { sysDraw(); } catch (e) { _swallow(e); } }); } catch (e) { _swallow(e); }
 // 상부 콘솔 스위치가 바뀌면 곧바로 다시 그린다(발전기·TRU·배터리 → Electrical)
 try { if (typeof ovhdOn === 'function') ovhdOn(() => { try { sysDraw(); } catch (e) { _swallow(e); } }); } catch (e) { _swallow(e); }
