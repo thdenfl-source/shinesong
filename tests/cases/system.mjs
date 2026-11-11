@@ -173,13 +173,16 @@ export async function run(page, t) {
     fuelReset(); fuel.mainR -= 30; sysTick(); o.autoSmall = auxPump[2];          // 30 비었을 때 AUTO 는 아직 쉰다
     ovhdSet('aux2Xfer', 'ON'); sysTick(); o.on = auxPump[2];
     fuel.mainR -= 200; ovhdSet('aux2Xfer', 'OFF'); sysTick(); o.off = auxPump[2];
-    // 화면 — 펌프가 돌 때만 TP 심벌
+    // 화면 — 실기처럼 EXT AUX1 · AUX2 마다 TP1 · TP2 가 늘 있고, 스위치가 OFF 면 회색 · 아니면 녹색 테
     selectPanel('right', 'sysp', true); await new Promise(r => setTimeout(r, 150)); sysPageSet('asys_fuel');
-    const texts = () => { const proto = CanvasRenderingContext2D.prototype, orig = proto.fillText, seen = [];
-      proto.fillText = function (t, ...a) { seen.push(String(t)); return orig.call(this, t, ...a); };
-      try { sysDraw(); } finally { proto.fillText = orig; } return seen; };
-    o.tpOff = !texts().includes('TP1');
-    ovhdSet('aux2Xfer', 'ON'); sysTick(); o.tpOn = texts().includes('TP1') && texts().includes('TP2');
+    const ring = () => { const proto = CanvasRenderingContext2D.prototype, oT = proto.fillText, oS = proto.stroke, seen = [], strokes = [];
+      proto.fillText = function (t, ...a) { seen.push(String(t)); return oT.call(this, t, ...a); };
+      proto.stroke = function (...a) { strokes.push(this.strokeStyle); return oS.call(this, ...a); };
+      try { sysDraw(); } finally { proto.fillText = oT; proto.stroke = oS; }
+      return { n: seen.filter(x => x === 'TP1' || x === 'TP2').length, green: strokes.filter(c => c === SYS_LINE).length }; };
+    const r0 = ring();
+    ovhdSet('aux2Xfer', 'ON'); sysTick(); const r1 = ring();
+    o.tpOff = r0.n === 4; o.tpOn = r1.n === 4 && r1.green > r0.green;
     // MTA — HEATER −4 · ENG ANTI ICE 하나 −7 · 둘 −14
     ovhdReset(); const m = mtaNow();
     ovhdSet('ecsMode', 'HEAT'); o.heat = +(m - mtaNow()).toFixed(1);
@@ -192,6 +195,6 @@ export async function run(page, t) {
   t.ok(!x.autoFull[0] && !x.autoFull[1] && x.autoLow && x.moved[0] > 0.3,   // (주 탱크는 그동안 집합 탱크도 채우므로 AUX 쪽만 본다)
     `AUX XFER AUTO — 주 탱크가 차 있으면 쉬고 100 넘게 비면 이송(${x.moved[0].toFixed(1)} lbs AUX → 주 탱크)`);
   t.ok(x.on && !x.autoSmall && !x.off, 'AUX XFER ON 은 조금만 비어도 늘 보내고, AUTO 는 쉬며, OFF 는 안 보낸다');
-  t.ok(x.tpOff && x.tpOn, 'Fuel 화면 — 이송 펌프가 돌 때만 TP 심벌이 나온다');
+  t.ok(x.tpOff && x.tpOn, 'Fuel 화면 — EXT AUX1 · AUX2 마다 TP1 · TP2 가 늘 있고, 스위치를 켜면 녹색');
   t.ok(x.heat === 4 && x.ai1 === 11 && x.ai2 === 18, `MTA — HEATER −4% · ENG ANTI ICE 하나 −7% · 둘 −14% (${x.heat} · ${x.ai1} · ${x.ai2})`);
 }
