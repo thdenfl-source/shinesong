@@ -50,8 +50,13 @@ export async function run(page, t) {
     ovhdSet('atRoll', 'IN'); drawPFD(); o.flashA = _fmaFlash[1] && _fmaFlash[1].col === '#ffb000';
     ovhdSet('atRoll', 'OUT'); afcsGuard();
     // P FLT TST — 공중 · 엔진이 돌면 시험하지 않는다
-    afcsLast = ''; afcsTestStart(); o.inh = afcsTest === null && afcsLast === 'P FLT TST INHIBITED';
-    afcsLast = '';
+    // P FLT TST — 땅 위 · 유압 정상이면 엔진이 돌든 멎었든 시험한다
+    const wow0 = fuelWow, hyd0 = hydPsi;
+    afcsLast = ''; fuelWow = () => false; afcsTestStart(); o.inhAir = afcsTest === null && afcsLast === 'P FLT TST INHIBITED';
+    fuelWow = () => true; afcsLast = ''; afcsTestStart(); o.okRun = !!afcsTest && engParams().e1.ng > 50; afcsTest = null;
+    hydPsi = () => ({ 1: 0, 2: 0 }); afcsLast = ''; afcsTestStart(); o.inhHyd = afcsTest === null && afcsLast === 'P FLT TST INHIBITED';
+    hydPsi = () => ({ 1: 2960, 2: 1200 }); afcsLast = ''; afcsTestStart(); o.inhHyd2 = afcsTest === null;
+    hydPsi = hyd0; fuelWow = wow0; afcsLast = '';
     // 전원 없음 — BATT · GEN 1 · 2 · APU 끔 → AFCS FAIL · FMA 꺼짐 · 무전기 · 하부 콘솔 · 승압 펌프
     ['batt', 'gen1', 'gen2', 'apuContr'].forEach(id => ovhdSet(id, 'OFF'));
     o.dc = pwrDc(); await wait(450); fuelSysTick(1, 0);
@@ -77,7 +82,9 @@ export async function run(page, t) {
   t.ok(R.ahrs1 && R.ahrsBk, 'RCU AHRS 1 → BOTH ON AHRS1 · BACKUP → 세 칸 SAS · AHRS BACKUP');
   t.ok(R.adc2 && R.adcBk, 'RCU ADC 2 → BOTH ON ADC2 · BACKUP → ALT 풀림 · ADC BACKUP · AFCS DEGRADED');
   t.ok(R.flashG && R.flashA, 'FMA — 모드가 걸리면 녹색, SAS 로 내려가면 황색 귀퉁이 상자(10초)');
-  t.ok(R.inh, 'P FLT TST — 공중 · 엔진이 돌면 P FLT TST INHIBITED');
+  t.ok(R.inhAir, 'P FLT TST — 공중이면 INHIBITED');
+  t.ok(R.okRun, 'P FLT TST — 땅 위 · 유압 정상이면 엔진이 돌고 있어도 시험한다');
+  t.ok(R.inhHyd && R.inhHyd2, 'P FLT TST — 유압이 0 이거나 한쪽이 정상 범위 밖이면 INHIBITED');
   t.ok(R.dc === false && R.fail && R.dead, 'DC 전원 없음 — AFCS FAIL(적) · FMA 꺼짐 · 무전기 화면 · 하부 콘솔 글씨 꺼짐 · 승압 펌프 멈춤(1 F/L PRES)');
   t.ok(R.alive, '전원이 돌아오면 다시 산다');
 }

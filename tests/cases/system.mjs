@@ -119,7 +119,7 @@ export async function run(page, t) {
     sysPageSet('asys_afcs'); const a0 = texts();
     o.afcsIdle = ['SEMA1 OK', 'SEMA2 OK', 'TRIM OK', 'AFCS MAINTENANCE MODE', 'NOM DEF'].every(x => a0.includes(x)) && a0.filter(x => x === 'OFF').length === 6;
     // 시험 — 하부 콘솔 AFCAU 의 P FLT TST 를 누르면 시작한다. 시간을 앞당겨 단계를 본다
-    afcsPfltOk = () => true;                     // 땅 위 · 엔진 멈춤 조건은 'AFCS 연동' 검사가 본다
+    afcsPfltOk = () => true;                     // 땅 위 · 유압 정상 조건은 'AFCS 연동' 검사가 본다
     afcsLast = ''; ovhdSet('bFltTst', 'IN'); o.pflt = !!afcsTest;
     const at = sec => { afcsTest.t0 = performance.now() - sec * 1000; return texts(); };
     const t1 = at(1), t4 = at(4), t8 = at(8);
