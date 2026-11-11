@@ -75,7 +75,7 @@ export async function run(page, t) {
       ovhdSet('xFeed', 'ENG1'); ovhdSet('aux1Xfer', 'ON'); const s1 = texts();
       o.xfeed = s1.filter(x => x === 'Open').length === s0.filter(x => x === 'Open').length + 1;   // MFSOV 의 Open 둘에 Crossfeed 가 더해진다
       o.aux = s1.includes('On');
-      sysPageSet('asys_fuel'); fuel.aft -= 100; ovhdSet('xferSel', 'LH'); sysTick(); o.tp = texts().includes('◀──'); fuelReset();
+      sysPageSet('asys_fuel'); fuel.aft -= 100; ovhdSet('xferSel', 'LH'); sysTick(); texts(); o.tp = fuelDrawn.tp === -1; fuelReset();
       sysPageSet('asys_afcs'); aseOn = true; const f0 = texts().filter(x => x === 'ON').length;
       ovhdSet('ap1', 'IN'); const f1 = texts().filter(x => x === 'ON').length;
       o.afcs = [f0, f1];

@@ -37,12 +37,12 @@ export async function run(page, t) {
     ovhdSet('bp1', 'BP1'); tick(1);
     // ④ XFER LH — FWD → AFT, AFT 98% 에서 저절로 멈춘다(TP ◀ 사라짐)
     fuel.aft -= 100; ovhdSet('xferSel', 'LH'); tick(0.1);
-    o.lh = fuelSys.xfer === -1 && draw().seen.includes('◀──');
+    o.lh = fuelSys.xfer === -1 && (draw(), fuelDrawn.tp === -1);
     const fwd0 = fuel.fwd; for (let i = 0; i < 60; i++) tick(0.05, 10);
-    o.lhStop = fuelSys.xfer === 0 && fuel.aft >= 420 * 0.98 && fuel.aft < 420 && fwd0 - fuel.fwd > 90 && !draw().seen.includes('◀──');
+    o.lhStop = fuelSys.xfer === 0 && fuel.aft >= 420 * 0.98 && fuel.aft < 420 && fwd0 - fuel.fwd > 90 && (draw(), fuelDrawn.tp === 0);
     // ⑤ XFER RH — AFT → FWD (TP ▶)
     fuelReset(); fuel.fwd -= 100; ovhdSet('xferSel', 'RH'); tick(0.1);
-    o.rh = fuelSys.xfer === 1 && draw().seen.includes('──▶');
+    o.rh = fuelSys.xfer === 1 && (draw(), fuelDrawn.tp === 1);
     // ⑥ XFER AUTO — 땅에서는 쉬고, 비행 중 차 100 넘으면 돌아 ±11 안에서 멈춘다
     fuelReset(); fuelWow = () => true; fuel.aft -= 200; ovhdSet('xferSel', 'AUTO'); tick(0.1);
     o.autoGnd = fuelSys.xfer === 0;
@@ -57,7 +57,7 @@ export async function run(page, t) {
     // ⑧ F5 XFER — ON: F5 → AFT(TP ▲) · AUTO: 비행 중 AFT 170 아래에서
     fuelReset(); fuel.aft -= 100; ovhdSet('f5Xfer', 'ON'); tick(0.1);
     const f50 = fuel.f5; tick(0.1, 60);
-    o.f5On = fuelSys.f5 && draw().seen.includes('▲') && Math.round(f50 - fuel.f5) === 14;
+    o.f5On = fuelSys.f5 && (draw(), fuelDrawn.f5) && Math.round(f50 - fuel.f5) === 14;
     fuelReset(); fuelWow = () => true; ovhdSet('f5Xfer', 'AUTO'); fuel.aft = 160; tick(0.1); o.f5Gnd = fuelSys.f5;
     fuelWow = () => false; tick(0.1); o.f5Auto = fuelSys.f5; fuelWow = wow0;
     // ⑨ MSOV(TQS 연료차단) CLOSE — 압력 0 · MFSOV 1 CLOSE 호박색 · Aircraft Status Closed
