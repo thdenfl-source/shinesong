@@ -332,7 +332,7 @@ function _sysLeftStrip(g, F) {
   _sysBox(g, 151, 188, 67, 152, 'MGB', '');
   _sysBars(g, 153, 192, 63, 145, ['T', 'P'], mgb.map(r0), [mgb[0] / 140, mgb[1] / 80], [[0.80, '#ff3030'], [0.24, '#ffcc00']]);
   // Fuel F · Fuel P · HYD P
-  const ff = [F.f1, F.f2], fp = [fuelPress(1), fuelPress(2)], hyd = [rot ? 2980 : 0, rot ? 2940 : 0];
+  const ff = [F.f1, F.f2], fp = [fuelPress(1), fuelPress(2)], hyd = [hydPsi()[1], hydPsi()[2]];
   _sysBox(g, 5, 356, 72, 152, 'Fuel F', 'PPH');
   _sysBars(g, 7, 360, 68, 145, ['F1', 'F2'], ff.map(r0), ff.map(v => v / 800), []);
   _sysBox(g, 81, 356, 70, 152, 'Fuel P', 'PSI');
@@ -672,6 +672,10 @@ function _sysElecPage(g) {
 // ── 공용 — 상부 콘솔 값 · 로터 · 바깥 기온 ──
 const _ov = (id, dflt) => { try { const v = typeof ovhdGet === 'function' ? ovhdGet(id) : undefined; return v === undefined ? dflt : v; } catch (e) { return dflt; } };
 function _sysRotor() { try { return engParams().nr > 50; } catch (e) { return true; } }
+// 유압 1 · 2(psi) — 주 기어박스(MGB)에 달린 펌프라 로터가 돌 때(NR 50% 넘게) 압력이 선다. 정상 범위 2600 ~ 3300(녹색 띠)
+const HYD_NORM = [2600, 3300];
+function hydPsi() { const rot = _sysRotor(); return { 1: rot ? 2960 : 0, 2: rot ? 3060 : 0 }; }
+function hydNormal() { const h = hydPsi(); return [1, 2].every(n => h[n] >= HYD_NORM[0] && h[n] <= HYD_NORM[1]); }
 function _sysOatC() {
   let t0 = 15;
   try { if (Number.isFinite(window._oatSurfaceC)) t0 = window._oatSurfaceC; } catch (e) { _swallow(e); }
@@ -691,13 +695,13 @@ function _sysX(g, x, y) {
 const AFCS_AP2_SEC = 3, AFCS_AP1_SEC = 7, AFCS_HOLD_SEC = 3;
 let afcsTest = null;          // { t0 } — 시험 중이면
 let afcsLast = '';            // 마지막 시험 결과
-// P FLT TST 는 땅 위(WOW) · 두 엔진이 멎은 채 · DC 전원이 있을 때만 — 아니면 시험하지 않고 버튼이 다시 나온다
+// P FLT TST 는 땅 위(WOW) · 유압 1 · 2 가 정상 범위(2600 ~ 3300 psi) · DC 전원이 있을 때만(엔진이 돌든 멎었든 상관없다)
+// — 아니면 시험하지 않고 버튼이 다시 나온다
 function afcsPfltOk() {
   if (!pwrDc()) return false;
-  let wow = true, eng = true;
-  try { wow = radarAltFt() < 5; } catch (e) { _swallow(e); }
-  try { const P = engParams(); eng = P.e1.ng < 10 && P.e2.ng < 10; } catch (e) { _swallow(e); }
-  return wow && eng;
+  let wow = true;
+  try { wow = fuelWow(); } catch (e) { _swallow(e); }
+  return wow && hydNormal();
 }
 function afcsTestStart() {
   if (!afcsPfltOk()) {
@@ -761,7 +765,7 @@ function _sysAfcsPage(g) {
   if (!P && afcsLast) {
     const inh = /INHIBITED/.test(afcsLast);
     g.fillStyle = inh ? SYS_AMBER : '#22e022'; g.textAlign = 'center'; g.font = _f(14); g.fillText(afcsLast, 610, 590);
-    if (inh) { g.font = _f(11, false); g.fillText('WOW · BOTH ENG OFF · DC POWER REQUIRED', 610, 608); }
+    if (inh) { g.font = _f(11, false); g.fillText('WOW · HYD PRESS NORMAL · DC POWER REQUIRED', 610, 608); }
   }
 }
 
@@ -845,7 +849,7 @@ function _sysStatusPage(g, F) {
     g.textAlign = 'right'; g.font = _f(13); g.fillStyle = col || '#fff'; g.fillText(v, x1, y);
   };
   // 유압 1 · 2
-  [[1, 0, rot ? 2960 : 0, rot ? 91 : oat, 4.6], [2, 173, rot ? 3060 : 0, rot ? 87 : oat, 4.4]].forEach(([n, x0, psi, tc, lit]) => {
+  [[1, 0, hydPsi()[1], rot ? 91 : oat, 4.6], [2, 173, hydPsi()[2], rot ? 87 : oat, 4.4]].forEach(([n, x0, psi, tc, lit]) => {
     panel(x0 + 2, 30, x0 + 170, 668, `Hydraulic ${n}`);
     const cx = x0 + 86;
     _sysDial(g, cx, 128, 74, 0, 5000, psi, [[0, 1500, R], [1500, 2600, Y], [2600, 3300, G], [3300, 4000, Y], [4000, 5000, R]], [0, 1000, 2000, 3000, 4000]);
