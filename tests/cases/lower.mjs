@@ -75,7 +75,7 @@ export async function run(page, t) {
       ovhdSet('xFeed', 'ENG1'); ovhdSet('aux1Xfer', 'ON'); const s1 = texts();
       o.xfeed = s1.filter(x => x === 'Open').length === s0.filter(x => x === 'Open').length + 1;   // MFSOV 의 Open 둘에 Crossfeed 가 더해진다
       o.aux = s1.includes('On');
-      sysPageSet('asys_fuel'); ovhdSet('xferSel', 'LH'); o.tp = texts().includes('LH');
+      sysPageSet('asys_fuel'); fuel.aft -= 100; ovhdSet('xferSel', 'LH'); sysTick(); o.tp = texts().includes('◀──'); fuelReset();
       sysPageSet('asys_afcs'); aseOn = true; const f0 = texts().filter(x => x === 'ON').length;
       ovhdSet('ap1', 'IN'); const f1 = texts().filter(x => x === 'ON').length;
       o.afcs = [f0, f1];
@@ -88,6 +88,6 @@ export async function run(page, t) {
   t.ok(L.emer && L.emerPfd && L.order, 'EMER — 비상 브레이크(세기는 스페이스 6 < EMER 9 < SET 12 kt/s) · PFD 에 EMER BRAKE');
   t.ok(L.spaceSet && L.spaceRel, '스페이스 두 번으로 파킹을 걸고 풀면 레버도 SET · RELEASE 로 따라간다');
   t.ok(L.xfeed && L.aux, 'FUEL 패널 X-FEED · AUX1 XFER 가 Aircraft Status(Crossfeed Valve Open · E-AUX1 On)에 보인다');
-  t.ok(L.tp, 'FUEL 패널 XFER 선택이 Fuel 화면 TP 칸에 보인다(LH)');
+  t.ok(L.tp, 'FUEL 패널 XFER LH — Fuel 화면 TP 에 왼쪽 이송 화살표(◀)');
   t.ok(L.afcs[0] === 6 && L.afcs[1] === 3, `AFCAU AP1 OFF 를 누르면 AFCS 화면 레인 1 이 OFF (ON ${L.afcs[0]} → ${L.afcs[1]})`);
 }
