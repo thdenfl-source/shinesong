@@ -139,7 +139,7 @@ export async function run(page, t) {
   // ── 3D 화면의 FCP L · R — 3D 단독에서만, 연 쪽 CHIN 창은 닫힌다 ──
   const fcp = await page.evaluate(async () => {
     const wait = ms => new Promise(r => setTimeout(r, ms));
-    const total = document.querySelectorAll('#pfd-wrap .ctrl-bar > .ctrl-sub-row > :not(.ctrl-div)').length + 1;   // + SIMPLE 패널(옛 1행)
+    const total = document.querySelectorAll('#pfd-wrap .ctrl-bar > .ctrl-sub-row > :not(.ctrl-div)').length + 2;   // + 소프트키 · FCP 패널
     if (!simModeOn) toggleSimMode(true);
     chinL = chinR = true; chinViewOn = true;
     const o = { split: fcp3dAvail() };
@@ -153,21 +153,23 @@ export async function run(page, t) {
     o.on = { show: box.classList.contains('show'), chinL, chinR, btn: document.getElementById('fcp-l-btn').textContent,
              all: box.querySelectorAll('.ctrl-sub-row > :not(.ctrl-div)').length, total,   // SIMPLE 패널도 첫 줄의 한 칸
              ias: !!box.querySelector('#fcp-simple [data-k="ias"]'), sim: !!box.querySelector('#fcp-simple [data-k="hdg"]'),
+             sk: (() => { const k = box.querySelector('#pfd-sk'), f = box.querySelector('#fcp-simple'); return !!(k && f && k.getBoundingClientRect().bottom <= f.getBoundingClientRect().top + 2); })(),
              left: Math.round(rc.left - r3.left), bottom: Math.round(r3.bottom - rc.bottom),
              w: rc.width / r3.width, h: rc.height / r3.height,
              fit: [...box.querySelectorAll('.ctrl-sub-row > *')].every(e => { const q = e.getBoundingClientRect(); return q.right <= rc.right + 1 && q.bottom <= rc.bottom + 1; }) };
     toggleChinView('L'); o.chinRefused = !chinL;
     document.getElementById('fcp-l-btn').click(); await wait(100);
     toggleChinView('L'); o.chinBack = chinL;
-    o.offHome = document.querySelectorAll('#pfd-wrap .ctrl-bar > .ctrl-sub-row > :not(.ctrl-div)').length + (document.querySelector('#pfd-wrap .ctrl-bar > #fcp-simple') ? 1 : 0);
+    o.offHome = document.querySelectorAll('#pfd-wrap .ctrl-bar > .ctrl-sub-row > :not(.ctrl-div)').length + (document.querySelector('#pfd-wrap .ctrl-bar > #fcp-simple') ? 1 : 0) + (document.querySelector('#pfd-wrap .ctrl-bar > #pfd-sk') ? 1 : 0);
     document.getElementById('fcp-l-btn').click(); await wait(100);
     exitSolo(); await wait(400);
-    o.back = { home: document.querySelectorAll('#pfd-wrap .ctrl-bar > .ctrl-sub-row > :not(.ctrl-div)').length + (document.querySelector('#pfd-wrap .ctrl-bar > #fcp-simple') ? 1 : 0), total, show: box.classList.contains('show') };
+    o.back = { home: document.querySelectorAll('#pfd-wrap .ctrl-bar > .ctrl-sub-row > :not(.ctrl-div)').length + (document.querySelector('#pfd-wrap .ctrl-bar > #fcp-simple') ? 1 : 0) + (document.querySelector('#pfd-wrap .ctrl-bar > #pfd-sk') ? 1 : 0), total, show: box.classList.contains('show') };
     toggleSimMode(false);
     return o;
   });
   t.ok(!fcp.split && fcp.splitRefused, '분할 화면에서는 FCP 를 열지 않는다(PFD 아래에 FCP 가 있다)');
   t.ok(fcp.oneBtn && fcp.on.btn === 'FCP ON', 'FCP 버튼은 하나(FCP ON/OFF)다');
+  t.ok(fcp.on.sk, '3D 단독 FCP 창 — PFD 소프트키가 FCP 패널 바로 위에 붙는다(비행 조작에 쓰는 줄)');
   t.ok(fcp.avail && fcp.on.show && fcp.on.all === fcp.on.total && fcp.on.ias && fcp.on.sim && fcp.on.left <= 2 && fcp.on.bottom <= 2 &&
        fcp.on.w <= 0.51 && fcp.on.h <= 0.46 && fcp.on.fit,
     `3D 단독에서 FCP 를 켜면 FCP 전체(${fcp.on.all}칸)가 왼쪽 아래 한 창(너비 ${(fcp.on.w * 100).toFixed(0)}% · 높이 ${(fcp.on.h * 100).toFixed(0)}%)으로 뜬다`);

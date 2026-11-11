@@ -17,7 +17,7 @@
      CDN 을 쓰면 한 번이라도 못 받는 순간 앱이 통째로 죽는다 — 비행 중에는
      그럴 여지를 두지 않는다. -->
 <!-- 패널 새 창(다중 모니터) — 라이브러리가 거는 이벤트까지 받아 적어야 하므로 맨 먼저 -->
-<script src="js/00-popout.js?v=577"></script>
+<script src="js/00-popout.js?v=578"></script>
 <link rel="stylesheet" href="vendor/leaflet.css"/>
 <script src="vendor/leaflet.js"></script>
 <link rel="stylesheet" href="vendor/leaflet-velocity.min.css"/>
@@ -732,6 +732,7 @@ html, body {
 .fcp3d-l .fcp3d-in { left: 0; transform-origin: top left; }
 .fcp3d-r .fcp3d-in { right: 0; transform-origin: top right; }
 .fcp3d .ctrl-sub-row { flex-wrap: nowrap; }
+.fcp3d .ctrl-sub-row > #pfd-sk { flex: 1 1 100%; min-width: 0; }   /* 소프트키 줄은 FCP 패널 폭에 맞춘다 */
 #ctl3d #chin-btn.show { display: flex; }
 #ctl3d #chin-btn .sim-btn { flex: 1; width: auto; padding: 5px 0; font-size: 10px; }
 #ctl3d #chin-btn .sim-btn.on { color: #00e5ff; border-color: #00e5ff; }
@@ -2186,7 +2187,7 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
     </div>
   </form>
 </div>
-<script src="js/00-gate.js?v=577"></script>
+<script src="js/00-gate.js?v=578"></script>
 <!-- ── 단일화면 선택 바 (기본 숨김) ── -->
 <!-- ── 시작 안내(사용법/키보드) 오버레이 ── -->
 <div id="help-overlay" style="display:none;">
@@ -2434,7 +2435,7 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
             GYRO ON 을 누르면 기울기 센서를 켜고(아이폰·아이패드는 허락을 묻습니다), <b>GYRO ALIGN 을 누른 그때의 자세가 가운데</b>가 되어 그때부터 조종합니다.
             기기를 25° 기울이면 끝 — 화면 사이클릭과 같이 <b>16방향 · 피치 ±10° · 롤 ±20°</b>(피치는 가운데 감도 반)입니다. 화면 사이클릭을 손으로 쥐면 손이 앞서고,
             화면을 가로·세로로 돌리면 다시 ALIGN 해야 합니다.<br>
-            <b>FCP ON/OFF</b>(3D 오른쪽 버튼 묶음) — <b>3D 단독(3D Only) 화면</b>에서 PFD 아래 FCP 전체(세 줄)를 <b>3D 화면 왼쪽 아래에 한 창</b>으로 띄웁니다
+            <b>FCP ON/OFF</b>(3D 오른쪽 버튼 묶음) — <b>3D 단독(3D Only) 화면</b>에서 PFD 소프트키(위) + FCP 패널(아래)을 <b>3D 화면 왼쪽 아래에 한 창</b>으로 띄웁니다
             (화면 너비의 반 · 높이의 45% 안으로 줄여 그림). 버튼 그대로라 기능이 같고, 켜면 L CHIN 창은 닫힙니다. 분할 화면에서는 PFD 아래에 FCP 가 있으므로 열지 않습니다.<br>
             <b>CHIN BUBBLE</b> — 1인칭에서는 <b>정면 시야가 3D 창 가득</b> 차고, 좌·우 발밑 창은 그 위
             <b>아래 왼쪽·오른쪽 모서리에 붙어 겹쳐</b> 뜹니다(창 하나가 너비 약 1/3 · 높이 2/9).
@@ -3483,37 +3484,37 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
 <!-- 앱 코드 — 클래식 스크립트(모듈 아님)라 전역 스코프를 공유한다.
      순서가 곧 실행 순서이므로 임의로 바꾸지 말 것. -->
   <!-- AIP 데이터 — 코드보다 먼저 로드한다 -->
-  <script src="js/data/terminal-fixes.js?v=577"></script>
-  <script src="js/data/ifr-fixes.js?v=577"></script>
-  <script src="js/data/ifr-procedures.js?v=577"></script>
-  <script src="js/data/airfield-info.js?v=577"></script>
-  <script src="js/data/enr-vors.js?v=577"></script>
-  <script src="js/data/loc-stations.js?v=577"></script>
-  <script src="js/data/enr-routes.js?v=577"></script>
-  <script src="js/data/airspace.js?v=577"></script>
-  <script src="js/data/runways.js?v=577"></script>
+  <script src="js/data/terminal-fixes.js?v=578"></script>
+  <script src="js/data/ifr-fixes.js?v=578"></script>
+  <script src="js/data/ifr-procedures.js?v=578"></script>
+  <script src="js/data/airfield-info.js?v=578"></script>
+  <script src="js/data/enr-vors.js?v=578"></script>
+  <script src="js/data/loc-stations.js?v=578"></script>
+  <script src="js/data/enr-routes.js?v=578"></script>
+  <script src="js/data/airspace.js?v=578"></script>
+  <script src="js/data/runways.js?v=578"></script>
   <!-- 앱 코드 -->
-  <script src="js/00-ui.js?v=577"></script>
-  <script src="js/01-state.js?v=577"></script>
-  <script src="js/02-math.js?v=577"></script>
-  <script src="js/03-pfd.js?v=577"></script>
-  <script src="js/04-map.js?v=577"></script>
-  <script src="js/05-gps.js?v=577"></script>
-  <script src="js/06-nav.js?v=577"></script>
-  <script src="js/07-sim.js?v=577"></script>
-  <script src="js/08-ifrdb.js?v=577"></script>
-  <script src="js/09-cdu.js?v=577"></script>
-  <script src="js/10-tools.js?v=577"></script>
-  <script src="js/11-charts.js?v=577"></script>
-  <script src="js/12-joystick.js?v=577"></script>
-  <script src="js/13-joyhid.js?v=577"></script>
-  <script src="js/14-simmode.js?v=577"></script>
-  <script src="js/15-heli3d.js?v=577"></script>
-  <script src="js/16-sound.js?v=577"></script>
-  <script src="js/17-upper.js?v=577"></script>
-  <script src="js/18-system.js?v=577"></script>
-  <script src="js/19-lower.js?v=577"></script>
-  <script src="js/20-navaids.js?v=577"></script>
+  <script src="js/00-ui.js?v=578"></script>
+  <script src="js/01-state.js?v=578"></script>
+  <script src="js/02-math.js?v=578"></script>
+  <script src="js/03-pfd.js?v=578"></script>
+  <script src="js/04-map.js?v=578"></script>
+  <script src="js/05-gps.js?v=578"></script>
+  <script src="js/06-nav.js?v=578"></script>
+  <script src="js/07-sim.js?v=578"></script>
+  <script src="js/08-ifrdb.js?v=578"></script>
+  <script src="js/09-cdu.js?v=578"></script>
+  <script src="js/10-tools.js?v=578"></script>
+  <script src="js/11-charts.js?v=578"></script>
+  <script src="js/12-joystick.js?v=578"></script>
+  <script src="js/13-joyhid.js?v=578"></script>
+  <script src="js/14-simmode.js?v=578"></script>
+  <script src="js/15-heli3d.js?v=578"></script>
+  <script src="js/16-sound.js?v=578"></script>
+  <script src="js/17-upper.js?v=578"></script>
+  <script src="js/18-system.js?v=578"></script>
+  <script src="js/19-lower.js?v=578"></script>
+  <script src="js/20-navaids.js?v=578"></script>
 
 <input type="file" id="zipFileInput" accept=".zip,application/zip,application/x-zip-compressed,application/octet-stream" style="display:none" onchange="handleZipFile(this.files[0]); this.value='';"></body>
 </html>

@@ -863,10 +863,12 @@ function _fcpSplit() {
   const bar = document.querySelector('#pfd-wrap .ctrl-bar');
   if (!bar) return [];
   _fcpParts = [];
-  // 옛 FCP 1행 대신 늘 보이는 SIMPLE 패널(07-sim.js)을 3D 창 FCP 의 첫 줄로
+  // 3D 단독 화면에서도 비행 조작에 쓰는 PFD 소프트키를 FCP 패널 바로 위에 — 첫 줄 소프트키, 둘째 줄 FCP 패널(07-sim.js)
+  const sk = bar.querySelector(':scope > #pfd-sk');
   const simple = bar.querySelector(':scope > #fcp-simple');
-  if (simple) _fcpParts.push({ el: simple, side: 'L', row: 0, ph: null });
-  const off = simple ? 1 : 0;
+  let off = 0;
+  if (sk) _fcpParts.push({ el: sk, side: 'L', row: off++, ph: null });
+  if (simple) _fcpParts.push({ el: simple, side: 'L', row: off++, ph: null });
   [...bar.querySelectorAll(':scope > .ctrl-sub-row')].forEach((row, r0) => {
     const ri = r0 + off;
     // 칸(무리)만 세어 반으로 가르고, 칸 사이 구분선(.ctrl-div)은 뒤 칸을 따라간다(반의 맨 앞 구분선은 두고 간다)

@@ -312,12 +312,19 @@ function drawStopwatch(x, y, w, h, cxC) {
   ctx.strokeStyle = '#446688'; ctx.lineWidth = 1; ctx.strokeRect(bx + 0.5, by + 0.5, bw - 1, bh - 1);
   // 윗줄 — 이름표 · 시각
   ctx.textBaseline = 'alphabetic';
+  // 칸이 좁으면(3D 에 겹친 작은 계기) 이름표를 빼고 시각만 — 글자가 겹치지 않게
+  const tTxt = typeof swText === 'function' ? swText() : '';
+  ctx.font = `bold ${fs * 1.25}px Helvetica Neue, Arial, sans-serif`;
+  const tW = ctx.measureText(tTxt).width;
   ctx.font = `bold ${fs * 0.8}px Helvetica Neue, Arial, sans-serif`;
-  ctx.fillStyle = '#8ac6ff'; ctx.textAlign = 'left';
-  ctx.fillText(sw ? 'SW' : 'TIME', bx + 4, by + fs * 1.45);
+  const lbl = sw ? 'SW' : 'TIME';
+  if (ctx.measureText(lbl).width + tW + 14 <= bw) {
+    ctx.fillStyle = '#8ac6ff'; ctx.textAlign = 'left';
+    ctx.fillText(lbl, bx + 4, by + fs * 1.45);
+  }
   ctx.font = `bold ${fs * 1.25}px Helvetica Neue, Arial, sans-serif`;
   ctx.fillStyle = sw ? (run ? '#22e022' : '#ffffff') : '#ffffff'; ctx.textAlign = 'right';
-  ctx.fillText(typeof swText === 'function' ? swText() : '', bx + bw - 4, by + fs * 1.55);
+  ctx.fillText(tTxt, bx + bw - 4, by + fs * 1.55);
   // 아랫줄 — 버튼
   const btns = sw ? [[run ? 'STP' : 'GO', 'swToggle', run], ['RST', 'swReset', false], ['TIME', 'swSetMode:clock', false]]
                   : [['STOP WATCH', 'swSetMode:sw', false]];
