@@ -10,6 +10,8 @@ import { fileURLToPath } from 'node:url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const ROOT = path.resolve(HERE, '..', '..');
+// 판(js/00-edition.js) — Flightsimulator 저장소(경로에 'flightsimulator')면 절차 훈련판으로 띄운다. EDITION=proc|full 로 바꿀 수 있다
+export const EDITION = process.env.EDITION || (/flightsimulator/i.test(ROOT) ? 'proc' : 'full');
 
 export function buildEnv() {
   const vendor = path.join(ROOT, 'vendor');
@@ -23,7 +25,7 @@ export function buildEnv() {
   }
   const file = path.join(dir, 'index.html');
   fs.copyFileSync(path.join(ROOT, 'index.html'), file);
-  return { dir, file, url: 'file://' + file };
+  return { dir, file, url: 'file://' + file + (EDITION === 'proc' ? '?edition=proc' : '') };
 }
 
 // 페이지를 띄우고 도움말 오버레이를 닫은 상태로 반환

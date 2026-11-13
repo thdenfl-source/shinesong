@@ -264,7 +264,7 @@ export async function run(page, t) {
     _mapOpenWpt(1);
     return { mode: fpMode, idx: fpWptIdx,
              title: document.getElementById('fp-mode-title').textContent,
-             cduShown: leftSel === 'cdu' || rightSel === 'cdu' || rightSel === 'plan' };
+             cduShown: leftSel === 'cdu' || rightSel === 'cdu' || rightSel === 'plan' || (typeof midSel !== 'undefined' && (midSel === 'cdu' || midSel === 'plan')) };   // 3분할이면 가운데 칸도
   });
   t.ok(jump.mode === 'WPT' && jump.idx === 1,
     '「정보」를 누르면 비행계획의 그 웨이포인트 카드로 간다');
