@@ -24,6 +24,11 @@ export async function run(page, t) {
     click('[data-act="fuelEauxToggle"]'); await wait(30); o.eauxOn = fuelAux() === 1050;
     const end0 = txt('fuelc-end'); fuelCfg.ret = 1000; _fuelCduRefresh(); o.ret = txt('fuelc-ret'); o.endShort = txt('fuelc-end') !== end0;
     o.sim = !!document.querySelector('#mainContentArea [data-act="fuelAdjust"]') && txt('fuelc-t') === '2964 LBS';
+    // 칸이 모자라면 위아래로 밀어 아래 RESET 까지 닿는다(스크롤 칸 · 세로 터치 이동 허용)
+    { const m = document.getElementById('mainContentArea'), r = m.querySelector('[data-act="fuelReset"]');
+      m.scrollTop = m.scrollHeight; await wait(30);
+      o.scroll = getComputedStyle(m).overflowY === 'auto' && getComputedStyle(m).touchAction === 'pan-y' && r.getBoundingClientRect().bottom <= m.getBoundingClientRect().bottom + 1;
+      m.scrollTop = 0; }
     // Video Settings
     await open('asys_video');
     o.vHead = document.querySelector('#mainContentArea .gtc-head').textContent;
@@ -45,7 +50,7 @@ export async function run(page, t) {
   t.ok(R.head === 'Fuel Configuration' && R.type0 === 'JET A-1' && R.type1 === 'JET A', `Fuel — Fuel Configuration 화면 · Fuel Type 누르면 바뀐다 (${R.type0} → ${R.type1})`);
   t.ok(R.bar0 && R.eauxOff && R.eauxOn, 'Fuel E-AUX Tank — 녹색 막대(장착) · 끄면 AUX 0 · Fuel 화면에서 EXT AUX 사라짐 · 다시 켜면 1050');
   t.ok(R.ret === '1000LB' && R.endShort, `Return Fuel — ${R.ret} 만큼 빼고 END 를 셈한다`);
-  t.ok(R.sim, '아래 시뮬 연료(훈련용) 칸은 그대로');
+  t.ok(R.sim && R.scroll, '아래 시뮬 연료(훈련용) 칸은 그대로 · 칸이 모자라면 밀어서 RESET 까지 본다');
   t.ok(R.vHead === 'Video Settings' && R.vCh === 'RADAR', 'Video — Video Settings 화면 · Channel RADAR');
   t.eq(R.list.join(','), 'RADAR,DMM,EO/IR,HOIST', 'Channel 을 누르면 RADAR · DMM · EO/IR · HOIST (EXPD 없음)');
   t.ok(R.pickHead === 'Channel Select' && R.vCh2 === 'EO/IR', `채널을 고르면 그 채널 (${R.vCh2})`);

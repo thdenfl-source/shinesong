@@ -2005,7 +2005,9 @@ const SK_MENUS = {
     { lbl: 'Hover<br>Position', on: () => hoverPosOn, act: () => toggleHoverPosition() },
     { lbl: 'CAS' },
     // SIM — 조종간으로 직접 모는 모드(FCP 의 SIM 버튼을 옮겨 왔다 · simModeBtnPress)
-    { lbl: 'SIM', on: () => simModeOn, act: () => simModeBtnPress() },
+    // (절차 훈련판 — 00-edition.js SIM_ENABLED 거짓 — 에서는 빈칸)
+    { lbl: () => (typeof SIM_ENABLED === 'undefined' || SIM_ENABLED) ? 'SIM' : '', on: () => simModeOn,
+      dim: () => typeof SIM_ENABLED !== 'undefined' && !SIM_ENABLED, act: () => { if (typeof SIM_ENABLED === 'undefined' || SIM_ENABLED) simModeBtnPress(); } },
   ],
   // 그림 6 — PFD 지도 선택
   MAPSET: [

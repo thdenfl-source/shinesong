@@ -12,7 +12,19 @@
   Flightsimulator 에는 SIM 모드가 없다.
 - 요청한 기능이 이 저장소에 없으면 Flightsimulator 에 있는지 확인하고 그쪽에서 작업한다
   (사용자가 저장소를 잘못 짚어 말하는 일이 있다).
-- 두 저장소에 다 있는 기능(SHIP·PFD·CDU 등)이면 어느 쪽에 반영할지 사용자에게 묻는다.
+- (아래 '두 저장소는 같은 코드다' — 이제는 shinesong 에서 고쳐 Flightsimulator 로 복사한다.)
+
+## 두 저장소는 같은 코드다 — shinesong 에서만 고친다
+- 앱 파일(js · index.html · sw.js · tests · data · vendor · 그림)은 **두 저장소가 같다.** 판(edition)만 다르다:
+  `js/00-edition.js` 가 주소에 `flightsimulator` 가 들어 있으면 **절차 훈련판(proc)** — SIM 모드를 켤 수 없고
+  SIM 조작 버튼(3D 창 SIM · 회전익 특성 · ASE · 엔진 · SOUND · STICK · GYRO, 지도 창 SIM, PFD 소프트키 SIM)을 감춘다.
+  그 밖(PFD · FCP · CDU · 지도 · 3D · 상부/하부 콘솔 · SYSTEM 창 · 무전기 · 연료 · AFCS)은 모두 같다.
+- **고칠 일은 shinesong 에서 한다.** 끝나면 Flightsimulator 로 그대로 복사해 PR 을 하나 더 올린다
+  (`.git` · `.github` · `.nojekyll` · `.gitignore` · `CLAUDE.md` · `node_modules` 만 그 저장소 것을 둔다).
+- SIM 기능은 SIM 파일(14-simmode · 15-heli3d · 16-sound) 안에 두고, 다른 파일에서 부를 때는 '있으면 부른다'로 짠다.
+  SIM 에서만 쓰는 새 버튼은 `index.html` 의 `html.ed-proc …{ display:none }` 목록에 넣는다.
+- 검사: Flightsimulator 경로(또는 `EDITION=proc`)에서는 SIM 을 켜는 검사 파일(toggleSimMode(true) · SIM_SETUP ·
+  simModeOn = true)을 건너뛴다. 절차 훈련판을 shinesong 에서 미리 보려면 `EDITION=proc node tests/run.mjs` · 주소 `?edition=proc`.
 
 ## 항상 따를 규칙
 

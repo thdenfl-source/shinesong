@@ -4,7 +4,8 @@
 //          node tests/run.mjs 홀딩 NAV   (이름으로 일부만)
 // 필요:   npm i -D playwright   (라이브러리는 vendor/ 사본을 그대로 쓴다)
 import { chromium } from 'playwright';
-import { openApp, buildEnv } from './lib/env.mjs';
+import { openApp, buildEnv, EDITION } from './lib/env.mjs';
+import fs from 'node:fs';
 import * as smoke from './cases/smoke.mjs';
 import * as coords from './cases/coords.mjs';
 import * as chartcal from './cases/chartcal.mjs';
@@ -64,10 +65,23 @@ import * as npx138 from './cases/npx138.mjs';
 import * as fuelsys from './cases/fuel.mjs';
 import * as afcslink from './cases/afcs.mjs';
 import * as gtc from './cases/gtc.mjs';
+import * as edition from './cases/edition.mjs';
 
-const SUITES0 = [smoke, actions, coords, chartcal, hold, nav, gspd, dialog, chartview, procdata, simspd, tascalc, brg, fpwpt, maprot, map3d, dmearc, dme, fporder, wptcrs, brglbl, directto, crssync, locsta, susp, layout, gslope, joystick, geosearch, simmode, ga, tdown, bbtrim, physics2, hocas, joycenter, ship3d, heli3d, ralt, startapt, hdgref, sound, view3d, runway, apptune, lock, popout, upper, system, lower, c5000, npx138, fuelsys, afcslink, gtc, pfdmsg, fcpsimple, pfdsk, cdulive];
+const SUITES0 = [smoke, actions, coords, chartcal, hold, nav, gspd, dialog, chartview, procdata, simspd, tascalc, brg, fpwpt, maprot, map3d, dmearc, dme, fporder, wptcrs, brglbl, directto, crssync, locsta, susp, layout, gslope, joystick, geosearch, simmode, ga, tdown, bbtrim, physics2, hocas, joycenter, ship3d, heli3d, ralt, startapt, hdgref, sound, view3d, runway, apptune, lock, popout, upper, system, lower, c5000, npx138, fuelsys, afcslink, gtc, edition, pfdmsg, fcpsimple, pfdsk, cdulive];
 // 여러 묶음으로 나뉜 검사(suites 를 내보내는 파일)는 펼친다
-const SUITES = SUITES0.flatMap(m => m.suites ? m.suites : [m]);
+// 절차 훈련판(EDITION=proc — Flightsimulator)에서는 SIM 모드를 쓰는 묶음을 건너뛴다(그 판에는 SIM 이 없다)
+// — SIM 을 켜는 검사(toggleSimMode(true) · SIM_SETUP · simModeOn = true)가 든 파일은 통째로
+const _simFiles = new Set();
+if (EDITION === 'proc') {
+  const dir = new URL('./cases/', import.meta.url);
+  for (const f of fs.readdirSync(dir)) {
+    if (!f.endsWith('.mjs')) continue;
+    const src = fs.readFileSync(new URL(f, dir), 'utf8');
+    if (/toggleSimMode\(\s*true|SIM_SETUP|simModeOn\s*=\s*true/.test(src)) _simFiles.add(await import(new URL(f, dir).href));
+  }
+}
+const SUITES = SUITES0.filter(m => !_simFiles.has(m)).flatMap(m => m.suites ? m.suites : [m]);
+if (_simFiles.size) console.log(`절차 훈련판 — SIM 을 쓰는 검사 파일 ${_simFiles.size}개는 건너뜁니다`);
 const filter = process.argv.slice(2);
 
 function makeT() {

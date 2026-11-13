@@ -162,7 +162,7 @@
     const dpip = host.documentPictureInPicture;
     if (!dpip || typeof dpip.requestWindow !== 'function') {
       try { uiAlert('이 브라우저는 늘 위에 뜨는 창(Top)을 지원하지 않습니다 — 크롬·엣지 최신 판에서 쓸 수 있습니다.'); }
-      catch (e) { alert('Top 창을 지원하지 않는 브라우저입니다.'); }
+      catch (e) { _swallow(e); }   // (앱 대화창이 없을 때 — 기본 alert 는 쓰지 않는다)
       return false;
     }
     const panel = cur ? cur.panel : gid(PANEL_ID[side]);
@@ -216,7 +216,7 @@
     const win = W.open('', 'shinesong-' + side, feat);
     if (!win) {
       try { uiAlert('새 창이 막혔습니다 — 브라우저 주소창 오른쪽의 팝업 차단을 이 사이트에 허용해 주세요.'); }
-      catch (e) { alert('팝업이 차단되었습니다.'); }
+      catch (e) { _swallow(e); }   // (앱 대화창이 없을 때 — 기본 alert 는 쓰지 않는다)
       return false;
     }
     _popDocSetup(win, side, true);

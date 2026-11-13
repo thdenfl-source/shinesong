@@ -1363,6 +1363,8 @@ function acPlaceOnGround() {
 }
 
 function toggleSimMode(on, opt) {
+  // 절차 훈련판(00-edition.js — Flightsimulator)에서는 SIM 모드를 켜지 않는다
+  if (typeof SIM_ENABLED !== 'undefined' && !SIM_ENABLED && (on === undefined ? !simModeOn : !!on)) return;
   simModeOn = (on === undefined) ? !simModeOn : !!on;
   try { if (typeof simCamTx !== 'undefined') simCamTx = null; } catch (e) { _swallow(e); }   // 시점 전환 효과는 SIM 을 켜고 끌 때 거둔다
   gaOn = false; vsModeOn = false; tdOn = false; try { updateGaBtn(); } catch (e) { _swallow(e); }
