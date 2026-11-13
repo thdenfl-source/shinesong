@@ -1632,7 +1632,7 @@ let rnp     = 1.0;     // RNP value for FMS CDI scale
 //   기수 7.5° 면 35kt 까지만 준다. 수평 파워로 받쳐야 그 아래로(호버까지) 준다(14-simmode.js).
 // SIM 모드의 조종(14-simmode.js)과 AFCS 의 자동 자세가 같은 식을 쓴다.
 const PITCH_SPD = [[-10, 140], [0, 120], [2, 100], [6, 0]];                 // 수평 비행 기준 · 호버 6°
-const PITCH_SPD_DESC = [[-10, 140], [0, 120], [2, 100], [7.5, 35], [9, 0]];  // 감속 강하 — 7.5° 에서 35kt
+const PITCH_SPD_DESC = [[-10, 140], [0, 120], [2, 100], [4, 50], [7.5, 35], [9, 0]];   // 감속 강하 — 4° 까지는 수평과 같고, 4~7.5° 는 50 → 35kt(접근 감속)
 //   // [자세°(기수 올림 +), 속도 kt]
 function _pitchSeg(i, T = PITCH_SPD) {
   const a = T[i], b = T[i + 1];
