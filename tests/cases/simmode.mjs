@@ -2305,7 +2305,7 @@ async function part5(page, t) {
         const agl = S.alt - simGroundFt();
         if (!flared && agl <= flareAt) { flared = true; simTrim.pitch = -pit; o.flare = agl; }
         if (flared && cush && !cushed && agl <= cush) {
-          cushed = true; simTrim.pitch = -5; _ax(3, ((hoverPowerTq() - 8) / SIM_LEVER_TOP) * 2 - 1);
+          cushed = true; simTrim.pitch = -pitchFromSpd(70); _ax(3, ((hoverPowerTq() - 8) / SIM_LEVER_TOP) * 2 - 1);   // 기수를 고른다 — 70kt 자세(종전 5°, 지금 표로 약 3.2°)
         }
         // 지면효과에 받쳐 뜬 채 머물지 않게, 땅 가까이서 레버를 조금 더 내려 내려앉는다(전진 속도에서는 드는 토크가 작다)
         if (cushed && !settled && agl <= cush - 8) { settled = true; _ax(3, ((tqRequired() - 20) / SIM_LEVER_TOP) * 2 - 1); }   // (감속 강하 자세-속도로 속도가 버티므로 레버를 넉넉히)
