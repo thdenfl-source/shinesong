@@ -60,8 +60,8 @@ if (!IOS_MODE) setInterval(iosSend, 500);
 function openIos() {
   const q = new URLSearchParams(location.search); q.set('ios', '1');
   try { if (typeof AC_TYPE !== 'undefined') q.set('ac', AC_TYPE); } catch (e) { _swallow(e); }
-  const w = window.open(location.pathname + '?' + q.toString(), 'shinesong-ios', 'width=560,height=820');
-  if (!w) { try { uiToast('새 창이 막혔습니다 — 브라우저의 팝업 허용을 켜 주십시오', 'warn'); } catch (e) { _swallow(e); } }
+  // 홈 화면 앱(PWA)에서 직접 새 창을 열면 앱 창이 덮인다 — 앵커로 바깥 탭에 연다(00-ui.js uiOpenExternal)
+  uiOpenExternal(location.pathname + '?' + q.toString());
 }
 
 // ── 교관 창(?ios=1) ──

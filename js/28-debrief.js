@@ -402,9 +402,9 @@ function fdrReport() {
     <div class="imgs"><img src="${trk}" alt="항적"><img src="${ch}" alt="그래프"></div>
     <h3>사건</h3><div class="ev">${fdr.ev.map(e => `<div class="${e.kind}">${_hms(e.t)} — ${esc(e.txt)}</div>`).join('') || '없음'}</div>
     <p style="color:#777;margin-top:14px">서명(교관) ______________________ &nbsp; 서명(교육생) ______________________</p></body></html>`;
-  const win = window.open('', 'fdr-report', 'width=900,height=1000');
-  if (!win) { try { uiToast('새 창이 막혔습니다 — 팝업 허용을 켜 주십시오', 'warn'); } catch (e) { _swallow(e); } return html; }
-  win.document.open(); win.document.write(html); win.document.close();
+  // 새 탭에 연다 — 홈 화면 앱(PWA)에서도 앱 창을 덮지 않게 앵커로(00-ui.js uiOpenExternal)
+  const url = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
+  uiOpenExternal(url); setTimeout(() => URL.revokeObjectURL(url), 60000);
   return html;
 }
 

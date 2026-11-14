@@ -118,8 +118,8 @@ export async function run(page, t) {
     fdrClear(); fdr.on = true; for (let i = 0; i < 12; i++) { S.alt = 1000 + i * 10; fdrStep(1); }
     o.saved = fdrSaveFlight('검사 비행'); fdrClear(); o.empty = fdr.rows.length;
     o.loaded = fdrLoadFlight(0) && fdr.rows.length === 12 && !fdr.on && Math.abs(fdr.rows[11].alt - 1110) < 0.5;
-    const ow = window.open; let opened = null; window.open = () => { opened = { document: { open() {}, write(h) { opened.h = h; }, close() {} } }; return opened; };
-    const html = fdrReport(); window.open = ow; o.report = !!opened && /비행 강평 보고서/.test(html) && /사건/.test(html) && /<img/.test(html);
+    const ox = uiOpenExternal; let opened = null; uiOpenExternal = u => { opened = u; };
+    const html = fdrReport(); uiOpenExternal = ox; o.report = /^blob:/.test(opened || '') && /비행 강평 보고서/.test(html) && /사건/.test(html) && /<img/.test(html);
     dbfClose();
     if (keep === null) localStorage.removeItem('fdrSaved'); else localStorage.setItem('fdrSaved', keep);
     // 도움말
