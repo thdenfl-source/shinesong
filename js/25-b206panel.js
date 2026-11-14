@@ -466,6 +466,34 @@ function b206RoomH(canvas, H, ctrlH) {
   } catch (e) { /* 재지 못하면 FCP 높이로 */ }
   return Math.max(40, room);
 }
+// ── 3D 화면에 겹친 계기(계기 ON · 07-sim.js pfdOverlayDraw) — 비행에 꼭 필요한 다섯만 ──
+//   왼쪽 가운데 TORQUE · 위 가운데 자세계(+ 아래 볼) · 위 오른쪽 고도계 · 아래 가운데 방향지시계(DG) · 아래 오른쪽 승강계
+//   그림 좌표 600×420(B206_OV_W×B206_OV_H) — 칸에 맞춰 줄인다. 판은 살짝 비쳐 3D 가 보인다
+const B206_OV_W = 600, B206_OV_H = 420;
+function b206OverlayDraw(g, x, y, w, h) {
+  if (!(w > 40 && h > 40)) return;
+  const v = b206Vals(), rate = _b206TurnRate(v.hdg);
+  g.save();
+  g.clearRect(x, y, w, h);
+  const k = Math.min(w / B206_OV_W, h / B206_OV_H);
+  g.translate(x + (w - B206_OV_W * k) / 2, y + (h - B206_OV_H * k) / 2); g.scale(k, k);
+  g.fillStyle = 'rgba(127,138,147,0.82)';                               // 판(살짝 비침)
+  g.beginPath(); g.roundRect ? g.roundRect(0, 0, B206_OV_W, B206_OV_H, 14) : g.rect(0, 0, B206_OV_W, B206_OV_H); g.fill();
+  const R = 88;
+  b206RoundGauge(g, 104, 210, R, { lo: 0, hi: 120, maj: 10, min: 5, lab: q => q % 20 === 0 ? String(q) : null, fs: R * 0.17,
+    bands: [[0, B206_LIM.tqCont, B206_COL.green], [B206_LIM.tqCont, B206_LIM.tqMax, B206_COL.yellow]], redline: [B206_LIM.tqMax], val: _cl(v.tq, 0, 125), title: ['TORQUE', 'PERCENT'] });
+  b206Attitude(g, 300, 108, R, v.pit, v.bnk);
+  // 볼 — 자세계 아래(미끄럼 · 외활)
+  const by = 214, bw = 46;
+  g.save(); g.fillStyle = '#d8d0b0'; g.beginPath(); g.ellipse(300, by, bw, 9, 0, 0, 7); g.fill();
+  g.strokeStyle = '#000'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(291, by - 9); g.lineTo(291, by + 9); g.moveTo(309, by - 9); g.lineTo(309, by + 9); g.stroke();
+  g.fillStyle = '#111'; g.beginPath(); g.arc(300 + _cl(v.slip, -1, 1) * (bw - 8), by, 7.5, 0, 7); g.fill(); g.restore();
+  b206Altimeter(g, 496, 108, R, v.alt, v.baro);
+  b206Dg(g, 300, 318, R * 0.98, v.hdg, v.hdgBug);
+  b206Vsi(g, 496, 318, R * 0.98, v.vs);
+  g.restore();
+  return rate;
+}
 // 아무 캔버스에 판을 가득 그린다(Cockpit 모드 계기판 자리 · 팝아웃)
 function b206DrawTo(canvas) {
   const g = canvas.getContext('2d');

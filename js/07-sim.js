@@ -1567,8 +1567,12 @@ function pfdOvSize(d) {
 function pfdOverlaySync() {
   const ov = document.getElementById('pfd-ov');
   if (!ov) return false;
-  const w = `${(25 * pfdOvScale).toFixed(1)}%`, h = `${Math.min(92, 60 * pfdOvScale).toFixed(1)}%`;
-  if (ov.style.width !== w) { ov.style.width = w; ov.style.height = h; }
+  // Bell 206 — 다섯 계기 판(600×420 · 25-b206panel.js b206OverlayDraw)에 맞춰 가로로 넓게, 높이는 그 비율로
+  const b206 = typeof acIs === 'function' && acIs('b206');
+  const w = b206 ? `${(34 * pfdOvScale).toFixed(1)}%` : `${(25 * pfdOvScale).toFixed(1)}%`;
+  let h = `${Math.min(92, 60 * pfdOvScale).toFixed(1)}%`;
+  if (b206) { const pw = ov.parentElement ? ov.parentElement.clientWidth : 0; if (pw > 0) h = `${Math.round(pw * parseFloat(w) / 100 * 420 / 600)}px`; }
+  if (ov.style.width !== w || ov.style.height !== h) { ov.style.width = w; ov.style.height = h; }
   const lb = document.getElementById('pfdov-pct');
   if (lb) { const t = `${Math.round(pfdOvScale * 100)}%`; if (lb.textContent !== t) lb.textContent = t; }
   // 외부 시점(EXT)에서도 계기 ON 이면 띄운다(모형이 가리면 계기 OFF 나 EXT 카메라 버튼으로 비켜 본다)
