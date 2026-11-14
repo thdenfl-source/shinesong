@@ -1009,10 +1009,15 @@ function applyPanels() {
   const sysMapHost = () => { try { return (typeof sysMapSlot === 'function' && (ckC('sysp', 'pop') || hostOf0('sysp'))) ? sysMapSlot() : null; } catch (e) { return null; } };
   // SIM 3D 조종석(15-heli3d.js) — 콘솔 팝아웃(LowerC · UpperC)은 무엇보다 먼저, 조종석 안의 작은 콘솔은 다른 창에 없을 때만
   const ckC = (k, ph) => { try { return typeof ckpitConsoleHost === 'function' ? ckpitConsoleHost(k, ph) : null; } catch (e) { return null; } };
-  // 콘솔(UPPER · LOWER)은 단독 화면(Cockpit Mode 등)에서 접힌 창(display:none)을 그릇으로 삼지 않는다 — 그 창 탭이
-  // LOWER 였으면 하부 콘솔이 보이지 않는 창에 남아 조종석 안의 작은 하부 콘솔 칸이 검게 비었다
-  const hostCon = k => { const h = hostOf0(k); return ((k === 'ovhd' || k === 'lcon') && h && h.style.display === 'none') ? null : h; };
-  const hostOf = k => ckC(k, 'pop') || hostCon(k) || (k === 'map' ? sysMapHost() : null) || ckC(k, 'mini');
+  // 콘솔(UPPER · LOWER)은 단독 화면(Cockpit Mode 등)에서 보이지 않는 창을 그릇으로 삼지 않는다 — 그 창 탭이 UPPER · LOWER 였으면
+  // 콘솔이 보이지 않는 창에 남아 조종석 안의 작은 콘솔 칸이 검게 비었다. 창이 접혔거나(display:none) #app 째 숨었으면(화면에 자리가 없다) 조종석 칸이 먼저
+  const _vis = el => !!el && el.style.display !== 'none' && el.getClientRects().length > 0;
+  const hostOf = k => {
+    const pop = ckC(k, 'pop'); if (pop) return pop;
+    let h = hostOf0(k);
+    if ((k === 'ovhd' || k === 'lcon') && h && [L, M, R, B].includes(h) && !_vis(h)) h = null;
+    return h || (k === 'map' ? sysMapHost() : null) || ckC(k, 'mini');
+  };
   ['pfd', 'map', 'cdu', 'm3d', 'plan', 'ovhd', 'sysp', 'lcon'].forEach(k => {
     const el = document.getElementById(wrapIds[k]);
     if (!el) return;
