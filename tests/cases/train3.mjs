@@ -53,6 +53,7 @@ export async function run(page, t) {
     window.sndOnGround = () => false;
     const info = AIRFIELD_INFO.find(x => x.code === 'SS'), twr = parseFloat(info.twr);
     o.fac = atcFacility(twr); o.none = atcFacility(129.95);
+    _atcTrack.length = 0; atcTwr.phase = null;                       // 앞 검사에서 옮긴 자리(2초 간격 기록)가 '멀어짐'으로 읽히지 않게
     o.txt = atcReply(o.fac);
     window.sndOnGround = () => true; const onRw0 = window.atcOnRunway; atcOnRunway = () => true; o.txtGnd = atcReply(o.fac); atcOnRunway = onRw0;
     // 타워 교신 흐름 — 활주로 밖(지상 활주 요청) · 활주로 위(이륙) · 관제권 떠남 · 접근(inbound) · 5마일 final(착륙 허가)
