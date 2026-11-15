@@ -66,4 +66,6 @@
   **같은 번호로 함께** 올린다 — `tests/check-swver.mjs` 가 둘이 다르면 실패시킨다.
   (배포 직후 새 index.html 이 브라우저 캐시의 옛 JS 와 섞여 버튼이 듣지 않는 일을 막는다)
   예: `sed -i "s/vfr-flight-v500/vfr-flight-v501/" sw.js && sed -i 's/\.js?v=500"/.js?v=501"/g' index.html`
+  또는 `node tools/bump-cache.mjs`(하나 올림 · 둘을 함께).
+- Flightsimulator 로 복사: `node tools/sync-fs.mjs ../flightsimulator`(미리보기 `--dry`) — 그 저장소의 .git · .github · CLAUDE.md 등은 그대로 둔다.
 
