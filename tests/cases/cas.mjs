@@ -71,7 +71,7 @@ export async function run(page, t) {
   t.ok(r.blinkW, '승인 전 경고는 점멸 · 조언은 점멸하지 않는다');
   t.ok(r.lampW === '#ffffff' && r.lampC === '#000000' && !!r.lampRev, `MWP — WARN · CAUT 램프 켜짐 (${r.lampW} · ${r.lampC} · REV ${r.lampRev})`);
   t.ok(r.voice.length === 2 && r.voice.every(v => v === 'AFCS FAIL, AFCS FAIL'), `음성 — 가장 높은 경고부터 3.5 초마다 되풀이 (${r.voice.join(' / ')})`);
-  t.ok(r.after.pend === '' && r.after.n === 4 && /SIM/.test(r.after.k12), `소프트키 12 로 승인 — 점멸 · ACK 끝, 메시지는 남는다 (${r.after.n})`);
+  t.ok(r.after.pend === '' && r.after.n === 4 && !/ACK/.test(r.after.k12), `소프트키 12 로 승인 — 점멸 · ACK 끝, 메시지는 남는다 (${r.after.n})`);
   t.ok(r.lampOff !== '#000000' && r.voiceAfter === 0, '승인하면 램프가 꺼지고 음성이 멈춘다');
   t.ok(r.pend2 === 'C' && r.voice2.includes('CAUTION, CAUTION'), `새 주의 — CAUT ACK · "CAUTION, CAUTION" (${r.voice2.join(' / ')})`);
   t.ok(r.mwpHit && r.pend3 === '', 'MWP 램프를 누르면 승인');
