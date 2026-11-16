@@ -723,6 +723,8 @@ function _sysLeftStrip(g, F) {
   _sysBox(g, 114, 20, 104, 152, 'NG', '%');
   _sysBars(g, 118, 24, 96, 145, ['NG1', 'NG2'], [P.e1.ng.toFixed(1), P.e2.ng.toFixed(1)], [P.e1.ng / 110, P.e2.ng / 110],
     [[0.70, '#ff3030'], [0.66, '#ffcc00']]);
+  // 시동 중 — NG 막대 바깥쪽에 세로로 START(1번 왼쪽 · 2번 오른쪽)
+  try { if (typeof engStarting === 'function') { if (engStarting(1)) drawStartVert(g, 125, 70, 16, 13); if (engStarting(2)) drawStartVert(g, 207, 70, 16, 13); } } catch (e) { _swallow(e); }
   // EOT · EOP · MGB
   const eot = D.eot, eop = D.eop;
   _sysBox(g, 5, 188, 68, 152, 'EOT', '°C');

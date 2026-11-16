@@ -1231,9 +1231,21 @@
             `<div class="tcas-col" style="justify-content:flex-start;padding-top:22px;gap:12px;">` +
             _tcBtn(false, 'Active', 'tcasCduXpdr', [], xpdrState.active.replace('XPDR', 'XPDR '), 44) +
             _tcBtn(xpdrState.adsb, 'ADS-B TX', 'toggleAdsb', undefined, '', 44) +
-            _tcBtn(false, 'Flight ID', '', undefined, xpdrState.flightId, 44) +
+            _tcBtn(fidEdit, 'Flight ID', 'fidEditToggle', undefined, _fidHtml(), 44) +
             _tcBtn(false, 'Code', 'switchMode', ['XPDR_CODE'], xpdrState.code, 44) + `</div></div>`;
         footer.innerHTML = cduFooter("switchMode('TCAS')");
+    }
+    // Flight ID — 청록 Datafield: 누르면 오른쪽 노브로 고친다(큰 노브 커서 · 작은 노브 글자 K~Z → 0~9 → A~J · 누름 Enter)
+    let fidEdit = false, fidBuf = '', fidCur = 0;
+    const FID_LEN = 8, FID_CH = [' ', ...'KLMNOPQRSTUVWXYZ', ...'0123456789', ...'ABCDEFGHIJ'];
+    function _fidHtml() {
+        if (!fidEdit) return xpdrState.flightId;
+        return [...fidBuf].map((c, i) => i === fidCur ? `<span class="knob-cur" style="background:#2fe0e0;color:#000;text-decoration:underline">${c === ' ' ? '_' : c}</span>` : (c === ' ' ? '&nbsp;' : c)).join('');
+    }
+    function fidEditToggle() {
+        fidEdit = !fidEdit;
+        if (fidEdit) { fidBuf = (xpdrState.flightId + ' '.repeat(FID_LEN)).slice(0, FID_LEN); fidCur = 0; }
+        renderContent();
     }
     function tcasCduMode(m) { setXpdrMode(m); }
     function tcasCduSet(k, v) { try { tcasSet(k, v); } catch (e) { _swallow(e); } renderContent(); }
@@ -2569,6 +2581,10 @@
         UNI('dist', '거리', [{v:'NM',t:'NM'},   {v:'km',t:'km'}],    unitDist) +
         UNI('spd',  '속도', [{v:'kt',t:'kt'},   {v:'kmh',t:'km/h'}], unitSpd) +
         UNI('temp', '온도', [{v:'C',t:'°C'},    {v:'F',t:'°F'}],     unitTemp) +
+        `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;margin-bottom:5px;border:1px solid #1e2630;border-radius:5px;background:#0a1116;">` +
+          `<div style="color:#cdd6df;font-size:12px;font-weight:bold;">COM Channel Spacing</div><div style="display:flex;gap:4px;">` +
+          [['25', '25 kHz'], ['8.33', '8.33 kHz']].map(([v, t]) => `<div data-act="setComSpacing" data-arg='["${v}"]' style="cursor:pointer;padding:4px 10px;border-radius:4px;font-size:11px;font-weight:bold;` +
+            `border:1px solid ${comSpacing === v ? '#00e5ff' : '#3a4653'};background:${comSpacing === v ? '#00303c' : '#161c23'};color:${comSpacing === v ? '#00e5ff' : '#8a97a5'};">${t}</div>`).join('') + `</div></div>` +
         `<div style="color:#4a5563;font-size:9px;margin:-1px 0 8px 2px;line-height:1.4;">` +
           `PFD 계기(속도·고도·CRHT·VSI·BRG)와 지도·T-CUT·VNAV·INFO·경보에 모두 적용됩니다.<br>` +
           `고도를 m로 두면 수직속도(VSI)는 m/s로 표시됩니다.</div>` +
@@ -3140,6 +3156,15 @@
     //     NAV 탭 — NAV1 · NAV2 활성 주파수(이 앱의 NAV 에는 대기가 없다) 1 MHz · 50 kHz, 누름 NAV1 ⇄ NAV2
     //     데이터 입력 화면(COM 대기 입력 · PERF 입력 · XPDR 코드) — 큰 노브 커서 · 작은 노브 숫자 · 누름 Enter
     let knobTune = 'com1', knobNav = 'nav1', knobCur = -1;
+    // COM 채널 간격 — 25 kHz(118.000~136.975 · 760채널 · XXX.XX 로 시현 — .025 → .02) · 8.33 kHz(118.000~136.990 · 2,280채널 · XXX.XXX)
+    //   (FLM 7.15 — Utilities > Setup > Avionics Settings > System > COM Channel Spacing · CDU Setting 에 둔다)
+    let comSpacing = '25';
+    try { if (localStorage.getItem('comSpacing') === '8.33') comSpacing = '8.33'; } catch (e) { _swallow(e); }
+    function setComSpacing(v) { comSpacing = v === '8.33' ? '8.33' : '25'; try { localStorage.setItem('comSpacing', comSpacing); } catch (e) { _swallow(e); } renderContent(); }
+    const fmtCom = f => comSpacing === '25' ? String(f).replace(/^(\d+\.\d\d)\d$/, '$1') : String(f);
+    // 8.33 kHz 채널 이름 — 25 kHz 칸마다 .005 · .010 · .015(+25 · 50 · 75) → 1 MHz 에 120 · 136.990 까지
+    const COM833 = []; for (let h = 0; h < 1000; h += 25) [5, 10, 15].forEach(o => COM833.push(h + o));
+    window.cduComFmt = fmtCom;
     const knobSq = { com1: true, com2: true, uvhf: true }, knobNavId = { nav1: false, nav2: false };
     const _knobMicVol = () => ({ 'COM1': 'com1', 'COM2': 'com2', 'U/VHF': 'uvhf', 'VHF-FM': 'vhffm', 'HF': 'hf' })[micSelected] || 'com1';
     const _knobNavCtx = () => currentMode === 'AUDIO' && audioTab === 'NAV';
@@ -3170,7 +3195,15 @@
         let [mhz, khz] = String(freqs[id].stb).split('.');
         mhz = +mhz; khz = Math.round(+('0.' + (khz || '0')) * 1000);
         if (big) mhz = 118 + ((mhz - 118 + d) % 19 + 19) % 19;          // 118 ~ 136 MHz
-        else khz = ((khz + 25 * d) % 1000 + 1000) % 1000;              // 25 kHz
+        else if (comSpacing === '8.33') {                              // 8.33 kHz 채널 — 가장 가까운 채널에서 한 칸
+            const n = COM833.length, at = COM833.indexOf(khz);
+            let i;
+            if (at >= 0) i = at + d;                                    // 채널 위면 한 칸
+            else if (d > 0) { i = COM833.findIndex(c => c > khz); if (i < 0) i = n; }   // 채널 사이면 그쪽 첫 채널
+            else { i = -1; COM833.forEach((c, j) => { if (c < khz) i = j; }); }
+            khz = COM833[(i % n + n) % n];
+        }
+        else khz = ((Math.round(khz / 25) * 25 + 25 * d) % 1000 + 1000) % 1000;              // 25 kHz
         freqs[id].stb = mhz + '.' + String(khz).padStart(3, '0');
         updateHeaderUI();
         const el = document.getElementById(`h-${id}-stb`);
@@ -3205,6 +3238,11 @@
         },
         // 오른쪽 노브 — big: 큰 노브, d: ±1
         tune(big, d) {
+            if (currentMode === 'TCAS_XPDR' && fidEdit) {
+                if (big) fidCur = Math.max(0, Math.min(FID_LEN - 1, fidCur + d));
+                else { const a = fidBuf.split(''), i = FID_CH.indexOf(a[fidCur]); a[fidCur] = FID_CH[((i < 0 ? 0 : i) + d + FID_CH.length) % FID_CH.length]; fidBuf = a.join(''); }
+                renderContent(); return;
+            }
             if (_knobEntry()) {
                 const buf = _knobBuf(); if (knobCur < 0) knobCur = Math.max(0, buf.length - 1);
                 if (big) { knobCur = Math.max(0, Math.min(Math.min(buf.length, _knobMax() - 1), knobCur + d)); if (!hasStartedTyping) _knobBufSet(buf); renderContent(); return; }
@@ -3218,6 +3256,7 @@
             _knobComStep(knobTune, big, d);
         },
         push() {
+            if (currentMode === 'TCAS_XPDR' && fidEdit) { xpdrState.flightId = fidBuf.replace(/\s+$/, '') || xpdrState.flightId; fidEdit = false; renderContent(); return; }
             if (_knobEntry()) {
                 knobCur = -1;
                 if (currentMode === 'XPDR_CODE') confirmXpdr(); else if (currentMode === 'PERF_INPUT') confirmPerfInput(); else confirmInput();
@@ -3234,12 +3273,12 @@
         labels() {
             const nav = _knobNavCtx(), vid = nav ? knobNav : _knobMicVol();
             const mid = [`${vid.toUpperCase()} Volum`, `<b>${volumes[vid] ?? 100}%</b>`, nav ? `Push:ID ${knobNavId[vid] ? 'ON' : 'OFF'}` : `Push:Squelch ${(knobSq[vid] ?? true) ? 'ON' : 'OFF'}`];
-            const right = _knobEntry() ? ['Data Entry', 'Push:Enter']
+            const right = (_knobEntry() || (currentMode === 'TCAS_XPDR' && fidEdit)) ? ['Data Entry', 'Push:Enter']
                         : nav ? [`${knobNav.toUpperCase()} FREQ`, `<b>${freqs[knobNav].act}</b>`, 'Push:1-2']
-                        : [`${knobTune.toUpperCase()} FREQ`, `<b>${freqs[knobTune].stb}</b>`, 'Push:1-2 Hold:↕'];
+                        : [`${knobTune.toUpperCase()} FREQ`, `<b>${fmtCom(freqs[knobTune].stb)}</b>`, 'Push:1-2 Hold:↕'];
             return { mid, right };
         },
-        state: () => ({ mode: currentMode, tune: knobTune, nav: knobNav, cur: knobCur, sq: { ...knobSq }, navId: { ...knobNavId }, vol: { ...volumes }, freqs: JSON.parse(JSON.stringify(freqs)), xpdr: xpdrState.code, buf: _knobBuf() }),
+        state: () => ({ fid: xpdrState.flightId, fidBuf, fidEdit, spacing: comSpacing, mode: currentMode, tune: knobTune, nav: knobNav, cur: knobCur, sq: { ...knobSq }, navId: { ...knobNavId }, vol: { ...volumes }, freqs: JSON.parse(JSON.stringify(freqs)), xpdr: xpdrState.code, buf: _knobBuf() }),
     };
 
     // --- Render Helpers ---
@@ -3590,10 +3629,10 @@
         if(topMon) topMon.innerText = monText;
 
         if(document.getElementById('h-com1-act')){
-            document.getElementById('h-com1-act').innerText = freqs.com1.act;
-            document.getElementById('h-com1-stb').innerText = freqs.com1.stb;
-            document.getElementById('h-com2-act').innerText = freqs.com2.act;
-            document.getElementById('h-com2-stb').innerText = freqs.com2.stb;
+            document.getElementById('h-com1-act').innerText = fmtCom(freqs.com1.act);
+            document.getElementById('h-com1-stb').innerText = fmtCom(freqs.com1.stb);
+            document.getElementById('h-com2-act').innerText = fmtCom(freqs.com2.act);
+            document.getElementById('h-com2-stb').innerText = fmtCom(freqs.com2.stb);
         }
 
         const xpdrModeElem = document.getElementById('top-xpdr-mode');
@@ -3736,6 +3775,8 @@ switchMode('HOME');
     // data-act 이름 → 실제 함수. 여기 없는 이름을 쓰면 콘솔에 경고가 찍히므로,
     // 예전처럼 버튼이 조용히 죽지 않는다. 복합 동작은 아래에서 합성 액션으로 만든다.
     cduRegister({
+      fidEditToggle,
+      setComSpacing,
       _setToggle,
       joyPick,
       joyUnbind,

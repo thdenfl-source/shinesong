@@ -317,6 +317,13 @@ function _engBox(x, y, w, h, title) {
     ctx.fillText(title, x + w / 2, y + 3);
   }
 }
+// 시동 중인 엔진(36-kuhsys.js fadec — CRANK · IGN) — NG 계기 옆에 세로로 START
+function engStarting(n) { try { const e = typeof fadec !== 'undefined' && fadec.e[n]; return !!e && (e.ph === 'CRANK' || e.ph === 'IGN'); } catch (er) { return false; } }
+function drawStartVert(g, cx, y0, step, fs) {
+  g.save(); g.font = `bold ${fs}px Helvetica Neue, Arial, sans-serif`; g.textAlign = 'center'; g.textBaseline = 'alphabetic'; g.fillStyle = '#ffffff';
+  'START'.split('').forEach((c, i) => g.fillText(c, cx, y0 + fs + i * step));
+  g.restore();
+}
 function drawEnginePanel(x, y, w, h) {
   if (!(w > 60) || !(h > 80)) return;
   const P = engParams();
@@ -336,6 +343,9 @@ function drawEnginePanel(x, y, w, h) {
   };
   num(x + m, 'TGT °C', 'TGT1', 'TGT2', P.e1.tgt, P.e2.tgt, 0);
   num(x + m * 2 + half, 'NG %', 'NG1', 'NG2', P.e1.ng, P.e2.ng, 1);
+  { const bx = x + m * 2 + half, fs = Math.max(6, Math.min(8, (th - 6) / 5.6)), st = fs * 1.1;   // 시동 중 — NG 숫자 옆 세로 START
+    if (engStarting(1)) drawStartVert(ctx, bx + half / 2 - 6, y + 11, st, fs);
+    if (engStarting(2)) drawStartVert(ctx, bx + half / 2 + 6, y + 11, st, fs); }
   // 아래: TQ(엔진마다) · NP1/NR/NP2 막대
   const by = y + 9 + th + 12, bh = h - (by - y) - 4;
   drawTqGauge(x + m, by, half, bh, [P.e1.tq, P.e2.tq]);
