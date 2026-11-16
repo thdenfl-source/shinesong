@@ -3303,6 +3303,16 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
         <li><b>AFCS P FLT TEST</b>: 땅 위 · 유압 · DC 와 함께 <b>AP1 · AP2 OFF</b>(조이스틱이 있으면 사이클릭 · 페달 가운데)여야 시작합니다. 시험 중 다시 누르면 중단.
             결과 — OK · 사소한 결함(한쪽 APM · SEMA2 — 기능 저하 운용) · 중요 결함(두 APM · 한 축 SEMA 둘 — 운용 불가). 결함이 5회면 AFCS 사용 불가(AFCS FAIL).
             AFCS FAIL 이면 130 KIAS 넘으면 IAS 주의. 교관 창 고장: APM1 · APM2 · 피치 SEMA2 · 피치 SEMA 둘(피치 축만 SAS) · COLL LINK(컬렉티브 축만) · GEN1 과전압 · TRU1.</li>
+        <li><b>PERF(Helicopter PERF — FLM 4.9)</b>: CDU PERF 위쪽 <b>Config · Hover · Cruise</b> 탭 · <b>MFD 보기</b>(SYSTEM 창 Helicopter Performance).
+            <ul>
+            <li><b>Config</b>: Gross WT(12,240 ~ 19,200 lb 밖이면 황색) · ENG ANTI ICE · ECS-H(둘 다면 가용 토크 −18%) · TQ-L(D30M · S10M · S2.5M) · Exterior(E-AUX · SRCH LT · EFS · E.HOIST — Drag Factor) · <b>Use Defaults</b>(지금 고도 · 외기).</li>
+            <li><b>Hover</b>: 가용 토크(MTA) · IGE/OGE 요구 토크(MTA 를 넘으면 적색) · Go/No-Go · MAX Gross WT IGE/OGE(AEO · OEI — 지금 무게 이하면 황색).</li>
+            <li><b>Cruise</b>: VNE · MAX END(최소동력 속도) · MAX Range(예비 340 lb 제외) · OEI MAX(120kt 까지) · OEI MIN · MAX ROC. (OEI · 순항은 교범 도표가 그림이라 근사)</li>
+            <li><b>H-V 선도</b>(MFD — 한 엔진 고장 · OEI 2.5분, 19,200 lb): 해면 ISA 0kt 25~210ft → 22kt 25~45ft, 4,000ft ISA+20 은 465ft · 37.5kt 까지(밀도고도로 잇는다). 지금 IAS · 바퀴 높이 점이 회피영역 안이면 적색.</li>
+            </ul></li>
+        <li><b>자리 · CDU1/CDU2 · MFD1~4</b>(CDU Setting 의 '자리'): 기장 — CDU2 · MFD2(PFD) · MFD4(SYSTEM) / 부기장 — CDU1 · MFD1 · MFD3. SYSTEM 창은 지상 전원을 넣으면 <b>HALF</b> 로 시작합니다(EIS 는 늘 왼쪽).
+            <b>MFD 고장</b>(교관 창): MWP <b>REV</b> 램프 — 누르면 2초, 안 누르면 8초 뒤 대체 모드(SYSTEM 고장 → PFD 가 PFD/EIS · PFD 고장 → SYSTEM 창이 PFD 백업). 고장이 풀리면 약 17.5초 뒤 정상.
+            <b>배터리 단독</b>이면 MFD3 · CDU2 가 꺼집니다 — 기장 자리면 CDU 가, 부기장 자리면 SYSTEM 창이 꺼지고 PFD 가 EIS 대체 모드.</li>
         <li><b>HOCAS</b>(CDU <b>Aircraft Systems → HOCAS</b>): 누르면 <b>SYSTEM 창</b>에 HOCAS 화면(<b>Cyclic Stick Position</b> 원 · Co-Pilot/Pilot 의 Cyclic · Collective · Push to talk 표)이 떠 <b>사이클릭(전후·좌우)과 페달</b>이 가운데(중립)인지,
             한쪽으로 얼마나 치우쳤는지 보입니다 — <b>●</b> 지금 조종간 자리(가운데면 초록 · 치우치면 호박색, F/A·L/R %),
             <b>○</b> SIM 에서 트림이 잡고 있는 자리, 아래 막대는 페달입니다.
