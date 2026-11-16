@@ -3281,6 +3281,25 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
             NG 90% 이하로 2분 식히지 않고 끄면 5분 안에 다시 시동하거나 4시간 기다려야 합니다. 건너편이 멎으면 TGT 한계가 951 → 974℃ 로 넓어집니다.
             교관 창 고장: 1번 고온 시동 · AISBV 고착(NG 40% 실속) · FAIL FIX(<span style="color:#ffb000">1 FADEC</span> — 그 고도에서 4,000ft 내려오면 실속) · PWR LIMIT(TQ 85%).
             SYSTEM 창 Engine 화면 맨 아래에 FADEC 단계가 보입니다.</li>
+        <li><b>시동 중 START</b>: 시동 중인 엔진(CRANK · 점화)은 PFD · SYSTEM 의 NG 계기 옆에 세로로 <b>START</b> 가 보입니다.</li>
+        <li><b>CDU 노브 — 더</b>:
+            <ul>
+            <li><b>COM 채널 간격</b>(CDU Setting): 25 kHz(XXX.XX 로 시현 — .025 → .02) · 8.33 kHz(XXX.XXX · .005 · .010 · .015 … 136.990 까지).</li>
+            <li><b>Flight ID 입력</b>(TCAS → Transponder 의 Flight ID 를 누르면 청록 Datafield): 오른쪽 작은 노브 K~Z → 0~9 → A~J, 큰 노브 커서, 누르면 Enter.</li>
+            <li><b>Push:Radar</b>: SYSTEM 창 Video 채널이 RADAR 일 때 CDU 조이스틱을 누르면 레이더 제어(거리 · RDR TX · FREEZE · TILT −15~+15° · GAIN 0~32) — 다시 누르면 닫힘.</li>
+            <li><b>Config Mode</b>: Maintenance → System Maintenance → Restart Options → System to Config Mode. 오른쪽 큰 노브 장 · 작은 노브 항목 · 누름 들어감/나옴(Knobs 장은 노브 입력을 보입니다).</li>
+            </ul></li>
+        <li><b>NAV 예비 주파수</b>(Audio &amp; Radios NAV 탭): 활성 아래 <b>STBY</b> · <b>↕</b> 교환 · <b>DME HOLD</b>(다시 튜닝해도 잡아 둔 국의 거리 — PFD 에 ident 뒤 H).
+            새 활성이 들어오면(입력 · 접근 자동 튜닝) 앞 활성은 예비로 내려갑니다. NAV 탭에서 오른쪽 노브는 예비를 맞추고 1.5초 누르면 교환.
+            ILS/LOC 접근은 CDI 가 FMS 인 채로 15NM 안에서 LOC 진로에 들면 LOC 를 맞춘 NAV 로 자동 전환합니다.</li>
+        <li><b>HOCAS 스위치</b>(조이스틱 배정 — HOCAS 묶음): <b>MEP CTL</b> 4방향으로 DOI(청록 테두리 — PFD → SYSTEM → 지도) · <b>DMS</b> 4방향 + 누름(지도: DIR · VIEW · QUICK · SETUP, VIEW 누르면 2D ⇄ 3D / SYSTEM: 계통 화면 · HALF 판 / PFD: CAS 넘기기) ·
+            컬렉티브 <b>CURSOR</b> X/Y(누르는 동안) · PUSH(기체 자리로) · ENABLE · ▲ 길게(FREEZE). SYSTEM HOCAS 표 Pilot 칸에 지금 값이 보입니다.</li>
+        <li><b>전기 버스</b>: GCU 보호(저 · 과전압 4.5초 · 저주파 4초 · 고주파 2초 — GEN 스위치 OFF→ON 으로 다시), 발전기 하나면 AC-BTC 로 반대 버스까지,
+            두 발전기 없이 APU GEN 만이면 AC · DC NON-ESSENTIAL 차단, TRU 하나 고장이면 DC BTC(<span style="color:#ffb000">n TRU</span>), 둘 다 없으면 <b>배터리 단독</b>(80% 에서 약 50분 · <span style="color:#ffb000">BATT LOW</span>).
+            APU GEN 단독에 비상 유압 펌프 · 윈드실드 · 흡입구 방빙을 함께 2분 넘게 쓰면 경고. SYSTEM Electrical 화면 아래에 버스 상태 · 배터리 남은 시간.</li>
+        <li><b>AFCS P FLT TEST</b>: 땅 위 · 유압 · DC 와 함께 <b>AP1 · AP2 OFF</b>(조이스틱이 있으면 사이클릭 · 페달 가운데)여야 시작합니다. 시험 중 다시 누르면 중단.
+            결과 — OK · 사소한 결함(한쪽 APM · SEMA2 — 기능 저하 운용) · 중요 결함(두 APM · 한 축 SEMA 둘 — 운용 불가). 결함이 5회면 AFCS 사용 불가(AFCS FAIL).
+            AFCS FAIL 이면 130 KIAS 넘으면 IAS 주의. 교관 창 고장: APM1 · APM2 · 피치 SEMA2 · 피치 SEMA 둘(피치 축만 SAS) · COLL LINK(컬렉티브 축만) · GEN1 과전압 · TRU1.</li>
         <li><b>HOCAS</b>(CDU <b>Aircraft Systems → HOCAS</b>): 누르면 <b>SYSTEM 창</b>에 HOCAS 화면(<b>Cyclic Stick Position</b> 원 · Co-Pilot/Pilot 의 Cyclic · Collective · Push to talk 표)이 떠 <b>사이클릭(전후·좌우)과 페달</b>이 가운데(중립)인지,
             한쪽으로 얼마나 치우쳤는지 보입니다 — <b>●</b> 지금 조종간 자리(가운데면 초록 · 치우치면 호박색, F/A·L/R %),
             <b>○</b> SIM 에서 트림이 잡고 있는 자리, 아래 막대는 페달입니다.

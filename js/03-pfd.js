@@ -346,8 +346,8 @@ function drawEnginePanel(x, y, w, h) {
   num(x + m, 'TGT °C', 'TGT1', 'TGT2', P.e1.tgt, P.e2.tgt, 0);
   num(x + m * 2 + half, 'NG %', 'NG1', 'NG2', P.e1.ng, P.e2.ng, 1);
   { const bx = x + m * 2 + half, fs = Math.max(6, Math.min(8, (th - 6) / 5.6)), st = fs * 1.1;   // 시동 중 — NG 숫자 옆 세로 START
-    if (engStarting(1)) drawStartVert(ctx, bx + half / 2 - 6, y + 11, st, fs);
-    if (engStarting(2)) drawStartVert(ctx, bx + half / 2 + 6, y + 11, st, fs); }
+    if (engStarting(1)) drawStartVert(ctx, bx + half / 2 + (engStarting(2) ? -3 : 1), y + 11, st, fs);   // NG1 숫자와 NG2 숫자 사이
+    if (engStarting(2)) drawStartVert(ctx, bx + half / 2 + (engStarting(1) ? 5 : 1), y + 11, st, fs); }
   // 아래: TQ(엔진마다) · NP1/NR/NP2 막대
   const by = y + 9 + th + 12, bh = h - (by - y) - 4;
   drawTqGauge(x + m, by, half, bh, [P.e1.tq, P.e2.tq]);
