@@ -136,6 +136,7 @@ function maintGo(step, arg) {
   _ksRefresh(true);
 }
 function maintBack() {
+  if (maint.step === 'CONFIG') { cfgExit(); return; }
   const back = { SYS_MAINT: 'PASSWORD', LOGGING_STATUS: 'SYS_MAINT', FAULTS_LIST: 'LOGGING_STATUS', CMC_LOG_VIEWER: 'FAULTS_LIST' }[maint.step];
   if (back) maintGo(back);
 }
@@ -368,7 +369,18 @@ function kuhSysInner(id) {
       `<div style="display:flex;gap:6px"><input id="maint-pw" type="password" autocomplete="off" style="flex:1;min-width:0;background:#000;color:#fff;border:1px solid #2fe0e0;font-size:16px;padding:6px">` +
       `${_kBtn('maintPwEnter', undefined, 'Enter', false, 'flex:0 0 70px')}</div>` +
       (maint.err ? `<div style="color:#ff5050;font-size:12px;margin-top:6px">비밀번호가 맞지 않습니다</div>` : '');
-    if (maint.step === 'SYS_MAINT') return back + _kHd('System Maintenance') + `<div style="display:flex;gap:6px">${_kBtn('maintGo', ['LOGGING_STATUS'], 'CMC Logs')}${_kBtn('maintGo', ['PASSWORD'], 'Log Out')}</div>`;
+    if (maint.step === 'SYS_MAINT') return back + _kHd('System Maintenance') + `<div style="display:flex;gap:6px">${_kBtn('maintGo', ['LOGGING_STATUS'], 'CMC Logs')}${_kBtn('maintGo', ['PASSWORD'], 'Log Out')}</div>` +
+      _kHd('Restart Options') + `<div style="display:flex;gap:6px">${_kBtn('cfgEnter', undefined, 'System to Config Mode')}</div>`;
+    if (maint.step === 'CONFIG') {
+      const pg = CFG_PAGES[cfgMode.page];
+      const body = !cfgMode.in
+        ? CFG_PAGES.map((p, i) => `<div style="padding:5px 8px;margin-bottom:2px;border-radius:3px;${i === cfgMode.page ? 'background:#2fe0e0;color:#000;font-weight:bold' : 'color:#cde'}">${p}</div>`).join('')
+        : `<div style="color:#2fe0e0;font-weight:bold;margin-bottom:6px">${pg}</div>` +
+          (pg === 'Knobs' ? _kRow('마지막 노브 입력', cfgMode.last || '—') : '') +
+          [...Array(6).keys()].map(i => `<div style="padding:4px 8px;border-radius:3px;${i === cfgMode.item ? 'background:#16353b;color:#2fe0e0' : 'color:#9ab'}">${pg} · Item ${i + 1}</div>`).join('');
+      return _kHd('Home (Config Mode) — 오른쪽 큰 노브 장 · 작은 노브 항목 · 누름 들어감/나옴') + body +
+        `<div style="display:flex;gap:6px;margin-top:8px">${_kBtn('cfgExit', undefined, 'Exit Config Mode')}</div>`;
+    }
     if (maint.step === 'LOGGING_STATUS') return back + _kHd('CMC Logs — Logging Status') + _kRow('Logging', 'Active', '#3ad13a') + _kRow('MFL 기록', `${maint.mfl.length}건`) +
       `<div style="display:flex;gap:6px;margin-top:8px">${_kBtn('maintGo', ['FAULTS_LIST'], 'Faults List')}</div>`;
     if (maint.step === 'FAULTS_LIST') {
@@ -526,7 +538,7 @@ try {
     setNavRadio = function (navId, freq, id) {
       const r = (typeof navRadios !== 'undefined' && navRadios[navId]) || {}, old = r.freq;
       _snr(navId, freq, id);
-      if (!_navSwapping && freq != null && old != null && Math.abs(parseFloat(old) - parseFloat(r.freq)) >= 0.001) { navStby[navId] = String(old); _navStbySave(); }
+      if (!_navSwapping && freq != null && old != null && Math.abs(parseFloat(old) - parseFloat(r.freq)) >= 0.001) { navStby[navId] = Number(old).toFixed(2); _navStbySave(); }
     };
   }
 } catch (e) { _swallow(e); }
@@ -535,7 +547,7 @@ function navSwap(navId) {
   const old = r.freq, nw = navStby[navId];
   _navSwapping = true;
   try { const v = typeof _resolveVor === 'function' ? _resolveVor(nw, null) : null; setNavRadio(navId, nw, v ? v.id : null); } finally { _navSwapping = false; }
-  navStby[navId] = String(old); _navStbySave();
+  navStby[navId] = Number(old).toFixed(2); _navStbySave();
   try { if (typeof cduRerender === 'function') cduRerender(); } catch (e) { _swallow(e); }
 }
 function navStbyStep(navId, big, d) {
@@ -613,6 +625,10 @@ function hocasCursor(op, dx, dy) {
   if (op === 'push') { knobPtr.x = 0; knobPtr.y = 0; try { leafMap.panTo([S.lat, S.lon], { animate: false }); } catch (e) { _swallow(e); } knobPtrDraw(); return; }
   if (op === 'slew') { knobPtrMove(dx, dy); hocasSw.cx = Math.max(-1, Math.min(1, knobPtr.x / 200)); hocasSw.cy = Math.max(-1, Math.min(1, -knobPtr.y / 200)); }
 }
+
+let _hcSlew = null;
+function hocasSlewStart(dx, dy) { hocasSlewStop(); hocasCursor('slew', dx, dy); _hcSlew = setInterval(() => hocasCursor('slew', dx, dy), 120); }
+function hocasSlewStop() { if (_hcSlew) { clearInterval(_hcSlew); _hcSlew = null; } }
 
 // ══════════ ⑨ 전기 — GCU 보호 · 버스 타이 · 부하 차단 · 배터리 단독 ══════════
 //   GCU: 저전압 100V · 과전압 125V 4.5초 · 저주파 336Hz 4초 · 고주파 475Hz 2초 넘게 이어지면 그 발전기를 떼어 낸다(GEN 스위치를 OFF 했다 ON 해야 다시)

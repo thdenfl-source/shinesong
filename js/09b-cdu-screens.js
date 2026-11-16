@@ -3252,7 +3252,7 @@
                 a[knobCur] = String(((n + d) % top + top) % top);
                 _knobBufSet(a.join('')); renderContent(); return;
             }
-            if (_knobNavCtx()) return _knobNavStep(knobNav, big, d);
+            if (_knobNavCtx()) { if (typeof navStbyStep === 'function') { navStbyStep(knobNav.toUpperCase(), big, d); renderContent(); return; } return _knobNavStep(knobNav, big, d); }
             _knobComStep(knobTune, big, d);
         },
         push() {
@@ -3266,6 +3266,7 @@
             knobTune = knobTune === 'com1' ? 'com2' : 'com1';
         },
         hold() {
+            if (_knobNavCtx() && typeof navSwap === 'function') { navSwap(knobNav.toUpperCase()); return; }   // NAV 예비 ⇄ 활성
             if (_knobEntry() || _knobNavCtx()) return;
             swapFreq(knobTune);
         },
@@ -3274,7 +3275,7 @@
             const nav = _knobNavCtx(), vid = nav ? knobNav : _knobMicVol();
             const mid = [`${vid.toUpperCase()} Volum`, `<b>${volumes[vid] ?? 100}%</b>`, nav ? `Push:ID ${knobNavId[vid] ? 'ON' : 'OFF'}` : `Push:Squelch ${(knobSq[vid] ?? true) ? 'ON' : 'OFF'}`];
             const right = (_knobEntry() || (currentMode === 'TCAS_XPDR' && fidEdit)) ? ['Data Entry', 'Push:Enter']
-                        : nav ? [`${knobNav.toUpperCase()} FREQ`, `<b>${freqs[knobNav].act}</b>`, 'Push:1-2']
+                        : nav ? [`${knobNav.toUpperCase()} STBY`, `<b>${typeof navStby !== 'undefined' ? navStby[knobNav.toUpperCase()] : freqs[knobNav].act}</b>`, 'Push:1-2 Hold:↕']
                         : [`${knobTune.toUpperCase()} FREQ`, `<b>${fmtCom(freqs[knobTune].stb)}</b>`, 'Push:1-2 Hold:↕'];
             return { mid, right };
         },
@@ -3330,14 +3331,22 @@
             </div>
             <div class="freq-display-box" style="align-items:center; padding:0; justify-content:center; cursor:pointer;" data-act="openNavSel" data-arg='["${id}"]'>
                 <div style="display:flex; gap:4px; font-size:12px; font-weight:bold; margin-bottom:2px;">
-                    <span style="color:var(--text-green);">${freqs[id].act}</span>
-                    <span style="color:white;">${freqs[id].id}</span>
+                    <span style="color:var(--text-green);">${_navAct(id)}</span>
+                    <span style="color:white;">${_navIdent(id)}</span>
                     ${knobNavId[id] ? '<span class="knob-navid" style="color:#fff;border:1px solid #fff;font-size:9px;padding:0 2px;">ID</span>' : ''}
                 </div>
                 <div style="color:var(--text-cyan); font-size:9px; font-weight:bold;">▾ 표지 선택</div>
             </div>
+        </div>
+        <div style="display:flex; gap:5px; margin:-3px 0 8px 66px; align-items:center;">
+            <span style="color:#9ab; font-size:9px;">STBY</span><span class="nav-stby" style="color:var(--text-cyan); font-size:12px; font-weight:bold; min-width:44px;">${typeof navStby !== 'undefined' ? navStby[id.toUpperCase()] : freqs[id].stb}</span>
+            <div class="item-btn" style="height:24px; flex:0 0 34px; font-size:12px;" data-act="navSwap" data-arg='["${id.toUpperCase()}"]'>↕</div>
+            <div class="item-btn ${typeof navDmeHold !== 'undefined' && navDmeHold[id.toUpperCase()] ? 'on' : ''}" style="height:24px; flex:0 0 66px; font-size:9px;" data-act="navDmeHoldToggle" data-arg='["${id.toUpperCase()}"]'>DME HOLD<div class="status-line"></div></div>
         </div>`;
     }
+    // NAV 활성은 실제 튜닝(01-state.js navRadios) — CDU 값은 그것을 따른다
+    const _navAct = id => { try { const r = navRadios[id.toUpperCase()]; return r && r.freq ? Number(r.freq).toFixed(2) : freqs[id].act; } catch (e) { return freqs[id].act; } };
+    const _navIdent = id => { try { const r = navRadios[id.toUpperCase()]; return r ? (r.id || '') : freqs[id].id; } catch (e) { return freqs[id].id; } };
 
     // ── NAV1/NAV2 VOR 튜닝 화면 ──
     let _navSelTarget = 'nav1';   // 현재 튜닝 대상 무선

@@ -169,9 +169,11 @@ function drawNavSrcBox(x, y, w, h) {
                 lat: ok ? wp.lat : null, lon: ok ? wp.lon : null, color: '#00cc44' });
   }
   ['NAV1', 'NAV2'].forEach(id => {
-    const rr = navRadios[id] || {};
+    // DME HOLD(36-kuhsys.js navDmeHold) — 잡아 둔 국의 거리를 계속(ident 뒤 H)
+    const hd = typeof navDmeHold !== 'undefined' ? navDmeHold[id] : null;
+    const rr = hd || navRadios[id] || {};
     const ok = rr.lat !== null && rr.lat !== undefined && rr.lon !== null && rr.lon !== undefined;
-    rows.push({ src: id, ident: ok ? (rr.id || '----') : '----',
+    rows.push({ src: id, ident: ok ? ((rr.id || '----') + (hd ? ' H' : '')) : '----',
                 lat: ok ? rr.lat : null, lon: ok ? rr.lon : null, color: '#44aaff', dme: true, elev: rr.elev || 0 });
   });
   ctx.save(); ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
@@ -556,6 +558,8 @@ function pfdMsgs() {
   // VRS(소용돌이 고리 · SIM) — 저속 · 큰 강하율에서 들어가면 맨 위에 황색 경고(음성은 14-simmode.js)
   try { if (typeof simVrsOn === 'function' && simVrsOn()) out.unshift({ t: 'VORTEX RING', c: PFD_MSG_AMBER }); } catch (e) { _swallow(e); }
   // TCAS(33-train4.js) — TA 황색 · RA 빨강(올라라 · 내려라)
+  // 전기(36-kuhsys.js) — n TRU · BATT LOW(주의)
+  try { if (typeof elecCas === 'function') out.push(...elecCas()); } catch (e) { _swallow(e); }
   // T700 FADEC(36-kuhsys.js) — n ENG STRT(조언) · n ENG FAULT · n FADEC(주의)
   try { if (typeof fadecCas === 'function') out.push(...fadecCas()); } catch (e) { _swallow(e); }
   // SIM 경고 · 주의(KUH-1CG SDS 31-50-04) — n ENG OUT · LOW ROTOR RPM(적) · IAS(황 · VNE 넘김)
