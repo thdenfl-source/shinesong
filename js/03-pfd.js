@@ -714,11 +714,12 @@ function pfdSysMsgs() {
   return out;
 }
 let _mwpR = null;
-// MWP(주 경고 패널) — FMA 오른쪽에 WARN · CAUT · REV 램프, FMA 왼쪽에 MSG. 램프를 누르면 승인
+// MWP(주 경고 패널) — FMA 오른쪽에 WARN · CAUT · REV 램프, 그 옆에 MSG(시스템 메시지). 램프를 누르면 승인
 function drawMwp(L) {
   const fc = fmaCells(L.ai.x, L.ai.w), y = L.ai.y + FMA_MARGIN, h = FMA_BOX_H, bw = 34, gap = 3;
   const pend = casAckPending(), x0 = fc.x0 + fc.total + 8;
   if (x0 + bw * 3 + gap * 2 > L.ai.x + L.ai.w - 2) return;
+  const msgFits = x0 + bw * 4 + gap * 3 <= L.ai.x + L.ai.w - 2;
   const lamps = [['WARN', pend === 'W' || [...casAct.values()].some(m => m.lvl === 1 && !m.ack), '#e01818', '#fff'],
                  ['CAUT', [...casAct.values()].some(m => m.lvl === 2 && !m.ack), '#ffb000', '#000'],
                  ['REV', !!L.revOn, '#ffb000', '#000']];
@@ -734,8 +735,8 @@ function drawMwp(L) {
   });
   // MSG — 시스템 메시지가 있으면 점멸
   const sm = pfdSysMsgs();
-  if (sm.length && fc.x0 - 8 - bw > L.ai.x + 2) {
-    const x = fc.x0 - 8 - bw, bl = Math.floor(performance.now() / 500) % 2 === 0;
+  if (sm.length && msgFits) {                    // REV 오른쪽(왼쪽 EIS 칸과 겹치지 않게)
+    const x = x0 + 3 * (bw + gap), bl = Math.floor(performance.now() / 500) % 2 === 0;
     ctx.fillStyle = bl ? '#ffffff' : '#000'; ctx.fillRect(x, y, bw, h);
     ctx.strokeStyle = '#fff'; ctx.strokeRect(x + 0.5, y + 0.5, bw - 1, h - 1);
     ctx.fillStyle = bl ? '#000' : '#fff'; ctx.fillText('MSG', x + bw / 2, y + h / 2 + 1);
