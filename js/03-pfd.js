@@ -752,13 +752,13 @@ function drawMwp(L) {
   ctx.restore();
   if (!cvs.dataset.noFcp) _mwpR = R;
 }
-// TCAS TRAFFIC 알림 — FMA 아래 왼쪽(TA 황 · RA 적, 처음 5초 점멸 — 33-train4.js tcasAnn)
+// TCAS TRAFFIC 알림 — FMA 아래 가운데(TA 황 · RA 적, 처음 5초 점멸 — 33-train4.js tcasAnn)
 function drawTcasAnn(L) {
   const a = typeof tcasAnn === 'function' ? tcasAnn() : null; if (!a) return;
   const fc = fmaCells(L.ai.x, L.ai.w), h = FMA_BOX_H, y = L.ai.y + FMA_MARGIN + h + 6;
   ctx.save();
   ctx.font = `bold ${Math.max(10, h * 0.6)}px Helvetica Neue, Arial, sans-serif`;
-  const w = ctx.measureText(a.txt).width + 14, x = fc.x0;
+  const w = ctx.measureText(a.txt).width + 14, x = fc.x0 + fc.total / 2 - w / 2;   // FMA 아래 가운데
   const on = !a.blink || Math.floor(performance.now() / 400) % 2 === 0;
   ctx.fillStyle = on ? a.col : 'rgba(0,0,0,0.7)'; ctx.fillRect(x, y, w, h);
   ctx.strokeStyle = a.col; ctx.lineWidth = 1.5; ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);

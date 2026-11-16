@@ -32,7 +32,7 @@ export async function run(page, t) {
     Object.assign(traffic[0], { lat: 37 + 12 / 60, alt: 6000 }); tcasEval(); o.clear = tcasState;
     o.said = said.slice(); window.speak = sp0;
     // PFD TCAS 창 — 'NO TRAFFIC' 대신 기호
-    Object.assign(traffic[0], { lat: 37 + 2 / 60, alt: 2300 }); tcasEval();
+    Object.assign(traffic[0], { lat: 37 + 1.4 / 60, alt: 2300 }); tcasEval();   // 1.4NM +300ft — TA
     const seen = [], oT = CanvasRenderingContext2D.prototype.fillText;
     CanvasRenderingContext2D.prototype.fillText = function (x, ...a) { seen.push(String(x)); return oT.call(this, x, ...a); };
     try { if (typeof skState !== 'undefined') skState.tfcMap = true; drawPfdInset({ x: 0, y: 0, w: 220, h: 220 }); } finally { CanvasRenderingContext2D.prototype.fillText = oT; if (typeof skState !== 'undefined') skState.tfcMap = false; }
