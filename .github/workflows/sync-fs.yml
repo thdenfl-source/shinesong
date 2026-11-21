@@ -1,0 +1,74 @@
+name: Flightsimulator 자동 복사
+
+# shinesong 의 main 에 머지되면 앱 파일을 Flightsimulator 로 복사해 PR 을 자동으로 연다
+# (CLAUDE.md '두 저장소는 같은 코드다' — tools/sync-fs.mjs 와 같은 규칙).
+# 머지는 여전히 사용자가 Flightsimulator 에서 직접 한다.
+#
+# 처음 한 번 준비: shinesong 저장소 Settings → Secrets and variables → Actions 에
+#   FS_SYNC_TOKEN = Flightsimulator 에 Contents · Pull requests 쓰기 권한이 있는 개인 토큰(fine-grained PAT)
+# 토큰이 없으면 아무것도 하지 않고 안내만 남긴다.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: sync-fs
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: 토큰 확인
+        id: tok
+        env:
+          T: ${{ secrets.FS_SYNC_TOKEN }}
+        run: |
+          if [ -z "$T" ]; then
+            echo "::notice::FS_SYNC_TOKEN 이 없어 복사를 건너뜁니다(이 파일 머리말 참고)."
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.tok.outputs.ok == 'true'
+        with:
+          path: shinesong
+
+      - uses: actions/checkout@v4
+        if: steps.tok.outputs.ok == 'true'
+        with:
+          repository: thdenfl-source/Flightsimulator
+          token: ${{ secrets.FS_SYNC_TOKEN }}
+          path: flightsimulator
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        if: steps.tok.outputs.ok == 'true'
+        with:
+          node-version: '20'
+
+      - name: 복사 · PR
+        if: steps.tok.outputs.ok == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.FS_SYNC_TOKEN }}
+          SHA: ${{ github.sha }}
+        run: |
+          cd shinesong
+          node tools/sync-fs.mjs ../flightsimulator
+          cd ../flightsimulator
+          if [ -z "$(git status --porcelain)" ]; then echo "바뀐 것 없음"; exit 0; fi
+          SUBJ="$(cd ../shinesong && git log -1 --format=%s)"
+          BR="auto-sync/${SHA::7}"
+          git config user.name "shinesong-sync"
+          git config user.email "actions@users.noreply.github.com"
+          git checkout -b "$BR"
+          git add -A
+          git commit -q -m "shinesong ${SHA::7} 복사 — ${SUBJ}"
+          git push -q origin "$BR"
+          gh pr create --repo thdenfl-source/Flightsimulator --base main --head "$BR" \
+            --title "shinesong 복사 — ${SUBJ}" \
+            --body "shinesong main 의 ${SHA} 를 자동으로 복사했습니다(tools/sync-fs.mjs). 검사가 통과하면 머지해 주세요."
