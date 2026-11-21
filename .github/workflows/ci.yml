@@ -1,0 +1,54 @@
+name: CI
+
+# PR 마다 전체 회귀 검사를 8 조각으로 나눠 함께 돌린다(한 줄로 돌리면 약 40분 → 조각마다 몇 분).
+# 이 저장소는 빌드가 없고 index.html 이 그대로 GitHub Pages 로 나가므로, 머지 전에 깨진 것을 잡는다.
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quick:
+    name: 문법 · 캐시 번호
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: 문법 검사
+        run: node tests/check-syntax.mjs
+      - name: 서비스워커 캐시 번호 확인
+        if: github.event_name == 'pull_request'
+        run: node tests/check-swver.mjs "${{ github.event.pull_request.base.sha }}"
+
+  test:
+    name: 회귀 검사 ${{ matrix.shard }}/8
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: 의존성 설치
+        run: npm install --no-audit --no-fund
+      - name: 크로미움 설치
+        run: npx playwright install --with-deps chromium
+      - name: 회귀 검사
+        env:
+          SHARD: ${{ matrix.shard }}/8
+          TIMING: '1'
+        run: node tests/run.mjs
