@@ -982,7 +982,8 @@ function selectPanel(side, sel, force) {
   // 두 패널에 CDU 가 겹쳐 뜨고, 한쪽에서 FPL 을 눌러도 다른 쪽이 바뀐다.
   // 다만 같은 화면(PFD · CDU · UPPER · LOWER · SYSTEM …)을 고르면 맞바꾸지 않고 둘 다 띄운다 — 한쪽은 거울 창(38-mirror.js)
   const holder = sides.find(k => k !== side && panelFam(get(k)) === panelFam(sel));
-  const dup = holder && get(holder) === sel && typeof MIRROR_OK !== 'undefined' && MIRROR_OK.has(sel);
+  //   (탭을 눌러 고를 때만 — 프로그램이 부르는 것(force)은 종전처럼 맞바꾼다: 단독 화면 · Flight Plan · SIM 창 배치 등)
+  const dup = !force && holder && get(holder) === sel && typeof MIRROR_OK !== 'undefined' && MIRROR_OK.has(sel);
   if (holder && !dup) set(holder, get(side));
   set(side, sel);
   applyPanels();
