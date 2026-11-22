@@ -85,12 +85,13 @@ export async function run(page, t) {
     const o = { ovhd: document.getElementById('lcon-wrap').parentElement.id, h: document.getElementById('lcon-wrap').getBoundingClientRect().height };
     exitSolo(); await w(500);
     o.back = document.getElementById('lcon-wrap').parentElement.id;
+    o.rightShows = rightSel === 'lcon' && (document.getElementById('right-panel').contains(document.getElementById('lcon-wrap')) || !!document.querySelector('#right-panel .mirror-box'));
     try { if (simModeOn) toggleSimMode(false); } catch (e) { /* 그만 */ }
     S.alt = 0; S.spd = 0; S.running = false;
     return o;
   });
   t.ok(U.ovhd === 'ck-mini-lcon' && U.h > 20, `LOWER 를 띄운 채 Cockpit 모드 — 하부 콘솔(무전 스택)이 조종석에 보인다 (${U.ovhd} · 높이 ${Math.round(U.h)})`);
-  t.ok(U.back === 'right-panel', `분할 화면으로 돌아오면 오른쪽 창으로 돌아간다 (${U.back})`);
+  t.ok(/^(right|mid)-panel$/.test(U.back) && U.rightShows, `분할 화면으로 돌아오면 창으로 돌아간다 · 오른쪽 창에 LOWER(진짜 또는 거울 — 가운데 창도 LOWER 면) (${U.back})`);
 
   // 기종 바꾸기 — 적어 두기만(다시 불러오지 않고)
   const P = await page.evaluate(() => { setAircraftType('aw189', false); const a = localStorage.getItem('shineAc'); setAircraftType('b206', false); return { a, b: localStorage.getItem('shineAc'), bad: setAircraftType('xx', false) }; });
