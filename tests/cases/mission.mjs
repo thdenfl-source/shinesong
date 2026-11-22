@@ -2,7 +2,8 @@
 export const name = '흰수리 전탐석 — EO/IR · 레이더 · 서치라이트';
 
 export async function run(page, t) {
-  t.ok(await page.evaluate(() => !!document.querySelector('.gate-ac-btn[data-ac="kuhm"]')), '시작 화면 기종 고르기에 "흰수리 전탐석" 이 있다');
+  t.ok(await page.evaluate(() => !document.querySelector('.gate-ac-btn[data-ac="kuhm"]') && /LOFT/.test((document.getElementById('gate-mode-loft') || {}).textContent || '')),
+    '시작 화면 — 기종 고르기에서 전탐석을 빼고, 화면 고르기에 LOFT(조종석 + 전탐석) 모드');
   // 흰수리 조종석(전탐석이 아닌 페이지) — 아무도 EO/IR 영상을 보지 않으면 3D 지도를 만들지 않는다(페이지가 뜨자마자 만들어 CI 가 느려졌다)
   const idle = await page.evaluate(async () => { await new Promise(r => setTimeout(r, 400)); return { map: _eoMap, need: _eoNeed(), hw: msnHoistWant(), t: Math.round(performance.now()) }; });
   t.ok(idle.map === null && !idle.need && !idle.hw, `흰수리 조종석 — 보는 곳이 없으면 EO/IR · 호이스트 지도를 만들지 않는다(${idle.t}ms)`);
@@ -131,6 +132,15 @@ export async function run(page, t) {
     slc.joy.x = -1; slc.joy.y = 1; const az0 = hsl.az, el0 = hsl.el; slcStep(1); slc.joy.x = 0; slc.joy.y = 0; o.slew = [hsl.az - az0, hsl.el - el0];
     slc.joy.x = 1; for (let i = 0; i < 20; i++) slcStep(1); slc.joy.x = 0; o.azMax = hsl.az;
     hsl.focus = 4; const nb = hslBeam(); hsl.focus = 13; const wb = hslBeam(); o.focus = [nb.wide < wb.wide, nb.k > wb.k]; hsl.focus = 8;
+    // EO/IR 영상에 탐조등 빛 무리가 보인다(밤 · 주간 카메라) — 열상(IR)에는 안 보인다
+    { const alt0 = S.alt, tod0 = env.tod, sen0 = eo.sensor, az0 = eo.az, el0 = eo.el, mode0 = eo.mode;
+      S.alt = _mGndFt(S.lat, S.lon) + 800; envSet({ tod: 'NIGHT' }); Object.assign(eo, { pwr: true, mode: 'MAN', sensor: 'EOW', az: -30, el: -35 }); hsl.az = -30; hsl.el = -35;
+      _eoCamera(); await w(400); _eoCamera();
+      const cv = document.createElement('canvas'); cv.width = 400; cv.height = 300;
+      const lum = () => { const g = cv.getContext('2d'); g.clearRect(0, 0, 400, 300); eoirVideoDrawTo(g, 0, 0, 400, 300); const d = g.getImageData(0, 0, 400, 300).data; let t = 0; for (let i = 0; i < d.length; i += 4) t += d[i] + d[i + 1] + d[i + 2]; return t / (d.length / 4) / 3; };
+      o.eoSpot = eoBeamSpots().length; const on = lum(); hsl.lit = false; const off = lum(); hsl.lit = true; o.eoLum = [+on.toFixed(1), +off.toFixed(1)];
+      eo.sensor = 'IR'; o.eoSpotIr = eoBeamSpots().length;
+      Object.assign(eo, { sensor: sen0, az: az0, el: el0, mode: mode0 }); envSet({ tod: tod0 }); S.alt = alt0; }
     slcRender(); o.lm = [...document.querySelectorAll('#msn-root [data-sll].on')].map(e => e.dataset.sll).join(',');
     slcPress('lamp', true); slcPress('lamp', false); o.cool = [hsl.lit, Math.round(hsl.cool)];
     hslPwrSet(false); o.fault = hsl.fault; hslPwrSet(true); hsl.fault = false; hsl.cool = 0;
@@ -205,6 +215,7 @@ export async function run(page, t) {
   t.ok(!D.lampStowed && D.init[0] === false && D.init[1] === -45, `HSL-1600 — STOW 면 램프가 켜지지 않고 · INIT 로 풀면 −45° (${D.init})`);
   t.ok(!D.ign && D.lit && D.beam && D.beam.down === 45 && D.irBare === null, 'LAMP — 5초 안에 켜진다 · 3D 빛 무리 · IR 은 NVG 없이는 보이지 않는다');
   t.ok(D.auto === 'EO' && D.slew[0] < -20 && D.slew[1] > 15 && D.azMax === 30, `MAN/AUTO · 조이스틱 — 방위 ${D.slew[0].toFixed(0)}° · 고각 +${D.slew[1].toFixed(0)}°/s · 오른쪽 한계 +30°`);
+  t.ok(D.eoSpot >= 1 && D.eoLum[0] > D.eoLum[1] + 4 && D.eoSpotIr === 0, `EO/IR 영상에 탐조등 빛 무리 — 밤 주간 카메라(밝기 ${D.eoLum[1]} → ${D.eoLum[0]}) · 열상(IR)에는 없음`);
   t.ok(D.focus[0] && D.focus[1], 'FOCUS — 4°(Spot)는 좁고 밝게 · 13°(Flood)는 넓게');
   t.ok(/PWR/.test(D.lm) && /LAMP/.test(D.lm) && D.cool[0] === false && D.cool[1] === 420 && D.fault, `표시등(${D.lm}) · 끄면 냉각팬 7분(${D.cool[1]}s) · 그동안 전원을 끊으면 FAULT`);
   t.ok(D.stowMv === 'STOW' && D.stow[0] && D.stow[1] === 0 && D.stow[2] === -90, `INIT/STOW — STOW 25초 뒤 0° · −90° (${D.stow})`);
@@ -226,6 +237,21 @@ export async function run(page, t) {
   t.ok(D.dvExp && D.dvOff, 'USB 내보내기 — 채널마다 MJPEG AVI(RIFF · MJPG) · POWER OFF 면 녹화 멈춤');
   const errs = (page.errors || []).filter(e => !/Failed to fetch|NetworkError|tile/i.test(e));
   t.eq(errs.length, 0, `페이지 오류 없음${errs.length ? ' — ' + errs[0] : ''}`);
+  // ── LOFT — 조종석 오른쪽 버튼 줄 맨 아래 🎯 전탐석 · 전탐석 ⧉ 새 창 ──
+  const L = await page.evaluate(async () => {
+    const w = ms => new Promise(r => setTimeout(r, ms)), o = {};
+    msnShow(false); cockpitStart(); await w(1500);
+    const b = document.getElementById('msn-open-btn'), ctl = document.getElementById('ctl3d');
+    o.ctl = !!ctl && b.parentElement === ctl && ctl.lastElementChild === b;
+    o.split = [...ctl.children].some(c => /Split screen/.test(c.textContent));
+    b.click(); await w(200); o.open = msnOpen;
+    o.pop = msnPopout(); await w(800); o.popped = msnPopped() && document.getElementById('msn-root').ownerDocument !== window.document;
+    msnPopout(); await w(400); o.back = !msnPopped() && document.getElementById('msn-root').ownerDocument === window.document;
+    msnShow(false); try { exitSolo(); } catch (e) { /* */ } await w(300);
+    return o;
+  });
+  t.ok(L.ctl && L.split && L.open, `조종석(3D) 화면 — 🎯 전탐석 이 오른쪽 버튼 줄 맨 아래(Split screen 밑) · 누르면 전탐석 (${JSON.stringify(L)})`);
+  t.ok(L.pop && L.popped && L.back, 'LOFT — 전탐석 ⧉ 새 창(다른 모니터) · 다시 누르면 이 창으로');
   if (process.env.MSN_SHOT) { await page.evaluate(() => { msnSpawn(4); rdr.tx = true; }); await page.waitForTimeout(3500); await page.screenshot({ path: process.env.MSN_SHOT }); }
   // 다음 묶음이 전탐석을 물려받지 않게
   await page.evaluate(() => { msnShow(false); msnVslClear(); rdr.tx = false; });
