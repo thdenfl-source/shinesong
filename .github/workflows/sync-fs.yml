@@ -1,15 +1,16 @@
 name: Flightsimulator 자동 복사
 
-# shinesong 의 main 에 머지되면 앱 파일을 Flightsimulator 로 복사해 PR 을 자동으로 연다
-# (CLAUDE.md '두 저장소는 같은 코드다' — tools/sync-fs.mjs 와 같은 규칙).
-# 머지는 여전히 사용자가 Flightsimulator 에서 직접 한다.
+# 앱 파일을 Flightsimulator 로 복사해 PR 을 연다(CLAUDE.md '두 저장소는 같은 코드다' — tools/sync-fs.mjs 와 같은 규칙).
+# 머지는 사용자가 Flightsimulator 에서 직접 한다.
+#
+# 지금은 손으로만 돈다(Actions → 이 워크플로 → Run workflow). main 에 머지될 때마다 저절로 돌게 했더니,
+# 작업마다 Claude 가 올리는 복사 PR 과 겹치고 · 쌓인 자동 PR 들이 서로 충돌했다(Flightsimulator #617 · #619).
+# 지금 방식: 고칠 일마다 shinesong PR 하나 + Flightsimulator 복사 PR 하나를 Claude 가 올리고, 사용자가 하나씩 머지한다.
 #
 # 처음 한 번 준비: shinesong 저장소 Settings → Secrets and variables → Actions 에
 #   FS_SYNC_TOKEN = Flightsimulator 에 Contents · Pull requests 쓰기 권한이 있는 개인 토큰(fine-grained PAT)
 # 토큰이 없으면 아무것도 하지 않고 안내만 남긴다.
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 concurrency:
