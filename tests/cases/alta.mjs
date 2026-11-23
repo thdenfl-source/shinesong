@@ -20,7 +20,8 @@ export async function run(page, t) {
     o.push = { vs: vsModeOn, armed: altArmed, sel: selVS, alt: altHoldOn };
     { const f = fma(); o.fmaVs = f.includes('VS +1000') && f.includes('ALT'); }
     // ③ 1,000ft 전 — 한 번 '삐'
-    const n0 = altAlertCount; S.alt = 1950; altaStep(); altaStep(); o.alert = altAlertCount - n0;
+    const n0 = altAlertCount; S.alt = 1990; altaStep(); altaStep();   // 2,000ft 를 지나면(1,000ft 안) — 1,990 은 아직 아니다
+    o.early = altAlertCount - n0; S.alt = 2010; altaStep(); altaStep(); o.alert = altAlertCount - n0;
     // 가는 동안 VS 노브 · COLL TRIM 으로 승강률을 고친다
     applyDelta('vs', 500); o.vsKnob = selVS; collTrimStep(-1); o.vsTrim = selVS;
     S.alt = 2690; altaStep(); o.still = vsModeOn && altArmed;
@@ -44,7 +45,7 @@ export async function run(page, t) {
   });
   t.ok(r.pre.alta === 3000 && !r.pre.alt && !r.pre.vs && !r.pre.armed, `ALT.A 노브로 3,000ft 를 고르는 동안은 아무 모드도 걸리지 않는다 (${JSON.stringify(r.pre)})`);
   t.ok(r.push.vs && r.push.armed && r.push.sel === 1000 && !r.push.alt && r.fmaVs, `ALT.A 를 누르면 VS +1000(녹색) · ALT 무장(흰색) (${JSON.stringify(r.push)})`);
-  t.eq(r.alert, 1, '목표 1,000ft 전(2,000ft)에 한 번 알림음');
+  t.ok(r.early === 0 && r.alert === 1, `목표 1,000ft 전(2,000ft)을 지나면 한 번 알림음 (${r.early} → ${r.alert})`);
   t.ok(r.vsKnob === 1500 && r.vsTrim === 1400 && r.still, `가는 동안 VS 노브 · COLL TRIM 으로 승강률을 고친다 (${r.vsKnob} → ${r.vsTrim})`);
   t.ok(!r.cap.vs && !r.cap.armed && r.cap.alt && r.cap.sel === 3000 && r.fmaAlt, `300ft 전(2,700ft) — VS 가 사라지고 ALT 가 걸려 3,000ft 로 (${JSON.stringify(r.cap)})`);
   t.eq(r.trimAlt, 3020, 'ALT 가 걸린 뒤 COLL TRIM 은 ALT 기준 고도를 옮긴다(10ft 씩)');

@@ -1319,9 +1319,9 @@ async function part3(page, t) {
 
     // ⑤ 조종 장치 설정에서 ↑ 키를 다른 동작(ALT +)에 배정해 두면 키보드 트림은 비켜선다
     joySetBind('kArrowUp', 'altUp');
-    const alt0 = selAlt;
+    const alt0 = altaSelGet();   // ALT + 는 ALT.A 목표 고도를 고른다(01-state.js)
     key('keydown', 'ArrowUp'); key('keyup', 'ArrowUp');
-    const boundKey = { pitch: simTrim.pitch, alt: selAlt - alt0 };
+    const boundKey = { pitch: simTrim.pitch, alt: altaSel - alt0 };
     simTrimReset(); selAlt = alt0; altHoldOn = false;
 
     joyBinds = savedBinds; joySave(); kbdShortcuts = savedKbd;
@@ -2297,7 +2297,7 @@ async function part4(page, t) {
       return texts;
     };
     const out = { on: altHoldOn, sel: selAlt, f1: fma() };
-    applyDelta('alt', 100); out.sel2 = selAlt; out.alta = altaSel; out.f2 = fma();   // ALT.A 노브는 고르기만(ALT 기준은 그대로)
+    altaSel = null; applyDelta('alt', 100); out.sel2 = selAlt; out.alta = altaSel; out.f2 = fma();   // ALT.A 노브는 고르기만(ALT 기준은 그대로)
     toggleAltHold(); toggleAltHold(); out.recap = selAlt;      // 다시 누르면 다시 지금 고도
     altHoldOn = false;
     return { on: out.on, sel: out.sel, sel2: out.sel2, alta: out.alta, recap: out.recap,
