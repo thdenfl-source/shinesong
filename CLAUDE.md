@@ -22,7 +22,7 @@
 - **고칠 일은 shinesong 에서 한다.** 끝나면 Flightsimulator 로 그대로 복사해 PR 을 하나 더 올린다
   (`.git` · `.github` · `.nojekyll` · `.gitignore` · `CLAUDE.md` · `node_modules` 만 그 저장소 것을 둔다).
 - SIM 기능은 SIM 파일(14-simmode · 15-heli3d · 16-sound) 안에 두고, 다른 파일에서 부를 때는 '있으면 부른다'로 짠다.
-  사이클릭(피치 · 롤)으로만 쓰는 새 버튼은 `css/app.css` 의 `html.ed-proc …` 규칙(지금은 GYRO)에 넣는다.
+  사이클릭(피치 · 롤)으로만 쓰는 새 버튼은 `js/00-style.js`(꾸밈) 의 `html.ed-proc …` 규칙(지금은 GYRO)에 넣는다.
 - 검사: Flightsimulator 경로(또는 `EDITION=proc`)에서는 SIM 을 켜는 검사 파일(toggleSimMode(true) · SIM_SETUP ·
   simModeOn = true)을 건너뛴다. 절차 훈련판을 shinesong 에서 미리 보려면 `EDITION=proc node tests/run.mjs` · 주소 `?edition=proc`.
 
@@ -62,11 +62,11 @@
   다섯을 다 돌릴 때는 `JOBS=5 node tests/run.mjs 'SIM 모드'` 처럼 함께 돌린다(묶음마다 새 페이지라 서로 간섭하지 않는다).
 
 ### 파일 구성
-- 화면 꾸밈(CSS)은 `css/app.css`(index.html 은 HTML 만) · `07-sim.js` 는 차례대로 `07-sim.js`(조종 · 시뮬) → `07a-panels.js`(창 배치 · 화면 모드) → `07b-fcp.js`(FCP SIMPLE · PFD 소프트키)로 나눴다.
+- 화면 꾸밈(CSS)은 `js/00-style.js`(<head> 에서 <style> 로 넣는다 · index.html 은 HTML 만 — CSS 안에 역따옴표 · 역빗금 · '${' 금지) · `07-sim.js` 는 차례대로 `07-sim.js`(조종 · 시뮬) → `07a-panels.js`(창 배치 · 화면 모드) → `07b-fcp.js`(FCP SIMPLE · PFD 소프트키)로 나눴다.
 - 3D 지도 그림을 재는 검사는 고정 대기 대신 `await __mapsIdle()`(tests/lib/env.mjs)로 지도가 다 그려질 때까지 기다린다.
 
 ### 캐시 버전 올리기
-- 앱 파일을 고치면 `sw.js` 의 `CACHE`(vfr-flight-vNNN)와 `index.html` 스크립트 · 꾸밈 꼬리표(`js/…js?v=NNN` · `css/app.css?v=NNN`)를
+- 앱 파일을 고치면 `sw.js` 의 `CACHE`(vfr-flight-vNNN)와 `index.html` 스크립트 꼬리표(`js/…js?v=NNN`)를
   **같은 번호로 함께** 올린다 — `tests/check-swver.mjs` 가 둘이 다르면 실패시킨다.
   (배포 직후 새 index.html 이 브라우저 캐시의 옛 JS 와 섞여 버튼이 듣지 않는 일을 막는다)
   예: `sed -i "s/vfr-flight-v500/vfr-flight-v501/" sw.js && sed -i 's/\.js?v=500"/.js?v=501"/g' index.html`
