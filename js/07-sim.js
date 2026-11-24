@@ -23,7 +23,8 @@ function applyDelta(field, d){
       }
       if (_spdDirect) { iasNsOn = true; S.spd = Math.max(0, Math.min(320, S.spd + d)); S.pit = pitchFromSpd(S.spd); selSpd = S.spd; break; }
       // IAS 노브는 기준 속도만 고른다 — 걸려 있으면 그 속도로, 꺼져 있으면 누를 때(fcpSync 'ias') 그 속도로 건다
-      if (!iasNsOn && !fcpPre.ias) selSpd = Math.round(S.spd);
+      if (iasNsOn) selSpd = S.spd;                                  // 걸려 있으면(SIM 이 아니면 속도가 곧 기준) 지금 속도에서
+      else if (!fcpPre.ias) selSpd = Math.round(S.spd);
       if (!iasNsOn) fcpPre.ias = true;
       selSpd = Math.max(0, Math.min(320, selSpd + d));
       if (iasNsOn) { S.spd = selSpd; S.pit = pitchFromSpd(S.spd); }   // auto pitch from speed

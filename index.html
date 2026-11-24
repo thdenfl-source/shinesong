@@ -3075,6 +3075,11 @@ body.simple-mode #simple-view { display: flex; position: fixed; left: 0; right: 
             <b>ALT.A</b> — 목표 고도를 고르는 동안은 아무 일도 없고, 누르면 VS 가 목표 쪽으로(지금 VS 크기 · 없으면 1,000fpm) 녹색으로 걸리고 그 옆에 <b>ALT</b> 가 흰색으로 무장됩니다.
             목표 <b>1,000ft 전</b>에 '삐'(1초) · <b>300ft 전</b>에 VS 가 사라지고 ALT 가 걸려 목표에 수렴합니다.
             가는 동안은 VS 노브 · 컬렉티브 <b>COLL TRIM</b> 으로 승강률을 고치고, ALT 가 걸린 뒤 COLL TRIM 은 <b>ALT 기준 고도</b>를 10ft 씩 옮깁니다.</li>
+        <li><b>IAS · HDG · CR.HT</b> 노브도 돌리면 기준(속도 · 버그 · 높이)만 바뀌고 <b>누르면 켜고 끕니다</b>(돌려 고른 값이 있으면 그 값으로, 없으면 지금 값으로 걸림).
+            <b>UPLIM · DH</b> — 고도 경고 상한 · 하한(돌려 고르고 0 이면 OFF · 누르면 기준 RA ⇄ BARO). 넘으면 알림음 + PFD <b>UPLIM</b> · <b>MINIMUMS</b>.
+            <b>NAVD CPL</b> — 코스와 기수 각 50° 안 · 코스선에서 RNP 안이면 결합(녹색), 아니면 무장(흰 NAV — 들어오면 저절로 결합).
+            <b>BARO</b> 누름 — STD ⇄ 앞의 QNH · <b>CRS</b> 누름 — NAV(VOR · LOC)는 지금 자리를 지나는 코스, FMS 는 OBS 가 켜져 있을 때만.
+            <b>T.D.HOV</b> 가 다 내려오면 GSPD 0 + <b>HHT</b>(H.HT 노브 값으로 호버 높이 유지 — CR.HT 와 따로).</li>
         <li>PFD 하단 FCP에서 <b>IAS·HDG·CRS·VS·ALT·CRHT</b>를 ▲▼/◀▶로 조절.
             <b>CRHT ▲▼</b> 는 10ft 씩 옮기며, 지금 고도로 걸어 끝자리가 남아 있으면(예: 1,237ft)
             먼저 <b>10ft 단위</b>로 맞춥니다(▲ 1,240 · ▼ 1,230).
