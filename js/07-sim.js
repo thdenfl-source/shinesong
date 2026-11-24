@@ -10,7 +10,7 @@
 // 노브를 돌리면 다시 걸린다. (SIM 이 꺼져 있으면 속도는 노브로만 바뀌므로 풀어도 지금 속도 그대로 난다)
 let iasNsOn = true;
 function iasModeOn() { return (typeof simModeOn !== 'undefined' && simModeOn) ? simIasOn : iasNsOn; }
-let _collTrimNoMode = false;   // COLL TRIM 이 부른 'vs' — 걸린 수직 모드가 없으면 승강(01-state.js collTrimStep)
+let _collTrimNoMode = false, _spdDirect = false;   // _spdDirect — 4-WAY 전후 트림(속도를 곧바로)   // COLL TRIM 이 부른 'vs' — 걸린 수직 모드가 없으면 승강(01-state.js collTrimStep)
 function applyDelta(field, d){
   afcsCmd();
   switch(field){
@@ -21,6 +21,7 @@ function applyDelta(field, d){
       if (typeof acIs === 'function' && acIs('b206')) {   // Bell 206 — AFCS 가 없다: 속도를 곧바로
         S.spd = Math.max(0, Math.min(B206P.vne, S.spd + d)); S.pit = pitchFromSpd(S.spd); break;
       }
+      if (_spdDirect) { iasNsOn = true; S.spd = Math.max(0, Math.min(320, S.spd + d)); S.pit = pitchFromSpd(S.spd); selSpd = S.spd; break; }
       // IAS 노브는 기준 속도만 고른다 — 걸려 있으면 그 속도로, 꺼져 있으면 누를 때(fcpSync 'ias') 그 속도로 건다
       if (!iasNsOn && !fcpPre.ias) selSpd = Math.round(S.spd);
       if (!iasNsOn) fcpPre.ias = true;

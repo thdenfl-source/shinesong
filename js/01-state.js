@@ -941,9 +941,11 @@ function startTrimHold(dir) {
       }, SIM_TRIM_HOLD_MS - SIM_TRIM_REP_MS);
     } else {
       const d = dir === 'F' ? 1 : -1;
-      applyDelta('spd', d);
+      // 4-WAY 전후 트림은 속도를 곧바로 옮긴다(IAS 노브의 '고르기만' 과 다르다 — 07-sim.js applyDelta 'spd')
+      const spdTrim = () => { _spdDirect = true; try { applyDelta('spd', d); } finally { _spdDirect = false; } };
+      spdTrim();
       trimHoldTimer = setTimeout(() => {
-        trimHoldInt = _trimRep(() => applyDelta('spd', d), 80);
+        trimHoldInt = _trimRep(spdTrim, 80);
       }, 350);
     }
   }
