@@ -686,6 +686,36 @@ function map3dAutoFeed(fps, nowS) {
   try { requestAnimationFrame(tick); } catch (e) { /* 그림 루프가 없는 곳 */ }
 })();
 
+// ── 3D 지도 그래픽(WebGL) 문맥을 잃었을 때 ──
+// GPU 메모리가 모자라거나(3D 지도 여럿 · 태블릿) 절전에서 깨어날 때 브라우저가 그래픽 문맥을 거둬 가면 그 지도가 검게 멈춘다.
+// maplibre 는 문맥이 돌아오면 스스로 다시 그린다 — waitMs 안에 돌아오지 않으면 그 지도를 거두고 새로 만든다(rebuild).
+// 진단 기록(🩺)에 남긴다. 04-map.js(본 3D) · 24-sar.js(호이스트) · 37-mission.js(EO/IR · 전탐석 지도)가 쓴다.
+let mapGlLostN = 0, mapGlRebuiltN = 0;
+function mapGlGuard(map, name, rebuild, waitMs = 3000) {
+  if (!map || typeof map.on !== 'function') return;
+  let t = null;
+  map.on('webglcontextlost', () => {
+    if (map._glGone) return;   // 거둔 지도(remove — 그래픽을 놓으며 이 신호를 낸다)
+    mapGlLostN++; map._glLost = true;
+    try { _swallow(new Error(`3D 지도(${name}) 그래픽 문맥을 잃었다 — ${waitMs / 1000}초 안에 돌아오지 않으면 새로 만든다`)); } catch (e) { /* 그만 */ }
+    clearTimeout(t);
+    t = setTimeout(() => { if (!map._glLost || map._glGone) return; mapGlRebuiltN++; try { rebuild(map); } catch (e) { _swallow(e); } }, waitMs);
+  });
+  map.on('webglcontextrestored', () => { map._glLost = false; clearTimeout(t); try { map.triggerRepaint(); } catch (e) { _swallow(e); } });
+  // 거둘 때(remove) — 그 뒤의 신호는 듣지 않는다(새로 만든 지도를 잘못 거두지 않게)
+  const rm = map.remove.bind(map);
+  map.remove = function () { map._glGone = true; clearTimeout(t); return rm(); };
+}
+// 본 3D 지도를 새로 만든다(문맥을 잃은 채 돌아오지 않을 때) — 모형 · 꾸밈은 style.load 에서 다시 얹힌다
+function _ml3dRebuild(map) {
+  const old = _ml3d; if (!old || (map && map !== old)) return;
+  try { old.remove(); } catch (e) { _swallow(e); }
+  try { if (_ml3dMarker) _ml3dMarker.remove(); } catch (e) { _swallow(e); }
+  _ml3d = null; _ml3dMarker = null; _ml3dReady = false;
+  _init3dMap();
+  requestAnimationFrame(() => { try { if (_ml3d) { _ml3d.resize(); if (typeof _applyFollow === 'function') _applyFollow(); } } catch (e) { _swallow(e); } });
+}
+
 function _init3dMap() {
   if (_ml3d) {
     // Already initialised — just jump to current aircraft position
@@ -710,6 +740,7 @@ function _init3dMap() {
       attributionControl: false
     });
     _map3dQ.set(_ml3d, { q: map3dQuality, loaded: false });
+    mapGlGuard(_ml3d, '본 3D', _ml3dRebuild);
   } catch (e) {
     console.error('[3D] map init failed:', e);
     return;
