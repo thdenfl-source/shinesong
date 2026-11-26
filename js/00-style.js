@@ -1177,6 +1177,7 @@ html.ios-win #simple-bar { display: none !important; }
 html.ios-win #gate-overlay, html.ios-win #help-overlay, html.ios-win .ui-dlg-back:has(.start-apt) { display: none !important; }
 html.ios-win body.solo-mode #map3d-wrap, html.ios-win body.solo-mode .solo-panel-visible { top: calc(40px + env(safe-area-inset-top)) !important; }
 html.ios-win #ios-root { padding-top: 50px; }
+html.ios-obs #ios-root [data-ios]:not([data-ios="rtc"]), html.ios-obs #msn-root [data-mact]:not([data-mact="help"]) { opacity: 0.45; pointer-events: none; } html.ios-obs #ios-root::before { content: '👀 관찰 기기 — 보기만 합니다'; display: block; padding: 4px 10px; background: #1d3a52; color: #cfe8ff; font-size: 13px; }
 html.ios-win:not(.ios-mode) #ios-root { display: none !important; }
 #ios-root .ios-grip { display: none; }
 #ios-root.ios-grip-on > :not(.ios-grip) { display: none !important; }

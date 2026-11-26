@@ -47,6 +47,8 @@ function iosState() {
 // 교육생 창 — 명령을 받는다
 function iosHandle(m) {
   if (!m || m.type !== 'cmd') return;
+  // 확인 번호(qid)가 붙은 명령 — 받았다고 알리고(ACK), 다시 온 것(중계가 늦게 · 두 길로)은 한 번만 한다
+  if (m.qid) { _iosAck(m.qid); if (_iosSeenIds.includes(m.qid)) return; _iosSeenIds.push(m.qid); if (_iosSeenIds.length > 200) _iosSeenIds.splice(0, 100); }   // (m.id 는 콘솔 스위치 이름 — 확인 번호는 qid)
   const c = m.c;
   try {
     if (c === 'run' && !S.running) toggleSim();
@@ -99,8 +101,52 @@ function iosHandle(m) {
 }
 // 같은 브라우저(BroadcastChannel)와 다른 기기(WebRTC — 33-train4.js rtcSend) 둘 다로 보낸다
 function iosSend() { if (IOS_MODE) return; const m = iosState(); try { if (_iosCh) _iosCh.postMessage(m); } catch (e) { _swallow(e); } try { if (typeof rtcSend === 'function') rtcSend(m); } catch (e) { _swallow(e); } }
-function iosCmd(c, o = {}) { const m = Object.assign({ type: 'cmd', c }, o); try { if (_iosCh) _iosCh.postMessage(m); } catch (e) { _swallow(e); } try { if (typeof rtcSend === 'function') rtcSend(m); } catch (e) { _swallow(e); } }
-if (_iosCh) _iosCh.onmessage = e => { if (IOS_MODE) { if (e.data && e.data.type === 'mirror') iosMirrorApply(e.data); else iosRender(e.data); } else iosHandle(e.data); };
+function _iosPost(m) { try { if (_iosCh) _iosCh.postMessage(m); } catch (e) { _swallow(e); } try { if (typeof rtcSend === 'function') rtcSend(m); } catch (e) { _swallow(e); } }
+// ── 명령 확인(ACK) · 다시 보내기 — 인터넷 중계(MQTT QoS 0)는 가끔 하나를 잃는다 ──
+//   교관 쪽: 명령마다 번호를 붙여 보내고, 1.5초 안에 받았다는 답이 없으면 3번까지 다시 보낸다 · 그래도 없으면 알린다
+//   교육생 쪽: 번호를 기억해 같은 명령은 한 번만 하고, 받을 때마다 답한다. ping · 손잡이 이어 누름 · 조이스틱처럼 잦은 것은 번호 없이
+let _iosCmdSeq = 0, _iosNoAckWarnT = 0;
+const _iosPend = new Map(), _iosSeenIds = [];
+const _iosNoAck = (c, o) => c === 'ping' || c === 'kg' || (c === 'msn' && o && o.f === '_joy');
+function _iosAck(qid) { _iosPost({ type: 'ack', qid }); }
+function iosCmd(c, o = {}) {
+  if (IOS_MODE && typeof rtc !== 'undefined' && rtc.obs && c !== 'ping') { try { uiToast('👀 관찰 기기 — 보기만 합니다(조작은 교관 기기에서)', 'warn', 2500); } catch (e) { _swallow(e); } return false; }
+  const m = Object.assign({ type: 'cmd', c }, o);
+  if (IOS_MODE && !_iosNoAck(c, o)) { m.qid = Date.now().toString(36) + '-' + (++_iosCmdSeq); _iosPend.set(m.qid, { m, n: 0, t: Date.now() }); }
+  _iosPost(m); return true;
+}
+function iosAckIn(m) { if (m && m.type === 'ack') { _iosPend.delete(m.qid); return true; } return false; }
+if (IOS_MODE) setInterval(() => {
+  const now = Date.now();
+  for (const [id, p] of _iosPend) {
+    if (now - p.t < 1500) continue;
+    if (p.n >= 3) {
+      _iosPend.delete(id);
+      if (now - _iosNoAckWarnT > 5000) { _iosNoAckWarnT = now; try { uiToast(`교관 명령(${p.m.c})이 교육생 기기에 닿지 않았습니다 — 연결을 확인하십시오`, 'err', 5000); } catch (e) { _swallow(e); } }
+      continue;
+    }
+    p.n++; p.t = now; _iosPost(p.m);
+  }
+}, 500);
+// ── 연결 상태 알림 — 교관 쪽: 교육생 상태가 5초 끊기면 · 다시 오면 / 교육생 쪽: 교관 ping 이 6초 끊기면 · 다시 오면 ──
+let _iosLinkPrev = 'wait', _iosPeerHad = false, _iosPeerLostT = 0;
+setInterval(() => {
+  try {
+    if (IOS_MODE) {
+      const st = iosLinkState().st;
+      if (st !== _iosLinkPrev) {
+        if (st === 'lost' && _iosLinkPrev !== 'wait') uiToast('교육생 기기와 연결이 끊겼습니다 — 다시 잇는 중(화면은 마지막 상태로 멈춤)', 'warn', 5000);
+        else if (st === 'ok' && _iosLinkPrev === 'lost') uiToast('교육생 기기와 다시 이어졌습니다');
+        _iosLinkPrev = st;
+      }
+    } else {
+      const on = Date.now() - _iosPeerT < 6000;
+      if (on) { if (_iosPeerLostT) { uiToast('교관 기기와 다시 이어졌습니다'); _iosPeerLostT = 0; } _iosPeerHad = true; }
+      else if (_iosPeerHad && !_iosPeerLostT) { _iosPeerLostT = Date.now(); uiToast('교관 기기 연결이 끊겼습니다 — 다시 이어지기를 기다립니다', 'warn', 5000); }
+    }
+  } catch (e) { _swallow(e); }
+}, 1000);
+if (_iosCh) _iosCh.onmessage = e => { if (IOS_MODE) { if (e.data && e.data.type === 'mirror') iosMirrorApply(e.data); else if (!iosAckIn(e.data)) iosRender(e.data); } else iosHandle(e.data); };
 if (!IOS_MODE) setInterval(iosSend, 500);
 function openIos() {
   const q = new URLSearchParams(location.search); q.set('ios', '1');
