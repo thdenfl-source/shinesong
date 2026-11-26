@@ -343,6 +343,25 @@ export async function run(page, t) {
   });
   t.ok(L.ctl && L.split && L.open, `조종석(3D) 화면 — 🎯 Vendor 가 오른쪽 버튼 줄 맨 아래(Split screen 밑) · 누르면 전탐석 (${JSON.stringify(L)})`);
   t.ok(L.pop && L.popped && L.back, '전탐석 ⧉ 새 창(다른 모니터) · 다시 누르면 이 창으로');
+  // ── AIS — 같은 표적을 레이더 · TGT 정보 · 항법지도 · 2D 지도에 · AIS 없는 배는 NO AIS · 요구조자는 AIS-SART ──
+  const AI = await page.evaluate(() => {
+    const o = {};
+    msnVslClear(); msnSpawn(1, { brg: 30, nm: 3, spd: 5, anywhere: true, ais: { mmsi: '440123456', name: 'HANRA 7' } }); msnSpawn(1, { brg: 60, nm: 4, spd: 0, anywhere: true, ais: null });
+    const a = msnVsl[0].id, b = msnVsl[1].id;
+    sarPlaceAt(...destPoint(S.lat, S.lon, 10, 2));
+    const T = aisTargets(); o.ids = T.map(x => x.id); o.sart = T.some(x => x.ais.sart && x.id === 'SURV');
+    o.lblA = aisLabel(msnContacts().find(x => x.id === a)); o.lblB = aisLabel(msnContacts().find(x => x.id === b));
+    rdr.tgt = a; msnRenderPanels(); const td = document.querySelector('#msn-root [data-m="tdata"]'); o.tdA = td ? td.textContent : '';
+    rdr.tgt = b; msnRenderPanels(); o.tdB = td ? td.textContent : '';
+    ais.map = true; aisMapSync(); o.layer = !!_aisLayer && _aisLayer.getLayers().length === T.length; ais.map = false; aisMapSync(); o.off = !_aisLayer;
+    o.rand = (() => { let n = 0; for (let i = 0; i < 200; i++) if (_aisMake('화물선')) n++; let f = 0; for (let i = 0; i < 400; i++) if (_aisMake('고속단정')) f++; return n === 200 && f < 100; })();
+    rdr.tgt = null; msnVslClear(); if (sar.on) sarToggleOn();
+    return o;
+  });
+  t.ok(AI.ids.length === 2 && AI.sart && AI.lblA === 'AIS HANRA 7' && AI.lblB === 'NO AIS' && AI.rand,
+    `AIS — 받는 배 · AIS-SART(요구조자)만 AIS 목록 · 없으면 NO AIS · 화물선은 늘 켜고 고속단정은 드물게 (${AI.ids.join(',')})`);
+  t.ok(/HANRA 7/.test(AI.tdA) && /MMSI 440123456/.test(AI.tdA) && /NO AIS/.test(AI.tdB) && AI.layer && AI.off,
+    `지정 표적 정보에 AIS 이름 · MMSI / NO AIS · 2D 지도 AIS 겹 켜고 끄기 (${AI.tdA.split('\n').pop()} / ${AI.tdB.split('\n').pop()})`);
   if (process.env.MSN_SHOT) { await page.evaluate(() => { msnSpawn(4); rdr.tx = true; }); await page.waitForTimeout(3500); await page.screenshot({ path: process.env.MSN_SHOT }); }
   // 다음 묶음이 전탐석을 물려받지 않게
   await page.evaluate(() => { msnShow(false); msnVslClear(); rdr.tx = false; });

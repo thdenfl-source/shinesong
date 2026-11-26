@@ -288,6 +288,44 @@ const VSL_TYPES = [
 ];
 const msnVsl = [];
 let _vslSeq = 0;
+// AIS — 선박 자동식별(VHF) — 화물선은 늘 · 어선 70% · 소형선 40% · 고속단정 10% 만 켜고 있다.
+//   AIS 가 없는데 레이더에 잡히는 배는 'NO AIS'(불법 조업 · 밀입국 의심 — 해상 단속 연습)로 따로 보인다.
+//   요구조자는 AIS-SART(MMSI 970…)를 켜 둔 것으로 본다(레이더 SART 응답과 같은 자리) · 함정도 AIS 를 켠다
+//   지도 겹(CH4 항법지도 · 2D 지도)과 레이더 표적 꼬리표 · 지정 표적 정보(TGT)에 같은 표적으로 나온다 — 받는 거리 AIS_NM
+const AIS_P = { 화물선: 1, 어선: 0.7, 소형선: 0.4, 고속단정: 0.1 }, AIS_NM = 30;
+const AIS_NAMES = ['HANRA', 'SAMHO', 'DONGBANG', 'GEUMSEONG', 'DAEHAN', 'BADA', 'HAEWOO', 'JEJU', 'SEONGJIN', 'MIRAE'];
+const ais = { map: false };
+function _aisMake(ty) {
+  if (Math.random() >= (AIS_P[ty] ?? 0.5)) return null;
+  return { mmsi: '440' + String(Math.floor(100000 + Math.random() * 899999)), name: `${AIS_NAMES[Math.floor(Math.random() * AIS_NAMES.length)]} ${1 + Math.floor(Math.random() * 309)}` };
+}
+// 2D 지도(leaflet) 겹 — 2초마다 새로 그린다
+let _aisLayer = null;
+function aisMapSync() {
+  try {
+    if (typeof L === 'undefined' || typeof leafMap === 'undefined') return;
+    if (!ais.map) { if (_aisLayer) { leafMap.removeLayer(_aisLayer); _aisLayer = null; } return; }
+    if (!_aisLayer) _aisLayer = L.layerGroup().addTo(leafMap);
+    _aisLayer.clearLayers();
+    for (const c of aisTargets()) {
+      const col = c.ais.sart ? '#ff4040' : '#3dff7a';
+      L.circleMarker([c.lat, c.lon], { radius: c.ais.sart ? 7 : 5, color: col, weight: 2, fillOpacity: 0.25 })
+        .bindTooltip(`${aisLabel(c)}<br>MMSI ${c.ais.mmsi}${c.spd > 0.5 ? `<br>${fmtA(c.hdg || 0)}° ${c.spd.toFixed(0)}kt` : ''}`, { direction: 'right' }).addTo(_aisLayer);
+    }
+  } catch (e) { _swallow(e); }
+}
+setInterval(() => { if (ais.map) aisMapSync(); }, 2000);
+// 지금 받는 AIS(거리 안) — 레이더와 같은 id 로
+function aisTargets() {
+  const out = [];
+  for (const c of msnContacts()) {
+    if (!c.ais) continue;
+    const nm = distance(S.lat, S.lon, c.lat, c.lon); if (nm > AIS_NM) continue;
+    out.push(Object.assign({ nm }, c));
+  }
+  return out;
+}
+function aisLabel(c) { return c && c.ais ? `${c.ais.sart ? 'AIS-SART' : 'AIS'} ${c.ais.name}` : 'NO AIS'; }
 function msnSpawn(n = 6, opts = {}) {
   let made = 0;
   for (let i = 0; i < n * 12 && made < n; i++) {
@@ -296,7 +334,8 @@ function msnSpawn(n = 6, opts = {}) {
     if (!opts.anywhere && !_mWater(la, lo)) continue;
     const ty = opts.type ? VSL_TYPES.find(v => v.t === opts.type) || VSL_TYPES[0] : VSL_TYPES[Math.floor(Math.random() * VSL_TYPES.length)];
     msnVsl.push({ id: 'V' + (++_vslSeq), name: ty.t, lat: la, lon: lo, hdg: opts.hdg != null ? opts.hdg : Math.random() * 360,
-      spd: opts.spd != null ? opts.spd : ty.spd[0] + Math.random() * (ty.spd[1] - ty.spd[0]), len: ty.len, rcs: ty.rcs, turnT: 20 + Math.random() * 60 });
+      spd: opts.spd != null ? opts.spd : ty.spd[0] + Math.random() * (ty.spd[1] - ty.spd[0]), len: ty.len, rcs: ty.rcs, turnT: 20 + Math.random() * 60,
+      ais: opts.ais !== undefined ? opts.ais : _aisMake(ty.t) });
     made++;
   }
   return made;
@@ -315,9 +354,9 @@ function _vslStep(dt) {
 // 레이더 · EO/IR 가 볼 수 있는 것 — 선박 표적 · 함정 · 요구조자 · 항공기
 function msnContacts() {
   const out = [];
-  for (const v of msnVsl) out.push({ id: v.id, kind: 'vsl', name: v.name, lat: v.lat, lon: v.lon, hM: 0, len: v.len, hdg: v.hdg, spd: v.spd, rcs: v.rcs });
-  try { if (typeof shipVisible !== 'undefined' && shipVisible && shipLat !== null) out.push({ id: 'SHIP', kind: 'ship', name: '함정', lat: shipLat, lon: shipLon, hM: 0, len: 90, hdg: shipHdg, spd: shipSpd, rcs: 30 }); } catch (e) { _swallow(e); }
-  try { if (typeof sar !== 'undefined' && sar.on && sar.lat !== null && sar.state !== 'aboard') out.push({ id: 'SURV', kind: 'surv', name: sar.type === 'water' ? '익수자' : '요구조자', lat: sar.lat, lon: sar.lon, hM: sar.type === 'water' ? 0 : _mGndFt(sar.lat, sar.lon) * 0.3048, len: 1.8, hdg: 0, spd: 0, rcs: 1 }); } catch (e) { _swallow(e); }
+  for (const v of msnVsl) out.push({ id: v.id, kind: 'vsl', name: v.name, lat: v.lat, lon: v.lon, hM: 0, len: v.len, hdg: v.hdg, spd: v.spd, rcs: v.rcs, ais: v.ais || null });
+  try { if (typeof shipVisible !== 'undefined' && shipVisible && shipLat !== null) out.push({ id: 'SHIP', kind: 'ship', name: '함정', lat: shipLat, lon: shipLon, hM: 0, len: 90, hdg: shipHdg, spd: shipSpd, rcs: 30, ais: { mmsi: '440300150', name: 'KCG 3015' } }); } catch (e) { _swallow(e); }
+  try { if (typeof sar !== 'undefined' && sar.on && sar.lat !== null && sar.state !== 'aboard') out.push({ id: 'SURV', kind: 'surv', name: sar.type === 'water' ? '익수자' : '요구조자', lat: sar.lat, lon: sar.lon, hM: sar.type === 'water' ? 0 : _mGndFt(sar.lat, sar.lon) * 0.3048, len: 1.8, hdg: 0, spd: 0, rcs: 1, ais: { mmsi: '970010001', name: 'SART ACTIVE', sart: true } }); } catch (e) { _swallow(e); }
   try { if (typeof traffic !== 'undefined') for (const t of traffic) out.push({ id: 'A' + t.id, kind: 'air', name: t.ac === 'b206' ? 'Bell 206' : '흰수리', lat: t.lat, lon: t.lon, hM: (t.alt || 0) * 0.3048, len: 15, hdg: t.hdg, spd: t.spd, rcs: 8 }); } catch (e) { _swallow(e); }
   return out;
 }
@@ -905,7 +944,7 @@ function _msnBuild() {
   const slsw = (k, u, d) => `<div>${u}<span class="k" data-slc="${k}"><i></i></span>${d}</div>`;
   R.innerHTML = `
   <div class="msn-top"><b>Vendor · 흰수리 전탐석 MISSION CONSOLE</b><span class="msn-ac" data-m="ac"></span><span class="msn-link" data-m="link"></span><span class="msn-sp"></span>
-    <button data-mact="fly">▶ 비행</button><button data-mact="spawn">선박 표적 생성</button><button data-mact="clear">표적 지우기</button>
+    <button data-mact="fly">▶ 비행</button><button data-mact="spawn">선박 표적 생성</button><button data-mact="clear">표적 지우기</button><button data-mact="ais" title="AIS 선박 · AIS-SART 를 2D 지도(지도 창)에도 겹친다 — CH4 항법지도에는 늘 보인다">AIS 지도</button>
     <button data-mact="help">❓</button><button data-mact="popout" title="전탐석을 새 창으로 — 다른 모니터에서 전탐요원이 · 조종석은 이 창에">⧉ 새 창</button><button data-mact="close">조종석 보기 ⤴</button></div>
   <div class="msn-body">
     <div class="msn-disp"><div class="msn-nopwr" data-m="nopwr"></div>
@@ -1417,6 +1456,7 @@ function eoFocusBy(d) { if (eo.geo) eo.geoTrim = _mClamp(eo.geoTrim + d, -99, 99
 function msnAct(a) {
   switch (a) {
     case 'fly': try { toggleSim(); } catch (e) { _swallow(e); } break;
+    case 'ais': ais.map = !ais.map; aisMapSync(); _mToast(ais.map ? `AIS — 2D 지도에 겹침(${AIS_NM}NM 안 ${aisTargets().length}척)` : 'AIS — 2D 지도에서 거둠'); break;
     case 'spawn': { const n = msnSpawn(6); _mToast(n ? `선박 표적 ${n}척을 둘레 바다(2~12NM)에 띄웠습니다` : '둘레에 바다가 없어 띄우지 못했습니다(지형을 아직 모르면 잠시 뒤에)'); break; }
     case 'clear': msnVslClear(); break;
     case 'nv+': { const i = NV_RNG.indexOf(nv.nm); nv.nm = NV_RNG[_mClamp((i < 0 ? 2 : i) - 1, 0, NV_RNG.length - 1)]; break; }
@@ -1804,7 +1844,7 @@ function _eoHudG(g, x0, y0, W, H, full) {
     g.strokeStyle = col; g.lineWidth = 2 * k;
     [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([sx, sy]) => { g.beginPath(); g.moveTo(cx + sx * gw, cy + sy * gw - sy * b); g.lineTo(cx + sx * gw, cy + sy * gw); g.lineTo(cx + sx * gw - sx * b, cy + sy * gw); g.stroke(); });
     if (full) T(`${eo.gate} ${eo.alg}`, cx, cy - gw - 6 * k, 'center', 12, col);
-    if (eo.trk === 'LOCKED' && eo.lock && eo.lock.kind === 'obj') T(`TRK ${eo.lock.id}`, cx, cy + gw + 16 * k, 'center', 12, col);
+    if (eo.trk === 'LOCKED' && eo.lock && eo.lock.kind === 'obj') { T(`TRK ${eo.lock.id}`, cx, cy + gw + 16 * k, 'center', 12, col); const lc = msnContacts().find(x => x.id === eo.lock.id); if (lc && lc.kind !== 'air') T(aisLabel(lc), cx, cy + gw + 30 * k, 'center', 11, lc.ais ? '#6dff9a' : '#ffa040'); }
   }
   if (!full) return;
   // ── 전탐석 화면만 ──
@@ -1874,6 +1914,7 @@ function _rdrPaint(g, W, H) {
   if (sr) { const rel = normAS(sr.brg - S.hdg); if (Math.abs(rel) <= half) { g.strokeStyle = '#5ef'; g.lineWidth = 2; for (let i = 0; i < 12; i++) { const nm = sr.nm + i * 0.64; if (nm > rdr.rng) break; const [x, y] = P(rel, nm); g.beginPath(); g.arc(x, y, 3.5 * k, 0, 2 * Math.PI); g.stroke(); } const [x, y] = P(rel, sr.nm); g.fillStyle = '#5ef'; g.textAlign = 'left'; g.fillText('SART', x + 8 * k, y - 6 * k); } }
   // 추적 표적(TRK) — 상자 · 번호 · 침로 막대
   const now = performance.now();
+  const _cmap = {}; for (const x of msnContacts()) _cmap[x.id] = x;
   for (const [id, no] of Object.entries(rdr.trkNo)) {
     const p = rdr.paint[id]; if (!p || p.nm > rdr.rng) continue;
     const rel = normAS(p.brg - S.hdg); if (Math.abs(rel) > half) continue;
@@ -1882,7 +1923,7 @@ function _rdrPaint(g, W, H) {
     const T = rdr.trk[id];
     if (T && T.spd > 1) { const [la, lo] = destPoint(...destPoint(S.lat, S.lon, p.brg, p.nm), T.cse, T.spd / 60 * 3); const [x2, y2] = P(normAS(bearing(S.lat, S.lon, la, lo) - S.hdg), distance(S.lat, S.lon, la, lo)); g.beginPath(); g.moveTo(x, y); g.lineTo(x2, y2); g.stroke(); }
     if (rdr.tails && T && T.tail) { g.fillStyle = sel ? A : '#ff7070'; for (const q of T.tail) { const rq = normAS(bearing(S.lat, S.lon, q.lat, q.lon) - S.hdg), nq = distance(S.lat, S.lon, q.lat, q.lon); if (Math.abs(rq) > half || nq > rdr.rng) continue; const [tx, ty] = P(rq, nq); g.beginPath(); g.arc(tx, ty, 1.8 * k, 0, 2 * Math.PI); g.fill(); } }   // CONTACT TAILS
-    if (rdr.lblAll || sel) { g.fillStyle = sel ? A : '#ff7070'; g.textAlign = 'left'; g.fillText(`TRK${String(no).padStart(2, '0')}`, x + s2 + 2, y - s2); }   // SEARCH > ALL 꺼지면 고른 표적만 번호
+    if (rdr.lblAll || sel) { g.fillStyle = sel ? A : '#ff7070'; g.textAlign = 'left'; g.fillText(`TRK${String(no).padStart(2, '0')}`, x + s2 + 2, y - s2); const c = _cmap[id]; if (c && c.kind !== 'air') { g.fillStyle = c.ais ? '#6dff9a' : '#ffa040'; g.fillText(c.ais ? (c.ais.sart ? 'AIS-SART' : c.ais.name) : 'NO AIS', x + s2 + 2, y - s2 + 11 * Math.max(0.8, k)); } }   // AIS 이름 · 없으면 NO AIS(단속 의심)   // SEARCH > ALL 꺼지면 고른 표적만 번호
   }
   // 커서
   { const [x, y] = P(rdr.cur.az, rdr.cur.nm); g.strokeStyle = A; g.lineWidth = 2; g.beginPath(); g.moveTo(x - 12 * k, y); g.lineTo(x + 12 * k, y); g.moveTo(x, y - 12 * k); g.lineTo(x, y + 12 * k); g.stroke(); g.lineWidth = 1; g.beginPath(); g.arc(x, y, 15 * k, 0, 2 * Math.PI); g.stroke(); }
@@ -1982,7 +2023,8 @@ function msnRenderPanels() {
   if (td) {
     const c = rdr.tgt && msnContacts().find(x => x.id === rdr.tgt), T = rdr.tgt && rdr.trk[rdr.tgt];
     td.textContent = c ? `TGT ${c.id} (${c.name})\nRNG ${distance(S.lat, S.lon, c.lat, c.lon).toFixed(2)}NM  BRG ${fmtA(bearing(S.lat, S.lon, c.lat, c.lon))}°` +
-      (T && T.spd != null ? `\nCSE ${fmtA(T.cse || 0)}°  SPD ${T.spd.toFixed(1)}KT` : '\nCSE ---  SPD ---') : (rdr.tx ? '표적을 누르면 지정합니다' : '');
+      (T && T.spd != null ? `\nCSE ${fmtA(T.cse || 0)}°  SPD ${T.spd.toFixed(1)}KT` : '\nCSE ---  SPD ---') +
+      (c.kind === 'air' ? '' : c.ais ? `\n${aisLabel(c)}  MMSI ${c.ais.mmsi}` : '\nNO AIS — 신원 확인(EO/IR) · 단속 대상 여부') : (rdr.tx ? '표적을 누르면 지정합니다' : '');
   }
   slcRender(); dvrRender();
   _msnEl.querySelectorAll('[data-dk]').forEach(b => { const k = b.dataset.dk; b.classList.toggle('on', (k === 'multi' && disp.lay === 'quad') || (k === 'split' && disp.lay === 'split') || (k === 'pip' && eo.pip !== 'OFF') || (k === 'pwr' && disp.pwr) || (k === 'navi' && disp.lay === 'one' && disp.ch === 4) || (k === 'v' + disp.ch && disp.lay === 'one')); });
@@ -2051,6 +2093,16 @@ function _nvRender(cell) {
     const q = P(c2.lat, c2.lon); if (!q) continue;
     g.fillStyle = c2.kind === 'air' ? '#9ff' : '#ffef6a'; g.beginPath(); g.moveTo(q.x, q.y - 6); g.lineTo(q.x + 6, q.y); g.lineTo(q.x, q.y + 6); g.lineTo(q.x - 6, q.y); g.fill();
     if (c2.id === rdr.tgt) { g.strokeStyle = '#ffc400'; g.lineWidth = 2; g.strokeRect(q.x - 10, q.y - 10, 20, 20); g.fillStyle = '#ffc400'; g.font = 'bold 11px Arial'; g.textAlign = 'left'; g.fillText(c2.id, q.x + 12, q.y - 8); }
+    if (!c2.ais && c2.kind !== 'air') { g.fillStyle = '#ffa040'; g.font = '10px Arial'; g.textAlign = 'left'; g.fillText('NO AIS', q.x + 9, q.y + 4); }
+  }
+  // AIS — 받은 배는 침로로 돌린 초록 삼각형 · 이름 / AIS-SART 는 빨간 원 십자 (레이더가 꺼져 있어도 보인다)
+  for (const c2 of aisTargets()) {
+    const q = P(c2.lat, c2.lon); if (!q) continue;
+    g.save(); g.translate(q.x, q.y); g.lineWidth = 1.5;
+    if (c2.ais.sart) { g.strokeStyle = '#ff4040'; g.beginPath(); g.arc(0, 0, 7, 0, 2 * Math.PI); g.moveTo(-5, -5); g.lineTo(5, 5); g.moveTo(5, -5); g.lineTo(-5, 5); g.stroke(); }
+    else { g.rotate(((c2.hdg || 0) - (hdgUp ? S.hdg : 0)) * _mD); g.strokeStyle = '#6dff9a'; g.beginPath(); g.moveTo(0, -8); g.lineTo(5, 6); g.lineTo(-5, 6); g.closePath(); g.stroke(); }
+    g.restore();
+    g.font = '10px Arial'; g.textAlign = 'left'; g.fillStyle = c2.ais.sart ? '#ff6060' : '#6dff9a'; g.fillText(c2.ais.sart ? 'AIS-SART' : c2.ais.name, q.x + 9, q.y + 12);
   }
   // 커서
   if (nv.cur) { const q = P(nv.cur.lat, nv.cur.lon); if (q) { g.strokeStyle = '#fff'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(q.x - 12, q.y); g.lineTo(q.x + 12, q.y); g.moveTo(q.x, q.y - 12); g.lineTo(q.x, q.y + 12); g.stroke(); } }
