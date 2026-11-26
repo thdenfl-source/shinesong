@@ -1144,7 +1144,7 @@ html.env-rain1 .env-rain { display: block; opacity: 0.45; } html.env-rain2 .env-
 #set-wrap .set-box, #rtc-wrap .set-box, #diag-wrap .set-box, #tileprep-wrap .set-box { width: min(520px, 96vw); max-height: 88vh; overflow-y: auto; background: #121a21; border: 1px solid #3a4a58; border-radius: 8px; color: #dfe6ec; font-size: 14px; padding-bottom: 10px; }
 .set-box .set-bar { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; background: #1b2731; margin-bottom: 4px; }
 .set-box .set-row { display: flex; align-items: center; gap: 8px; padding: 5px 12px; } .set-box .set-row > span { width: 150px; flex: none; color: #8aa0b0; }
-.set-box .set-row > div { display: flex; flex-wrap: wrap; gap: 4px; flex: 1; } .set-box .sim-btn { width: auto; flex: none; padding: 4px 10px; margin: 0; }
+.set-box .set-row > div { display: flex; flex-wrap: wrap; gap: 4px; flex: 1; align-items: center; } .set-box .set-gap { width: 10px; } .set-box .set-sum { color: #8aa0b0; font-size: 12px; margin-left: 6px; } .set-box .sim-btn { width: auto; flex: none; padding: 4px 10px; margin: 0; }
 .set-box .sim-btn.on { border-color: #00e5ff; color: #00e5ff; } .set-box .set-note { padding: 6px 12px; color: #8aa0b0; font-size: 12px; }
 .set-box select { flex: 1; min-width: 0; max-width: 100%; background: #0b1218; color: #fff; border: 1px solid #3a4a58; border-radius: 4px; padding: 5px 6px; font-size: 13px; }
 .set-box input[type=text] { flex: 1; min-width: 0; background: #0b1218; color: #fff; border: 1px solid #3a4a58; border-radius: 4px; padding: 5px 8px; font-size: 14px; }

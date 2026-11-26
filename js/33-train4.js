@@ -448,8 +448,11 @@ function toggleSettings() {
       else if (k === 'voiceTest') { if (typeof speak === 'function') speak(`${appSet.callsign}, radar contact, maintain VFR.`); }
       else if (k === 'raCall' && typeof envSet === 'function') envSet({ raCall: v === '1' });
       else if (k === 'export') settingsExport();
-      else if (k === 'reset') Promise.resolve(typeof uiConfirm === 'function' ? uiConfirm('모든 설정 · 시나리오 · 저장 비행을 지우고 처음으로 돌릴까요?') : false).then(ok => { if (ok) settingsReset(); });
+      else if (k === 'reset') Promise.resolve(typeof uiConfirm === 'function' ? uiConfirm('모든 설정(조이스틱 · 단위 · 창 배치 · 환경) · 시나리오 · 저장 비행을 지우고 처음으로 돌릴까요? 비행계획 · 차트는 남깁니다.') : false).then(ok => { if (ok) settingsReset(); });
       else if (k === 'ios') toggleRemoteIos();
+      else if (k === 'unit' && typeof setUnit === 'function') { const [kind, val] = v.split('='); setUnit(kind, val); }
+      else if (k === 'joy' && typeof toggleJoy === 'function') { w.style.display = 'none'; toggleJoy(); return; }
+      else if (k === 'kbd' && typeof toggleKbdShortcuts === 'function') { w.style.display = 'none'; toggleKbdShortcuts(); return; }
       _setRender();
     });
     w.addEventListener('change', e => {
@@ -480,24 +483,85 @@ function _setRender() {
     <div class="set-row"><span>콜사인(관제)</span><div><input type="text" data-setv="callsign" value="${appSet.callsign.replace(/"/g, '&quot;')}"></div></div>
     <div class="set-row"><span>STICK 감도</span><div>${[0.5, 0.75, 1, 1.5].map(v => `<button class="sim-btn ${appSet.stickK === v ? 'on' : ''}" data-set="stickK:${v}">×${v}</button>`).join('')}</div></div>
     <div class="set-row"><span>STICK 데드존</span><div>${[0, 0.05, 0.1].map(v => `<button class="sim-btn ${appSet.stickDead === v ? 'on' : ''}" data-set="stickDead:${v}">${v ? Math.round(v * 100) + '%' : '없음'}</button>`).join('')}</div></div>
+    <div class="set-row"><span>단위</span><div>${(() => {
+      const u = (kind, val, lbl, cur) => `<button class="sim-btn ${cur === val ? 'on' : ''}" data-set="unit:${kind}=${val}">${lbl}</button>`;
+      const g = (a, b) => typeof a !== 'undefined' ? a : b;
+      return [u('alt', 'ft', 'ft', g(unitAlt, 'ft')) + u('alt', 'm', 'm', g(unitAlt, 'ft')), u('dist', 'NM', 'NM', g(unitDist, 'NM')) + u('dist', 'km', 'km', g(unitDist, 'NM')),
+        u('spd', 'kt', 'kt', g(unitSpd, 'kt')) + u('spd', 'kmh', 'km/h', g(unitSpd, 'kt')), u('temp', 'C', '°C', g(unitTemp, 'C')) + u('temp', 'F', '°F', g(unitTemp, 'C'))].join('<span class="set-gap"></span>');
+    })()}</div></div>
+    <div class="set-row"><span>조종 장치</span><div><button class="sim-btn" data-set="joy:1">🎮 조이스틱 축 · 버튼</button><button class="sim-btn" data-set="kbd:1">⌨ 키보드 단축키</button><span class="set-sum">${_setJoySum()}</span></div></div>
     <div class="set-row"><span>교관 기기 연결</span><div><button class="sim-btn" data-set="ios">📱 Instructor Sync(QR)</button></div></div>
     <div class="set-row"><span>모든 설정</span><div><button class="sim-btn" data-set="export">내보내기</button><label class="sim-btn">들여오기<input type="file" accept=".json" data-setv="file" hidden></label><button class="sim-btn" data-set="reset">초기화</button></div></div>
-    <div class="set-note">환경(시간대 · 시정 · 바다 · 돌풍 · 구름 · 지면 · 교통량)은 🌙 ENV 에서 고릅니다.</div></div>`;
+    <div class="set-note">내보내기 파일에는 조이스틱 축 · 버튼 배정 · 키보드 단축키 · 단위 · 창 배치 · 환경 · 시나리오 · 저장 비행 · 비행계획이 모두 들어갑니다(교관 기기 짝 정보는 빼고).<br>
+      환경(시간대 · 시정 · 바다 · 돌풍 · 구름 · 지면 · 교통량)은 🌙 ENV 에서 고릅니다.</div></div>`;
 }
-const SET_KEYS = ['appSet', 'envSet', 'scnList', 'fdrSaved', 'b206rad', 'shipMotion', 'simSound', 'autoMetarOn'];
-function settingsExport() {
-  const o = {}; SET_KEYS.forEach(k => { try { const v = localStorage.getItem(k); if (v !== null) o[k] = v; } catch (e) { _swallow(e); } });
+// 모든 설정 — 이 기기 localStorage 의 앱 항목을 묶음별로 내보내고 들여온다(조이스틱 · 단위 · 창 배치까지).
+//   빼는 것: 교관 기기 짝(rtcPair — 기기마다 다르다) · 한 번 본 안내 표시 · 지도 타일 같은 캐시(Cache Storage — 지도 미리 받기가 따로 맡는다)
+//   시나리오 · 저장 비행은 IndexedDB 에 있어 메모리 목록에서 꺼내 넣는다.
+const SET_KEYS = ['appSet', 'envSet', 'scnList', 'fdrSaved', 'b206rad', 'shipMotion', 'simSound', 'autoMetarOn'];   // 예전 파일과 맞춤(늘 넣는다)
+const SET_SKIP = /^(rtcPair|helpDismissed|vfrUnlocked|vfrStartApt$|_|debug)/;
+const SET_GROUPS = [
+  ['조종 장치', /^(joy|kbd|vStick|stick)/i],
+  ['단위', /^unit/],
+  ['창 배치 · 화면', /(Split|Layout|Mode2|split|pfdSk|nightMode|extCam|fpvOn|sysLayout|Ratio|kuhSeat|fixLayer|rangeRings|trkColor|raStMode|lit)/],
+  ['비행계획 · 차트', /^(fpl|savedCharts|chartCalib|navStby|vfrStartAptLast)/],
+  ['시나리오 · 저장 비행', /^(scnList|fdrSaved)$/],
+];
+function _setGroup(k) { for (const [g, re] of SET_GROUPS) if (re.test(k)) return g; return '환경 · 임무 · 기타'; }
+function _setJoySum() {
+  try {
+    const nb = typeof joyBinds === 'object' && joyBinds ? Object.keys(joyBinds).length : 0;
+    const ax = typeof joyAxes === 'object' && joyAxes ? Object.keys(joyAxes).length : 0;
+    return `축 ${ax} · 버튼 ${nb}개 배정${typeof joyOn !== 'undefined' && joyOn ? ' · 켜짐' : ''}`;
+  } catch (e) { return ''; }
+}
+function settingsCollect() {
+  const o = {};
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i); if (!k || SET_SKIP.test(k)) continue;
+      const v = localStorage.getItem(k); if (v !== null && v.length < 2e6) o[k] = v;
+    }
+  } catch (e) { _swallow(e); }
+  try { if (typeof scnList === 'function') { const a = scnList(); if (a.length) o.scnList = JSON.stringify(a); } } catch (e) { _swallow(e); }        // 시나리오는 IndexedDB
   try { if (typeof fdrSavedList === 'function' && fdrSavedList().length) o.fdrSaved = JSON.stringify(fdrSavedList()); } catch (e) { _swallow(e); }   // 저장 비행은 IndexedDB
+  return o;
+}
+function settingsSummary(o) {
+  const c = {}; Object.keys(o).forEach(k => { const g = _setGroup(k); c[g] = (c[g] || 0) + 1; });
+  return Object.keys(c).map(g => `${g} ${c[g]}`).join(' · ');
+}
+function settingsExport() {
+  const o = settingsCollect();
+  o._meta = JSON.stringify({ app: 'shinesong', ed: typeof APP_EDITION !== 'undefined' ? APP_EDITION : '', at: new Date().toISOString() });
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(o)], { type: 'application/json' })); a.download = 'shinesong-settings.json';
   document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  try { uiToast(`설정을 내보냈습니다 — ${settingsSummary(settingsCollect())}`, '', 4000); } catch (e) { _swallow(e); }
   return o;
 }
 function settingsImport(text) {
-  let n = 0; try { const o = JSON.parse(text); for (const k of SET_KEYS) if (typeof o[k] === 'string') { if (k === 'fdrSaved' && typeof fdrSavedReplace === 'function') fdrSavedReplace(JSON.parse(o[k])); else localStorage.setItem(k, o[k]); n++; } } catch (e) { _swallow(e); }
-  try { uiToast(n ? `설정 ${n}가지를 들여왔습니다 — 다시 열면 반영됩니다` : '설정 파일을 읽지 못했습니다', n ? '' : 'err'); } catch (e) { _swallow(e); }
+  let n = 0;
+  try {
+    const o = JSON.parse(text);
+    for (const k of Object.keys(o)) {
+      if (k === '_meta' || SET_SKIP.test(k) || typeof o[k] !== 'string') continue;
+      if (k === 'fdrSaved' && typeof fdrSavedReplace === 'function') fdrSavedReplace(JSON.parse(o[k]));
+      else if (k === 'scnList' && typeof _scnSaveList === 'function') _scnSaveList(JSON.parse(o[k]));
+      else localStorage.setItem(k, o[k]);
+      n++;
+    }
+    if (n) try { uiToast(`설정 ${n}가지를 들여왔습니다(${settingsSummary(o)}) — 다시 열면 모두 반영됩니다`, '', 5000); } catch (e) { _swallow(e); }
+  } catch (e) { _swallow(e); }
+  if (!n) try { uiToast('설정 파일을 읽지 못했습니다', 'err'); } catch (e) { _swallow(e); }
   return n;
 }
-function settingsReset() { SET_KEYS.forEach(k => { try { localStorage.removeItem(k); } catch (e) { _swallow(e); } }); try { if (typeof fdrSavedReplace === 'function') fdrSavedReplace([]); } catch (e) { _swallow(e); } try { uiToast('설정을 지웠습니다 — 다시 열면 처음 상태입니다'); } catch (e) { _swallow(e); } }
+function settingsReset() {
+  const ks = Object.keys(settingsCollect()).filter(k => _setGroup(k) !== '비행계획 · 차트').concat(SET_KEYS);   // 비행계획 · 차트(사용자 자료)는 남긴다
+  ks.forEach(k => { try { localStorage.removeItem(k); } catch (e) { _swallow(e); } });
+  try { if (typeof fdrSavedReplace === 'function') fdrSavedReplace([]); } catch (e) { _swallow(e); }
+  try { if (typeof _scnSaveList === 'function') _scnSaveList([]); } catch (e) { _swallow(e); }
+  try { uiToast('설정을 지웠습니다 — 다시 열면 처음 상태입니다'); } catch (e) { _swallow(e); }
+}
 
 // ── ⑥ 도구 메뉴(🧰) — 작은 화면(폭 900 · 높이 700 아래)에서는 낱 단추 대신 이 메뉴 하나로 ──
 const TOOLS = [['🎬 시나리오', 'toggleScenario'], ['🌙 환경', 'toggleEnvPanel'], ['📋 강평', 'toggleDebrief'], ['🧑‍✈️ Instructor View', 'openIos'], ['📱 Instructor Sync', 'toggleRemoteIos'], ['⚙ 설정', 'toggleSettings'], ['🗺 지도 미리 받기', 'toggleTilePrep'], ['🩺 진단 기록', 'toggleDiag'], ['📘 교관 교범', 'openManual'], ['❓ 도움말', 'toggleHelp']];
