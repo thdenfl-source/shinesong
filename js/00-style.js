@@ -1249,6 +1249,13 @@ html.ios-mode body { background: #0b1218; overflow: auto; }
 #dbf-mini { display: none; position: fixed; left: 50%; bottom: 12px; transform: translateX(-50%); z-index: 30000; gap: 6px; align-items: center; padding: 6px 10px;
   background: rgba(18,26,33,0.92); border: 1px solid #3a4a58; border-radius: 8px; color: #dfe6ec; font-size: 13px; width: min(720px, 94vw); }
 #dbf-mini .sim-btn { width: auto; flex: none; padding: 3px 8px; margin: 0; } #dbf-mini input { flex: 1; min-width: 60px; }
+#dbf-mini { width: min(940px, 96vw); flex-wrap: wrap; } #dbf-mini .rp-bar { position: relative; flex: 1; min-width: 120px; display: flex; } #dbf-mini .rp-bar input { width: 100%; }
+#dbf-mini .rp-marks { position: absolute; left: 8px; right: 8px; top: -3px; height: 6px; pointer-events: none; }
+#dbf-mini .rp-mk { position: absolute; width: 2px; height: 8px; background: #8fd3ff; transform: translateX(-1px); } #dbf-mini .rp-mk.warn { background: #ffb000; } #dbf-mini .rp-mk.err { background: #ff5252; }
+#dbf-mini .rp-seg { position: absolute; top: 2px; height: 3px; background: rgba(120,255,160,0.55); }
+#dbf-mini .rp-ev { position: absolute; left: 50%; bottom: 100%; transform: translateX(-50%); margin-bottom: 6px; padding: 3px 10px; border-radius: 6px; background: rgba(18,26,33,0.92); border: 1px solid #3a4a58; white-space: nowrap; opacity: 0; transition: opacity .3s; pointer-events: none; }
+#dbf-mini .rp-ev.show { opacity: 1; } #dbf-mini .rp-ev.warn { color: #ffb000; } #dbf-mini .rp-ev.err { color: #ff5252; }
+#dbf-mini .sim-btn.on { background: #2e7d32; }
 #dbf-wrap .dbf-ev div { cursor: pointer; padding: 1px 0; } #dbf-wrap .dbf-ev .warn { color: #ffb000; } #dbf-wrap .dbf-ev .err { color: #ff5252; }
 #dbf-wrap .dbf-ev .cur { background: #22384a; }
 @media (max-width: 700px) { #dbf-wrap .dbf-main { flex-direction: column; } #dbf-wrap .dbf-bot { flex-direction: column; height: 200px; } }
