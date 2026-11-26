@@ -265,6 +265,34 @@ function tilesAreaList(lat, lon, nm, { satMin = 8, satMax = 14, demMin = 8, demM
   add('sat', satMin, satMax); add('dem', demMin, demMax);
   return out.sort((p, q) => p.z - q.z || p.d - q.d);
 }
+// 항로 따라 — 비행계획 지점을 잇는 선 둘레(반경 nm) 타일. 선 위로 nm 마다 둥근 구역을 겹쳐 놓고 겹치는 타일은 한 번만
+function tilesRouteList(pts, nm, opt) {
+  const seen = new Set(), out = [];
+  const push = L => L.forEach(t => { const k = t.kind + t.z + '/' + t.x + '/' + t.y; if (!seen.has(k)) { seen.add(k); out.push(t); } });
+  const P = (pts || []).filter(p => p && Number.isFinite(p.lat) && Number.isFinite(p.lon));
+  if (P.length === 1) push(tilesAreaList(P[0].lat, P[0].lon, nm, opt));
+  for (let i = 0; i + 1 < P.length; i++) {
+    const a = P[i], b = P[i + 1];
+    const d = Math.hypot((b.lat - a.lat) * 60, (b.lon - a.lon) * 60 * Math.cos(a.lat * Math.PI / 180));
+    const n = Math.max(1, Math.ceil(d / Math.max(1, nm)));
+    for (let j = 0; j <= n; j++) { const f = j / n; push(tilesAreaList(a.lat + (b.lat - a.lat) * f, a.lon + (b.lon - a.lon) * f, nm, opt)); }
+  }
+  return out.sort((p, q) => p.z - q.z || p.d - q.d);
+}
+// 자주 쓰는 지역 — 이름 · 가운데 · 반경을 이 기기(localStorage 'tileAreas')에 남겨 두고 다시 받는다(받은 날도 적는다)
+function tileAreas() { try { const a = JSON.parse(localStorage.getItem('tileAreas') || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; } }
+function tileAreasSave(a) { try { localStorage.setItem('tileAreas', JSON.stringify(a.slice(0, 20))); } catch (e) { _swallow(e); } }
+function tileAreaAdd(name, lat, lon, nm) {
+  const a = tileAreas().filter(x => x.name !== name);
+  a.unshift({ name: String(name).slice(0, 30), lat: +lat.toFixed(4), lon: +lon.toFixed(4), nm, at: null });
+  tileAreasSave(a); return a;
+}
+function _fplPts() { try { return (S.wps || []).map(w => ({ lat: +w.lat, lon: +w.lon })).filter(p => Number.isFinite(p.lat) && Number.isFinite(p.lon)); } catch (e) { return []; } }
+// 인터넷이 끊기면 알린다 — 받아 둔 지도로 계속 돈다
+try {
+  window.addEventListener('offline', () => { try { uiToast('인터넷 끊김 — 받아 둔 지도(🧰 → 🗺 지도 미리 받기)로 계속합니다', 'warn', 5000); } catch (e) { _swallow(e); } });
+  window.addEventListener('online', () => { try { uiToast('인터넷 다시 연결됨'); } catch (e) { _swallow(e); } });
+} catch (e) { _swallow(e); }
 // 받기 — 이미 캐시에 있으면 건너뛴다. 위성 사진은 3D(?blankTile=false)와 2D · MFD(꼬리표 없음) 두 이름으로 넣는다
 const tilePrep = { busy: false, stop: false, done: 0, have: 0, fail: 0, total: 0 };
 async function tilesPrefetch(list, onProgress) {
@@ -308,7 +336,14 @@ async function tileCacheClear() {
     }
   } catch (e) { _swallow(e); }
 }
-function _tpEst(nm) { const L = tilesAreaList(S.lat, S.lon, nm); return { n: L.length, mb: L.length * TILE_PREP_KB / 1024, list: L }; }
+let _tpSrc = 'here';   // here · fpl · area:<i>
+function _tpEst(nm) {
+  let L;
+  if (_tpSrc === 'fpl') L = tilesRouteList(_fplPts(), Math.min(nm, 10));        // 항로는 양옆 10NM 까지
+  else if (_tpSrc.startsWith('area:')) { const A = tileAreas()[+_tpSrc.slice(5)]; L = A ? tilesAreaList(A.lat, A.lon, A.nm) : []; }
+  else L = tilesAreaList(S.lat, S.lon, nm);
+  return { n: L.length, mb: L.length * TILE_PREP_KB / 1024, list: L };
+}
 function toggleTilePrep() {
   let w = document.getElementById('tileprep-wrap');
   if (w && w.style.display === 'flex') { if (!tilePrep.busy) w.style.display = 'none'; return; }
@@ -322,12 +357,19 @@ function toggleTilePrep() {
       else if (k === 'stop') tilePrep.stop = true;
       else if (k === 'clear') { if (await uiConfirm('받아 둔 지도 타일(위성 · 지형 · 지도)을 모두 지울까요?')) { await tileCacheClear(); _tpRender(); } }
       else if (k.startsWith('nm')) { _tpNm = +k.slice(2); _tpRender(); }
+      else if (k.startsWith('src:')) { _tpSrc = k.slice(4); _tpRender(); }
+      else if (k === 'save') {
+        const nm = await uiPrompt('이 지역 이름(예: 제주 기지 · 서귀포 해역)', '');
+        if (nm && nm.trim()) { tileAreaAdd(nm.trim(), S.lat, S.lon, _tpNm); _tpSrc = 'area:0'; _tpRender(); }
+      }
+      else if (k.startsWith('adel:')) { const a = tileAreas(); a.splice(+k.slice(5), 1); tileAreasSave(a); _tpSrc = 'here'; _tpRender(); }
       else if (k === 'go') {
         const est = _tpEst(_tpNm);
         if (est.n > TILE_PREP_MAX) { uiAlert(`${est.n}장 — 한 번에 ${TILE_PREP_MAX}장까지입니다. 반경을 줄이십시오.`); return; }
         _tpRender();
         const r = await tilesPrefetch(est.list, () => _tpProg());
         uiToast(r.stopped ? `멈춤 — ${r.done}/${r.total}장` : r.ok ? `작전 구역 지도 준비 — ${r.total}장(이미 있던 ${r.have} · 못 받은 ${r.fail})` : r.why, r.fail ? 'warn' : '', 4000);
+        if (r.ok && _tpSrc.startsWith('area:')) { const a = tileAreas(), A = a[+_tpSrc.slice(5)]; if (A) { A.at = new Date().toISOString().slice(0, 10); tileAreasSave(a); } }
         _tpRender();
       }
     });
@@ -346,11 +388,21 @@ function _tpRender() {
   const row = (a, b) => `<div class="set-row"><span>${a}</span><div>${b}</div></div>`;
   const nmBtn = n => `<button class="sim-btn${_tpNm === n ? ' on' : ''}" data-tp="nm${n}" ${P.busy ? 'disabled' : ''}>${n}NM</button>`;
   w.innerHTML = `<div class="set-box diag-box"><div class="set-bar"><b>🗺 작전 구역 지도 미리 받기</b><button class="sim-btn" data-tp="x">✕</button></div>
-    ${row('가운데', `지금 기체 자리 ${S.lat.toFixed(3)}°N ${S.lon.toFixed(3)}°E`)}
+    ${row('어디를', (() => {
+      const dis = P.busy ? 'disabled' : '', b = (v, l) => `<button class="sim-btn${_tpSrc === v ? ' on' : ''}" data-tp="src:${v}" ${dis}>${l}</button>`;
+      const fp = _fplPts().length;
+      return b('here', `지금 자리 ${S.lat.toFixed(2)}°N ${S.lon.toFixed(2)}°E`) + (fp >= 2 ? b('fpl', `비행계획 항로(${fp}지점 · 양옆 ${Math.min(_tpNm, 10)}NM)`) : '');
+    })())}
+    ${row('저장한 지역', (() => {
+      const A = tileAreas(), dis = P.busy ? 'disabled' : '';
+      const esc = t => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+      return (A.length ? A.map((a, i) => `<span class="tp-area"><button class="sim-btn${_tpSrc === 'area:' + i ? ' on' : ''}" data-tp="src:area:${i}" ${dis}>📍 ${esc(a.name)} · ${a.nm}NM${a.at ? ' · ' + a.at : ' · 아직 안 받음'}</button><button class="sim-btn" data-tp="adel:${i}" title="목록에서 지우기" ${dis}>✕</button></span>`).join('') : '<span class="tp-none">없음</span>') +
+        `<button class="sim-btn" data-tp="save" ${dis}>＋ 지금 자리 · 반경을 저장</button>`;
+    })())}
     ${row('반경', [10, 20, 30, 40].map(nmBtn).join(''))}
     ${row('받을 것', `위성 사진 8~14 단계 · 3D 지형 8~12 단계 — ${est.n}장 · 약 ${est.mb.toFixed(0)}MB${est.n > TILE_PREP_MAX ? ` <b style="color:#ff6b6b">(한 번에 ${TILE_PREP_MAX}장까지)</b>` : ''}`)}
     ${row('받아 둔 타일', '<span id="tp-have">세는 중…</span>')}
-    <div class="set-row"><span></span><div id="tp-prog">${P.busy ? '' : '인터넷이 될 때(와이파이) 받아 두면, 끊겨도 2D · 3D · MFD 지도가 뜹니다.'}</div></div>
+    <div class="set-row"><span></span><div id="tp-prog">${P.busy ? '' : '인터넷이 될 때(와이파이) 받아 두면, 끊겨도 2D · 3D · MFD 지도가 뜹니다.' + (navigator.onLine === false ? ' <b style="color:#ffb74d">지금 오프라인</b>' : '')}</div></div>
     <div class="set-row"><span></span><div>${P.busy ? '<button class="sim-btn" data-tp="stop">멈춤</button>' : `<button class="sim-btn" data-tp="go" ${est.n > TILE_PREP_MAX ? 'disabled' : ''}>⬇ 받기</button><button class="sim-btn" data-tp="clear">지우기</button>`}</div></div></div>`;
   if (P.busy) _tpProg();
   tileCacheStats().then(o => { const el = document.getElementById('tp-have'); if (el) el.textContent = `위성 ${o.sat} · 지형 ${o.dem} · 지도(OSM) ${o.osm}장 — 판이 바뀌어도 남습니다`; });
