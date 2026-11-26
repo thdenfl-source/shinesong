@@ -77,6 +77,17 @@ function diagSpikeCheck(now = Date.now()) {
   return hit;
 }
 setInterval(() => { try { diagSpikeCheck(); } catch (e) { /* 진단이 진단을 부르지 않게 */ } }, DIAG_SPIKE_MS);
+// 지금 살아 있는 3D 지도(WebGL 문맥) — 이름 · 화면에 보이는가. 기기마다 문맥 수에 한계(보통 8~16)가 있어 넘으면 오래된 것부터 끊긴다
+function maps3dLive() {
+  const L = [];
+  const add = (name, f, shown) => { try { const m = f(); if (m && m.getCanvas) { const c = m.getCanvas(); L.push({ name, shown: !!shown(m), w: c.width, h: c.height }); } } catch (e) { /* 없다 */ } };
+  const vis = m => { const el = m.getContainer(); return !!el && el.offsetParent !== null && el.clientWidth > 20 && el.getBoundingClientRect().left > -500; };
+  add('메인 3D', () => _ml3d, m => typeof _map3dShown === 'function' ? _map3dShown() : vis(m));
+  add('EO/IR', () => _eoMap, vis);
+  add('전탐석 항법지도', () => _nvMap, vis);
+  add('호이스트 카메라', () => _sarCam.map, () => typeof _sarCam !== 'undefined' && _sarCam.mode === 'on');
+  return L;
+}
 function diagReport() {
   const ver = (() => { const s = [...document.scripts].map(x => x.src).find(u => /\?v=\d+/.test(u)); return s ? 'v' + s.match(/\?v=(\d+)/)[1] : '?'; })();
   return {
@@ -89,6 +100,7 @@ function diagReport() {
     timers: typeof schedStats === 'function' ? schedStats() : null,
     tune: typeof tuneDiff === 'function' ? tuneDiff() : {},
     storage: storageLocalSizes(),
+    maps: maps3dLive(),
   };
 }
 function diagText(r) {
@@ -99,6 +111,7 @@ function diagText(r) {
   L.push(`[삼킨 예외 — 종류별 ${r.swallowed.length}]`); r.swallowed.forEach(([m, n]) => L.push(`  ${n}× ${m}`));
   L.push(`[최근 삼킨 예외 ${r.recent.length}]`); r.recent.forEach(e => L.push(`  ${new Date(e.t).toLocaleTimeString()} ${e.msg} ${e.at}`));
   if (r.timers) { L.push(`[타이머 ${r.timers.tasks}개 · 박자 ${r.timers.ticks}]`); r.timers.list.forEach(t => L.push(`  ${t.ms}ms ${t.name} · ${t.n}회 · 평균 ${t.avgMs}ms${t.err ? ' · 오류 ' + t.err : ''}`)); }
+  L.push(`[3D 지도 ${r.maps.length}]`); r.maps.forEach(m => L.push(`  ${m.name} ${m.shown ? '보임' : '숨김'} ${m.w}×${m.h}`));
   const td = Object.entries(r.tune); L.push(`[바꾼 조정값 ${td.length}]`); td.forEach(([k, v]) => L.push(`  ${k} = ${v}`));
   L.push('[localStorage]'); r.storage.forEach(([k, n]) => L.push(`  ${k} ${_kb(n)}`));
   return L.join('\n');
@@ -133,6 +146,7 @@ function _diagRender() {
     ${row('저장 공간', '<span id="diag-quota">재는 중…</span>')}
     ${row('오프라인 준비', '<span id="diag-offline">확인 중…</span> <button class="sim-btn" data-diag="offline">지금 모두 받아 두기</button>')}
     ${row('저장 비행', `${typeof fdrSavedList === 'function' ? fdrSavedList().length : 0}개 · ${typeof _fdrIdb !== 'undefined' && _fdrIdb ? 'IndexedDB' : 'localStorage'}`)}
+    ${row('3D 지도(WebGL)', r.maps.length ? r.maps.map(m => `${m.name} <i>${m.shown ? '보임' : '숨김'} · ${m.w}×${m.h}</i>`).join(' · ') + ' — 숨은 EO/IR · 전탐석 지도 · 호이스트 카메라는 몇 초 뒤 저절로 거둡니다' : '없음')}
     ${row('타이머', r.timers ? `${r.timers.tasks}개를 한 박자로 · 오류 ${r.timers.list.reduce((a, t) => a + t.err, 0)}` : '—')}
     ${row('바꾼 조정값', td.length ? td.map(([k, v]) => `${_dgEsc(k)}=${_dgEsc(v)}`).join(' · ') + ' <button class="sim-btn" data-diag="tune">기본으로</button>' : '없음(00-params.js 기본)')}
     <div class="diag-h">화면 오류 ${r.errors.length}</div>

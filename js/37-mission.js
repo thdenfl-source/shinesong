@@ -1536,7 +1536,21 @@ function _msnJoyAxes() {
 // 보는 곳이 없으면(5초) 거둔다 — 그래픽 부담.
 let _eoHost = null, _eoWantT = -Infinity;   // 처음에는 아무도 보지 않는다(0 이면 페이지가 뜨자마자 5초 동안 3D 지도를 만들었다 — 페이지마다)
 const EO_IDLE_MS = 5000;
-function _eoNeed() { return msnOpen || performance.now() - _eoWantT < EO_IDLE_MS; }
+// EO/IR 3D 지도가 필요한가 — 조종석 SYSTEM · MFD 가 막 그렸거나(5초), 전탐석 표시기에 EO/IR 칸이 보이거나, 녹화기가 CH1 을 녹화 중일 때만.
+//   전탐석을 열어 두어도 레이더 · 지도 한 칸만 보고 있으면 EO/IR 지도(WebGL)를 거둬 그래픽 메모리를 아낀다(다시 보이면 새로 만든다 — 5초 여유).
+let _eoNeedT = -Infinity;
+function _eoNeed() {
+  const now = performance.now();
+  if (now - _eoWantT < EO_IDLE_MS) return true;
+  if (!msnOpen) return false;
+  let need = false;
+  try {
+    if (typeof dvrRecCh === 'function' && dvrRecCh(1)) need = true;
+    else if (_msnEl && msnScreenOn()) { const ceo = _msnEl.querySelector('.c-eo'); need = !!ceo && _cellVis(ceo); }
+  } catch (e) { need = true; }
+  if (need) _eoNeedT = now;
+  return now - _eoNeedT < EO_IDLE_MS;
+}
 function _eoHostPlace() {
   if (!_eoHost) { _eoHost = document.createElement('div'); _eoHost.className = 'eo-map'; }
   let vid = msnOpen && _msnEl ? _msnEl.querySelector('.eo-vid') : null;
