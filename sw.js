@@ -81,6 +81,7 @@ const CORE  = [
   './js/36-kuhsys.js',
   './js/37-mission.js',
   './js/38-mirror.js',
+  './js/39-train5.js',
   // 로터 소리(16-sound.js) — 되풀이용 WAV
   './sounds/heli-ground.wav',
   './sounds/heli-flight.wav',

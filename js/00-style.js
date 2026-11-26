@@ -1140,8 +1140,8 @@ html.env-rain1 .env-rain { display: block; opacity: 0.45; } html.env-rain2 .env-
 #map-tools-btn { flex: none !important; min-width: 64px; padding-left: 8px; padding-right: 8px; white-space: nowrap; }
 #tools-menu { display: none; position: fixed; z-index: 30003; background: #121a21; border: 1px solid #3a4a58; border-radius: 8px; padding: 6px; box-shadow: 0 6px 18px rgba(0,0,0,0.5); }
 #tools-menu .sim-btn { display: block; width: 100%; margin: 3px 0; text-align: left; padding: 8px 12px; font-size: 14px; }
-#set-wrap, #rtc-wrap, #diag-wrap, #tileprep-wrap { display: none; position: fixed; inset: 0; z-index: 30002; background: rgba(0,0,0,0.45); align-items: center; justify-content: center; }
-#set-wrap .set-box, #rtc-wrap .set-box, #diag-wrap .set-box, #tileprep-wrap .set-box { width: min(520px, 96vw); max-height: 88vh; overflow-y: auto; background: #121a21; border: 1px solid #3a4a58; border-radius: 8px; color: #dfe6ec; font-size: 14px; padding-bottom: 10px; }
+#set-wrap, #rtc-wrap, #diag-wrap, #tileprep-wrap, #iimc-wrap, #bingo-wrap, #radio-wrap { display: none; position: fixed; inset: 0; z-index: 30002; background: rgba(0,0,0,0.45); align-items: center; justify-content: center; }
+#set-wrap .set-box, #rtc-wrap .set-box, #diag-wrap .set-box, #tileprep-wrap .set-box, #iimc-wrap .set-box, #bingo-wrap .set-box, #radio-wrap .set-box { width: min(520px, 96vw); max-height: 88vh; overflow-y: auto; background: #121a21; border: 1px solid #3a4a58; border-radius: 8px; color: #dfe6ec; font-size: 14px; padding-bottom: 10px; }
 .set-box .set-bar { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; background: #1b2731; margin-bottom: 4px; }
 .set-box .set-row { display: flex; align-items: center; gap: 8px; padding: 5px 12px; } .set-box .set-row > span { width: 150px; flex: none; color: #8aa0b0; }
 .set-box .set-row > div { display: flex; flex-wrap: wrap; gap: 4px; flex: 1; align-items: center; } .set-box .set-gap { width: 10px; } .set-box .set-sum { color: #8aa0b0; font-size: 12px; margin-left: 6px; } .set-box .sim-btn { width: auto; flex: none; padding: 4px 10px; margin: 0; }
@@ -1649,6 +1649,14 @@ html.ac-b206 #pfd-ov { background: transparent; border: 0; box-shadow: none; min
 
 /* 진단 기록(34-infra.js) */
 #diag-wrap .diag-box { width: min(680px, 96vw); }
+#tileprep-wrap .tp-area { display: inline-flex; gap: 2px; } #tileprep-wrap .tp-none, #radio-wrap .tp-none { color: #8aa0b0; }
+#iimc-wrap .set-box, #radio-wrap .set-box { width: min(620px, 96vw); } #iimc-wrap .gr-t { border-collapse: collapse; width: calc(100% - 24px); margin: 6px 12px; font-size: 13px; }
+#iimc-wrap .gr-t th, #iimc-wrap .gr-t td { padding: 3px 6px; border-bottom: 1px solid #26323c; text-align: left; } #iimc-wrap .gr-sum { padding: 6px 12px; font-size: 15px; }
+#iimc-wrap .ok, #bingo-wrap .ok, #radio-wrap .ok { color: #7dff3a; } #iimc-wrap .bad, #bingo-wrap .bad, #radio-wrap .bad { color: #ff5252; } #bingo-wrap .warn { color: #ffb000; }
+#iimc-wrap .gr-우수 { color: #7dff3a; } #iimc-wrap .gr-만족 { color: #4fc3f7; } #iimc-wrap .gr-보통 { color: #ffb000; } #iimc-wrap .gr-미흡, #iimc-wrap .gr-불만족 { color: #ff5252; }
+#iimc-wrap .sim-btn.on, #bingo-wrap .sim-btn.on, #radio-wrap .sim-btn.on { background: #1d5a7a; color: #fff; }
+#radio-wrap textarea { width: 100%; background: #0d1318; color: #dfe6ec; border: 1px solid #3a4a58; border-radius: 4px; font-size: 13px; } #radio-wrap .radio-ex { flex: 1; color: #bfe3ff; font-size: 13px; }
+#radio-wrap .radio-chk { font-size: 13px; line-height: 1.6; } #radio-wrap .radio-chk span { margin-right: 6px; white-space: nowrap; }
 #tileprep-wrap .sim-btn.on { background: #1d5a7a; color: #fff; } #tileprep-wrap .tp-bar { height: 8px; background: #26323c; border-radius: 4px; overflow: hidden; margin-bottom: 4px; } #tileprep-wrap .tp-bar i { display: block; height: 100%; background: #3fb950; }
 .diag-box .diag-h { padding: 8px 12px 2px; color: #ffcc66; font-weight: bold; font-size: 13px; }
 .diag-box .diag-list { margin: 0 12px; max-height: 150px; overflow-y: auto; background: #0b1218; border: 1px solid #2a3a48; border-radius: 4px; padding: 4px 6px; font: 11px/1.45 monospace; color: #cfd8df; }

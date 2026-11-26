@@ -75,6 +75,7 @@ function iosHandle(m) {
     else if (c === 'scn' && typeof scnApply === 'function') scnApply(scnList()[+m.i]);
     else if (c === 'sar' && typeof sarPlaceAhead === 'function') { if (m.on) sarPlaceAhead(); else if (sar.on) sarToggleOn(); }
     else if (c === 'debrief' && typeof dbfOpen === 'function') dbfOpen();
+    else if (c === 'iimc' && typeof iimcStart === 'function') { if (m.on === false) { if (typeof iimcEnd === 'function') iimcEnd('교관이 멈춤'); } else iimcStart(); }
     else if (c === 'ping') { _iosPeerT = Date.now(); if (m.pt) _iosPingEcho = m.pt; return; }   // 교관 창이 있다 — 미러를 보낸다(받은 시각은 되돌려 보내 왕복 시간을 잰다)
     else if (c === 'ovhd' && typeof ovhdSet === 'function') ovhdSet(m.id, m.v);  // 교관 창에서 바꾼 콘솔 스위치
     else if (c === 'msn' && typeof msnRemoteCmd === 'function') msnRemoteCmd(m);  // 교관 화면 Vendor(전탐석)의 조작 — 37-mission.js
@@ -133,6 +134,7 @@ function iosBuild() {
     grp('바다', 'sea', [0, 1, 2, 3, 4, 5, 6].map(v => [v, String(v)])) + grp('돌풍', 'gust', [0, 5, 10, 15, 20].map(v => [v, v ? '+' + v : '없음'])) +
     grp('구름 밑면', 'ceil', [0, 500, 1000, 1500, 2500].map(v => [v, v ? v + 'ft' : '없음'])) +
     grp('지면', 'surface', [['normal', '보통'], ['sand', '모래'], ['snow', '눈']]) + grp('교통량', 'traffic', [0, 1, 3, 5].map(v => [v, v ? v + '대' : '없음'])) +
+    `<h2>IIMC</h2><div class="ios-btns"><button data-ios="iimc:1">⚠ IIMC 걸기(구름 속 · 회복 판정)</button><button data-ios="iimc:0">IIMC 멈춤</button></div>` +
     `<h2>SAR · 시나리오</h2><div class="ios-btns"><button data-ios="sar:1">요구조자 앞에 놓기</button><button data-ios="sar:0">요구조자 치우기</button></div><div class="ios-btns" data-iosv="scn"></div>
     <h2>교범</h2><div class="ios-btns"><button data-ios="manual">📘 교관 교범 열기</button></div>
     <h2>메시지</h2><div class="ios-row"><div style="flex:1;display:flex;gap:6px"><input type="text" data-iosv="msg" placeholder="교육생 화면에 띄울 말" style="flex:1"><button data-ios="msg">보내기</button></div></div>`;
@@ -150,6 +152,7 @@ function iosBuild() {
     else if (p[0] === 'msg') { const i = R.querySelector('[data-iosv="msg"]'); if (i.value.trim()) { iosCmd('msg', { text: i.value.trim() }); i.value = ''; } }
     else if (p[0] === 'scn') iosCmd('scn', { i: +p[1] });
     else if (p[0] === 'sar') iosCmd('sar', { on: p[1] === '1' });
+    else if (p[0] === 'iimc') iosCmd('iimc', { on: p[1] === '1' });
     else if (p[0] === 'gal') iosCmd('wb', { o: { gal: +p[1] } });
     else if (p[0] === 'wbset') { const o = {}; const r = R.querySelector('[data-iosv="wbrear"]').value, c = R.querySelector('[data-iosv="wbcargo"]').value; if (r !== '') o.rear = +r; if (c !== '') o.cargo = +c; iosCmd('wb', { o }); }
     else if (p[0] === 'wbp') iosCmd('wb', { o: p[1] === 'aft' ? { rear: 0, cargo: 250, copilot: 0 } : p[1] === 'heavy' ? { rear: 340, cargo: 100, copilot: 170, gal: 91 } : { rear: 0, cargo: 0, copilot: 170, pilot: 170 } });
