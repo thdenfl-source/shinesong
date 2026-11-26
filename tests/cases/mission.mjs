@@ -171,7 +171,8 @@ export async function run(page, t) {
     // EO/IR 영상에 탐조등 빛 무리가 보인다(밤 · 주간 카메라) — 열상(IR)에는 안 보인다
     { const alt0 = S.alt, tod0 = env.tod, sen0 = eo.sensor, az0 = eo.az, el0 = eo.el, mode0 = eo.mode;
       S.alt = _mGndFt(S.lat, S.lon) + 800; envSet({ tod: 'NIGHT' }); Object.assign(eo, { pwr: true, mode: 'MAN', sensor: 'EOW', az: -30, el: -35 }); hsl.az = -30; hsl.el = -35;
-      _eoCamera(); await w(400); _eoCamera(); await __mapsIdle(4000);
+      _eoWantT = performance.now(); _eoCamera(); await w(400); _eoWantT = performance.now(); _eoCamera(); await __mapsIdle(4000);   // (보는 이가 있다고 — 아무도 안 보면 5초 뒤 EO/IR 지도를 거둔다)
+      _eoWantT = performance.now();
       const cv = document.createElement('canvas'); cv.width = 400; cv.height = 300;
       const lum = () => { const g = cv.getContext('2d'); g.clearRect(0, 0, 400, 300); eoirVideoDrawTo(g, 0, 0, 400, 300); const d = g.getImageData(0, 0, 400, 300).data; let t = 0; for (let i = 0; i < d.length; i += 4) t += d[i] + d[i + 1] + d[i + 2]; return t / (d.length / 4) / 3; };
       o.eoSpot = eoBeamSpots().length; const on = lum(); hsl.lit = false; const off = lum(); hsl.lit = true; o.eoLum = [+on.toFixed(1), +off.toFixed(1)];
